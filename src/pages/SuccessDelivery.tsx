@@ -104,6 +104,54 @@ const SuccessDelivery = () => {
         }
     }, [orderInfo, status])
 
+    // Escáner de seguridad: Polling + Visibilidad de pestaña
+    useEffect(() => {
+        // Solo escanear si estamos activamente esperando el pago
+        if (status !== 'verifying' || !orderInfo) return;
+
+        let isChecking = false;
+
+        const checkPaymentStatus = async () => {
+            if (isChecking) return;
+            isChecking = true;
+            try {
+                const url = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+                const response = await fetch(`${url}/public/pedido/${orderInfo.tipoPedido}/${orderInfo.pedidoId}/status`);
+                const data = await response.json();
+
+                if (data.success && data.pagado) {
+                    setStatus('confirmed');
+                    toast.success('¡Transferencia recibida!', {
+                        icon: <CheckCircle2 className="w-5 h-5 text-green-500" />,
+                        duration: 6000
+                    });
+                }
+            } catch (error) {
+                console.error('Error verificando estado del pago', error);
+            } finally {
+                isChecking = false;
+            }
+        };
+
+        // 1. Polling: Revisar cada 4 segundos por las dudas
+        const pollInterval = setInterval(checkPaymentStatus, 4000);
+
+        // 2. Visibility API: Revisar INMEDIATAMENTE cuando el usuario vuelve a Chrome
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                console.log("El usuario volvió a la pestaña, verificando pago...");
+                checkPaymentStatus();
+            }
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        // Limpiar los listeners al desmontar o si cambia el estado
+        return () => {
+            clearInterval(pollInterval);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
+    }, [status, orderInfo]);
+
     if (!orderInfo) return null
 
     const handleCopyAlias = async (aliasToCopy: string) => {
