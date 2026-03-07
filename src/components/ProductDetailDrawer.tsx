@@ -94,7 +94,15 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
       if (prev.find(a => a.id === agregado.id)) {
         return prev.filter(a => a.id !== agregado.id)
       } else {
-        return [...prev, agregado]
+        // Hardcoded rule: Mutually exclusive Medallones
+        let filteredPrev = prev
+        if (agregado.nombre === "Doble Medallon De Carne") {
+          filteredPrev = filteredPrev.filter(a => a.nombre !== "Triple Medallon De Carne")
+        } else if (agregado.nombre === "Triple Medallon De Carne") {
+          filteredPrev = filteredPrev.filter(a => a.nombre !== "Doble Medallon De Carne")
+        }
+
+        return [...filteredPrev, agregado]
       }
     })
   }
