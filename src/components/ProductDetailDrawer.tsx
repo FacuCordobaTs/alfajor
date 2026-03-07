@@ -102,6 +102,13 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
           filteredPrev = filteredPrev.filter(a => a.nombre !== "Doble Medallon De Carne")
         }
 
+        // Hardcoded rule: Mutually exclusive Bacon
+        if (agregado.nombre === "Bacon Extra") {
+          filteredPrev = filteredPrev.filter(a => a.nombre !== "Bacon y Salsa Mil Islas")
+        } else if (agregado.nombre === "Bacon y Salsa Mil Islas") {
+          filteredPrev = filteredPrev.filter(a => a.nombre !== "Bacon Extra")
+        }
+
         return [...filteredPrev, agregado]
       }
     })
