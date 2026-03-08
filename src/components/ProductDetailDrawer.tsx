@@ -12,7 +12,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { Utensils } from 'lucide-react'
+import { Utensils, ChevronLeft } from 'lucide-react'
 
 interface Ingrediente {
   id: number
@@ -48,6 +48,8 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
   const [quantity, setQuantity] = useState(1)
   const [ingredientesExcluidos, setIngredientesExcluidos] = useState<number[]>([])
   const [agregadosSeleccionados, setAgregadosSeleccionados] = useState<Agregado[]>([])
+  const [modalView, setModalView] = useState<'main' | 'ingredientes' | 'carne' | 'extras'>('main')
+  const [isModalOpen, setIsModalOpen] = useState(false)
 
   // Resetear estado cuando se abre/cierra el drawer o cambia el producto
   useEffect(() => {
@@ -55,6 +57,8 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
       setIngredientesExcluidos([])
       setAgregadosSeleccionados([])
       setQuantity(1)
+      setModalView('main')
+      setIsModalOpen(false)
     }
   }, [open, product?.id])
 
@@ -96,10 +100,10 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
       } else {
         // Hardcoded rule: Mutually exclusive Medallones
         let filteredPrev = prev
-        if (agregado.nombre === "Doble Medallon De Carne") {
-          filteredPrev = filteredPrev.filter(a => a.nombre !== "Triple Medallon De Carne")
-        } else if (agregado.nombre === "Triple Medallon De Carne") {
-          filteredPrev = filteredPrev.filter(a => a.nombre !== "Doble Medallon De Carne")
+        if (agregado.nombre === "Doble Medallon") {
+          filteredPrev = filteredPrev.filter(a => a.nombre !== "Triple Medallon")
+        } else if (agregado.nombre === "Triple Medallon") {
+          filteredPrev = filteredPrev.filter(a => a.nombre !== "Doble Medallon")
         }
 
         // Hardcoded rule: Mutually exclusive Bacon
@@ -113,6 +117,18 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
       }
     })
   }
+
+  // Lógica de separación de agregados para el cliente Alfajor
+  const agregadosCarne = product?.agregados?.filter(a =>
+    a.nombre.includes('Veggie') || a.nombre.includes('Doble') || a.nombre.includes('Triple') || a.nombre.includes('Medallon Extra')
+  ) || []
+
+  const agregadosExtras = product?.agregados?.filter(a =>
+    !a.nombre.includes('Veggie') && !a.nombre.includes('Doble') && !a.nombre.includes('Triple') && !a.nombre.includes('Medallon Extra')
+  ) || []
+
+  const opcionVeggie = agregadosCarne.find(a => a.nombre.includes('Veggie'))
+  const opcionesMedallones = agregadosCarne.filter(a => !a.nombre.includes('Veggie'))
 
   return (
     <Drawer open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
@@ -171,89 +187,184 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
                 </p>
               </div>
 
-              {/* Botones de Modificación y Extras */}
+              {/* Botón y Modal de Modificación Centralizado (Estilo Alfajor) */}
               <div className="flex gap-3 pt-2">
-                {tieneIngredientes && (
-                  <Dialog>
+                {(tieneIngredientes || tieneAgregados) && (
+                  <Dialog open={isModalOpen} onOpenChange={(val) => {
+                    setIsModalOpen(val)
+                    if (!val) setModalView('main') // Resetea a main al cerrar
+                  }}>
                     <DialogTrigger asChild>
-                      <Button variant="outline" className="flex-1 whitespace-normal h-auto py-2">
-                        Modificar Ingredientes
+                      <Button variant="outline" className="flex-1 whitespace-normal h-auto py-3 text-base font-semibold border-primary/30 hover:bg-primary/5">
+                        Modificar Relleno
                       </Button>
                     </DialogTrigger>
-                    <DialogContent className="max-w-[400px] w-[90vw] rounded-2xl max-h-[85vh] overflow-hidden flex flex-col">
-                      <DialogHeader className="shrink-0">
-                        <DialogTitle className="text-left">Confirma los ingredientes incluidos</DialogTitle>
-                      </DialogHeader>
-                      <div className="flex-1 overflow-y-auto p-1 space-y-3">
-                        <div className="space-y-2 border rounded-lg p-3">
-                          {product.ingredientes?.map((ingrediente) => {
-                            const estaIncluido = isIngredienteIncluido(ingrediente.id)
-                            return (
-                              <div
-                                key={ingrediente.id}
-                                className={`flex items-center space-x-3 p-2 rounded-lg cursor-pointer transition-colors ${estaIncluido
-                                  ? 'bg-primary/10 border border-primary/30'
-                                  : 'bg-destructive/10 border border-destructive/30'
-                                  }`}
-                                onClick={() => toggleIngrediente(ingrediente.id)}
-                              >
-                                <Checkbox checked={estaIncluido} />
-                                <span className={`text-sm flex-1 ${estaIncluido ? '' : 'line-through text-muted-foreground'}`}>
-                                  {ingrediente.nombre}
-                                </span>
-                              </div>
-                            )
-                          })}
-                        </div>
-                        {ingredientesExcluidos.length > 0 && (
-                          <p className="text-xs text-primary/80 font-medium text-center">
-                            {ingredientesExcluidos.length} ingrediente{ingredientesExcluidos.length !== 1 ? 's' : ''} excluido{ingredientesExcluidos.length !== 1 ? 's' : ''}
-                          </p>
-                        )}
-                      </div>
-                    </DialogContent>
-                  </Dialog>
-                )}
 
-                {tieneAgregados && (
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button variant="outline" className="flex-1 whitespace-normal h-auto py-2">
-                        Agregar Extras
-                      </Button>
-                    </DialogTrigger>
                     <DialogContent className="max-w-[400px] w-[90vw] rounded-2xl max-h-[85vh] overflow-hidden flex flex-col">
-                      <DialogHeader className="shrink-0">
-                        <DialogTitle className="text-left">Agregados Opcionales</DialogTitle>
-                      </DialogHeader>
-                      <div className="flex-1 overflow-y-auto p-1 space-y-3">
-                        <div className="space-y-2 border rounded-lg p-3">
-                          {product.agregados?.map((agregado) => {
-                            const estaSeleccionado = !!agregadosSeleccionados.find(a => a.id === agregado.id)
-                            return (
-                              <div
-                                key={agregado.id}
-                                className={`flex items-center space-x-3 p-2 rounded-lg cursor-pointer transition-colors ${estaSeleccionado
-                                  ? 'bg-primary/10 border border-primary/30'
-                                  : 'bg-background hover:bg-muted border'
-                                  }`}
-                                onClick={() => toggleAgregado(agregado)}
-                              >
-                                <Checkbox checked={estaSeleccionado} />
-                                <span className="text-sm flex-1 font-medium text-foreground">
-                                  {agregado.nombre}
-                                </span>
-                                <span className="text-sm text-muted-foreground">+${parseFloat(agregado.precio).toFixed(2)}</span>
-                              </div>
-                            )
-                          })}
-                        </div>
-                        {agregadosSeleccionados.length > 0 && (
-                          <p className="text-xs text-primary/80 font-medium text-center">
-                            {agregadosSeleccionados.length} extra{agregadosSeleccionados.length !== 1 ? 's' : ''} seleccionado{agregadosSeleccionados.length !== 1 ? 's' : ''}
-                          </p>
-                        )}
-                      </div>
+
+                      {/* VISTA: MAIN */}
+                      {modalView === 'main' && (
+                        <>
+                          <DialogHeader className="shrink-0">
+                            <DialogTitle className="text-left text-xl leading-tight pb-2">
+                              ¿Cómo quieres modificar el relleno de tu alfajor?
+                            </DialogTitle>
+                          </DialogHeader>
+                          <div className="flex-1 overflow-y-auto p-1 space-y-3 mt-2">
+                            {tieneIngredientes && (
+                              <Button variant="outline" className="w-full justify-start h-14 text-base" onClick={() => setModalView('ingredientes')}>
+                                Quitar ingredientes
+                              </Button>
+                            )}
+                            {agregadosCarne.length > 0 && (
+                              <Button variant="outline" className="w-full justify-start h-14 text-base" onClick={() => setModalView('carne')}>
+                                Personalizar Carne
+                              </Button>
+                            )}
+                            {agregadosExtras.length > 0 && (
+                              <Button variant="outline" className="w-full justify-start h-14 text-base" onClick={() => setModalView('extras')}>
+                                Agregar Extras
+                              </Button>
+                            )}
+                          </div>
+                          <div className="pt-4 border-t mt-auto">
+                            <Button className="w-full h-12 text-base font-bold rounded-xl" onClick={() => setIsModalOpen(false)}>
+                              Confirmar
+                            </Button>
+                          </div>
+                        </>
+                      )}
+
+                      {/* VISTA: INGREDIENTES */}
+                      {modalView === 'ingredientes' && (
+                        <>
+                          <DialogHeader className="shrink-0">
+                            <DialogTitle className="text-left flex items-center gap-2">
+                              <Button variant="ghost" size="icon" className="h-8 w-8 -ml-2 shrink-0" onClick={() => setModalView('main')}>
+                                <ChevronLeft className="h-5 w-5" />
+                              </Button>
+                              Quitar ingredientes
+                            </DialogTitle>
+                          </DialogHeader>
+                          <div className="flex-1 overflow-y-auto p-1 space-y-3">
+                            <div className="space-y-2 border rounded-lg p-3">
+                              {product?.ingredientes?.map((ingrediente) => {
+                                const estaIncluido = isIngredienteIncluido(ingrediente.id)
+                                return (
+                                  <div
+                                    key={ingrediente.id}
+                                    className={`flex items-center space-x-3 p-2 rounded-lg cursor-pointer transition-colors ${estaIncluido ? 'bg-primary/10 border border-primary/30' : 'bg-destructive/10 border border-destructive/30'}`}
+                                    onClick={() => toggleIngrediente(ingrediente.id)}
+                                  >
+                                    <Checkbox checked={estaIncluido} />
+                                    <span className={`text-sm flex-1 ${estaIncluido ? '' : 'line-through text-muted-foreground'}`}>
+                                      {ingrediente.nombre}
+                                    </span>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+                          <div className="pt-4 border-t mt-auto">
+                            <Button variant="secondary" className="w-full h-12 text-base font-bold rounded-xl" onClick={() => setModalView('main')}>
+                              Aceptar
+                            </Button>
+                          </div>
+                        </>
+                      )}
+
+                      {/* VISTA: CARNE */}
+                      {modalView === 'carne' && (
+                        <>
+                          <DialogHeader className="shrink-0">
+                            <DialogTitle className="text-left flex items-center gap-2">
+                              <Button variant="ghost" size="icon" className="h-8 w-8 -ml-2 shrink-0" onClick={() => setModalView('main')}>
+                                <ChevronLeft className="h-5 w-5" />
+                              </Button>
+                              Personalizar Carne
+                            </DialogTitle>
+                          </DialogHeader>
+                          <div className="flex-1 overflow-y-auto p-1 space-y-3">
+                            <div className="space-y-4 border rounded-lg p-3">
+                              {/* Opción Veggie */}
+                              {opcionVeggie && (
+                                <div
+                                  className={`flex items-center space-x-3 p-2 rounded-lg cursor-pointer transition-colors ${agregadosSeleccionados.find(a => a.id === opcionVeggie.id) ? 'bg-primary/10 border border-primary/30' : 'bg-background hover:bg-muted border'}`}
+                                  onClick={() => toggleAgregado(opcionVeggie)}
+                                >
+                                  <Checkbox checked={!!agregadosSeleccionados.find(a => a.id === opcionVeggie.id)} />
+                                  <span className="text-sm flex-1 font-medium">{opcionVeggie.nombre}</span>
+                                  <span className="text-sm text-muted-foreground">+${parseFloat(opcionVeggie.precio).toFixed(2)}</span>
+                                </div>
+                              )}
+
+                              {/* Separador manual sin importar componentes extra */}
+                              {opcionVeggie && opcionesMedallones.length > 0 && (
+                                <div className="h-px w-full bg-border my-2" />
+                              )}
+
+                              {/* Opciones Doble / Triple */}
+                              {opcionesMedallones.map((agregado) => {
+                                const estaSeleccionado = !!agregadosSeleccionados.find(a => a.id === agregado.id)
+                                return (
+                                  <div
+                                    key={agregado.id}
+                                    className={`flex items-center space-x-3 p-2 rounded-lg cursor-pointer transition-colors ${estaSeleccionado ? 'bg-primary/10 border border-primary/30' : 'bg-background hover:bg-muted border'}`}
+                                    onClick={() => toggleAgregado(agregado)}
+                                  >
+                                    <Checkbox checked={estaSeleccionado} />
+                                    <span className="text-sm flex-1 font-medium">{agregado.nombre}</span>
+                                    <span className="text-sm text-muted-foreground">+${parseFloat(agregado.precio).toFixed(2)}</span>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+                          <div className="pt-4 border-t mt-auto">
+                            <Button variant="secondary" className="w-full h-12 text-base font-bold rounded-xl" onClick={() => setModalView('main')}>
+                              Aceptar
+                            </Button>
+                          </div>
+                        </>
+                      )}
+
+                      {/* VISTA: EXTRAS */}
+                      {modalView === 'extras' && (
+                        <>
+                          <DialogHeader className="shrink-0">
+                            <DialogTitle className="text-left flex items-center gap-2">
+                              <Button variant="ghost" size="icon" className="h-8 w-8 -ml-2 shrink-0" onClick={() => setModalView('main')}>
+                                <ChevronLeft className="h-5 w-5" />
+                              </Button>
+                              Agregar Extras
+                            </DialogTitle>
+                          </DialogHeader>
+                          <div className="flex-1 overflow-y-auto p-1 space-y-3">
+                            <div className="space-y-2 border rounded-lg p-3">
+                              {agregadosExtras.map((agregado) => {
+                                const estaSeleccionado = !!agregadosSeleccionados.find(a => a.id === agregado.id)
+                                return (
+                                  <div
+                                    key={agregado.id}
+                                    className={`flex items-center space-x-3 p-2 rounded-lg cursor-pointer transition-colors ${estaSeleccionado ? 'bg-primary/10 border border-primary/30' : 'bg-background hover:bg-muted border'}`}
+                                    onClick={() => toggleAgregado(agregado)}
+                                  >
+                                    <Checkbox checked={estaSeleccionado} />
+                                    <span className="text-sm flex-1 font-medium">{agregado.nombre}</span>
+                                    <span className="text-sm text-muted-foreground">+${parseFloat(agregado.precio).toFixed(2)}</span>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+                          <div className="pt-4 border-t mt-auto">
+                            <Button variant="secondary" className="w-full h-12 text-base font-bold rounded-xl" onClick={() => setModalView('main')}>
+                              Aceptar
+                            </Button>
+                          </div>
+                        </>
+                      )}
+
                     </DialogContent>
                   </Dialog>
                 )}
