@@ -211,11 +211,6 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
                             </DialogTitle>
                           </DialogHeader>
                           <div className="flex-1 overflow-y-auto p-1 space-y-3 mt-2">
-                            {tieneIngredientes && (
-                              <Button variant="outline" className="w-full justify-start h-14 text-base" onClick={() => setModalView('ingredientes')}>
-                                Quitar ingredientes
-                              </Button>
-                            )}
                             {agregadosCarne.length > 0 && (
                               <Button variant="outline" className="w-full justify-start h-14 text-base" onClick={() => setModalView('carne')}>
                                 Personalizar Carne
@@ -224,6 +219,11 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
                             {agregadosExtras.length > 0 && (
                               <Button variant="outline" className="w-full justify-start h-14 text-base" onClick={() => setModalView('extras')}>
                                 Agregar Extras
+                              </Button>
+                            )}
+                            {tieneIngredientes && (
+                              <Button variant="outline" className="w-full justify-start h-14 text-base" onClick={() => setModalView('ingredientes')}>
+                                Quitar ingredientes
                               </Button>
                             )}
                           </div>
