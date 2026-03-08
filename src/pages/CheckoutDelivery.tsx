@@ -335,7 +335,7 @@ const CheckoutDelivery = () => {
                                     <AddressAutocomplete
                                         value={direccion}
                                         onChange={handleAddressChange}
-                                        placeholder="Ej: Espora 811, Santa Fe"
+                                        placeholder="Ej: Necochea 3601, Santa Fe"
                                     />
                                     {/* Zone status after address selection */}
                                     {lat !== null && lng !== null && direccion && (
@@ -429,7 +429,7 @@ const CheckoutDelivery = () => {
 
                     <div className="space-y-2 pt-4 border-t border-border/50">
                         <Label htmlFor="notas">Notas adicionales <span className="text-muted-foreground font-normal">(opcional)</span></Label>
-                        <Textarea id="notas" placeholder="Ej: El timbre no anda, llamar al llegar..." className="min-h-[100px] rounded-xl resize-none" value={notas} onChange={(e: any) => setNotas(e.target.value)} />
+                        <Textarea id="notas" placeholder="Ej: El timbre no anda, Piso 9 Departamento 1" className="min-h-[100px] rounded-xl resize-none" value={notas} onChange={(e: any) => setNotas(e.target.value)} />
                     </div>
 
                     {cucuruConfigurado
