@@ -159,11 +159,11 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
                 <div className="flex-1">
                   <div className="flex items-center gap-2 flex-wrap mb-1">
                     <h3 className="text-2xl font-bold text-foreground leading-tight">{product.nombre}</h3>
-                    {product.descuento && product.descuento > 0 && (
+                    {product.descuento && product.descuento > 0 ? (
                       <span className="bg-emerald-500 text-white text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wide shadow-sm">
                         {product.descuento}% OFF
                       </span>
-                    )}
+                    ) : null}
                   </div>
                   <p className="text-sm text-muted-foreground">{product.categoria || 'Sin categoría'}</p>
                 </div>
