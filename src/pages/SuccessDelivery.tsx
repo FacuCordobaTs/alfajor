@@ -54,6 +54,25 @@ const SuccessDelivery = () => {
         }
     }, [username])
 
+    // Fetch current pedido status on mount (handles page reload)
+    useEffect(() => {
+        if (!orderInfo) return
+        const fetchPedidoStatus = async () => {
+            try {
+                const url = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+                const res = await fetch(`${url}/public/pedido/${orderInfo.tipoPedido}/${orderInfo.pedidoId}/status`)
+                const data = await res.json()
+                if (data.success) {
+                    if (data.pagado) setStatus('confirmed')
+                    if (data.estado) setPedidoEstado(data.estado)
+                }
+            } catch (err) {
+                console.error('Error fetching pedido status:', err)
+            }
+        }
+        fetchPedidoStatus()
+    }, [orderInfo])
+
     // WebSocket Connection
     useEffect(() => {
         if (!orderInfo) return

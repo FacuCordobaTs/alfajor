@@ -170,7 +170,7 @@ export function MisPedidosDrawer({
             setFetched(false)
             setError(null)
         }
-    }, [open, restauranteId])
+    }, [open, telefono, restauranteId])
 
     useEffect(() => {
         if (!open || !telefono?.trim() || !restauranteId) {
