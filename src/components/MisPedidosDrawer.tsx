@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, Package, Loader2, Truck, Store, Clock, CheckCircle2 } from 'lucide-react'
@@ -129,6 +129,8 @@ export function MisPedidosDrawer({
     const [loading, setLoading] = useState(false)
     const [fetched, setFetched] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    const wsRef = useRef<WebSocket | null>(null)
+    const pingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
     useEffect(() => {
         if (open && !telefono) {
@@ -170,6 +172,63 @@ export function MisPedidosDrawer({
             setError(null)
         }
     }, [open, restauranteId])
+
+    useEffect(() => {
+        if (!open || !telefono?.trim() || !restauranteId) {
+            if (wsRef.current) {
+                wsRef.current.close()
+                wsRef.current = null
+            }
+            if (pingIntervalRef.current) {
+                clearInterval(pingIntervalRef.current)
+                pingIntervalRef.current = null
+            }
+            return
+        }
+
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+        const wsBase = apiUrl.replace(/^http/, 'ws').replace(/\/api\/?$/, '')
+        const wsUrl = `${wsBase}/ws/tracking/${restauranteId}/${encodeURIComponent(telefono.trim())}`
+
+        const ws = new WebSocket(wsUrl)
+        wsRef.current = ws
+
+        ws.onopen = () => {
+            pingIntervalRef.current = setInterval(() => {
+                if (ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: 'PING' }))
+                }
+            }, 30000)
+        }
+
+        ws.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data)
+                if (data.type === 'PEDIDO_ESTADO_ACTUALIZADO') {
+                    const { pedidoId, tipo, estado } = data.payload
+                    setPedidos(prev => prev.map(p =>
+                        p.id === pedidoId && p.tipo === tipo ? { ...p, estado } : p
+                    ))
+                }
+            } catch {}
+        }
+
+        ws.onclose = () => {
+            if (pingIntervalRef.current) {
+                clearInterval(pingIntervalRef.current)
+                pingIntervalRef.current = null
+            }
+        }
+
+        return () => {
+            ws.close()
+            wsRef.current = null
+            if (pingIntervalRef.current) {
+                clearInterval(pingIntervalRef.current)
+                pingIntervalRef.current = null
+            }
+        }
+    }, [open, telefono, restauranteId])
 
     const handleSubmitTelefono = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault()
