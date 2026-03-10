@@ -67,7 +67,6 @@ function OrderTracker({ estado, tipo }: { estado: string; tipo: 'delivery' | 'ta
             {steps.map((step, i) => {
                 const isCompleted = isDelivered || (currentIdx >= 0 && i < currentIdx)
                 const isCurrent = !isDelivered && step === estado
-                const isPending = !isCompleted && !isCurrent
 
                 return (
                     <div key={step} className="flex items-center flex-1 min-w-0">
