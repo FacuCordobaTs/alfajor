@@ -17,6 +17,7 @@ const SuccessDelivery = () => {
     const [isLoadingRestaurante, setIsLoadingRestaurante] = useState(true)
     const [isCreatingMP, setIsCreatingMP] = useState(false)
     const [misPedidosOpen, setMisPedidosOpen] = useState(false)
+    const [pedidoEstado, setPedidoEstado] = useState<string | null>(null)
 
     useEffect(() => {
         const savedInfo = sessionStorage.getItem('deliveryOrderInfo')
@@ -85,6 +86,14 @@ const SuccessDelivery = () => {
                             icon: <CheckCircle2 className="w-5 h-5 text-green-500" />,
                             duration: 6000
                         })
+                    } else if (data.type === 'PEDIDO_ESTADO_ACTUALIZADO') {
+                        setPedidoEstado(data.payload.estado)
+                        if (data.payload.estado === 'dispatched') {
+                            toast.success('¡Tu pedido va en camino!', {
+                                icon: <Truck className="w-5 h-5 text-blue-500" />,
+                                duration: 6000
+                            })
+                        }
                     }
                 } catch (e) {
                     console.error('Error parsing WS message', e)
@@ -94,7 +103,7 @@ const SuccessDelivery = () => {
             ws.onclose = () => {
                 isConnecting = false
                 setTimeout(() => {
-                    if (status !== 'confirmed') connectWebSocket()
+                    connectWebSocket()
                 }, 3000)
             }
         }
@@ -104,7 +113,7 @@ const SuccessDelivery = () => {
         return () => {
             if (ws) ws.close()
         }
-    }, [orderInfo, status])
+    }, [orderInfo])
 
     // Escáner de seguridad: Polling + Visibilidad de pestaña
     useEffect(() => {
@@ -412,61 +421,122 @@ const SuccessDelivery = () => {
 
                 {status === 'confirmed' && (
                     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 w-full">
-                        {/* Success header */}
-                        <div className="text-center space-y-3">
-                            <div className="mx-auto w-24 h-24 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mb-2 ring-8 ring-green-50 dark:ring-green-900/10">
-                                <CheckCircle2 className="w-12 h-12 text-green-600 dark:text-green-400" />
+                        {/* Header: changes based on dispatched status */}
+                        {pedidoEstado === 'dispatched' ? (
+                            <div className="text-center space-y-3">
+                                <div className="mx-auto w-24 h-24 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center mb-2 ring-8 ring-blue-50 dark:ring-blue-900/10">
+                                    <Truck className="w-12 h-12 text-blue-600 dark:text-blue-400" />
+                                </div>
+                                <h1 className="text-3xl font-black tracking-tight text-blue-600 dark:text-blue-500">¡En camino!</h1>
+                                <p className="text-base font-medium text-muted-foreground">
+                                    Tu pedido #{pedidoId} ya fue despachado
+                                </p>
                             </div>
-                            <h1 className="text-3xl font-black tracking-tight text-green-600 dark:text-green-500">¡Pedido Confirmado!</h1>
-                            <p className="text-base font-medium text-muted-foreground">
-                                Ya estamos recibiendo tu pedido en cocina
-                            </p>
+                        ) : (
+                            <div className="text-center space-y-3">
+                                <div className="mx-auto w-24 h-24 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mb-2 ring-8 ring-green-50 dark:ring-green-900/10">
+                                    <CheckCircle2 className="w-12 h-12 text-green-600 dark:text-green-400" />
+                                </div>
+                                <h1 className="text-3xl font-black tracking-tight text-green-600 dark:text-green-500">¡Pedido Confirmado!</h1>
+                                <p className="text-base font-medium text-muted-foreground">
+                                    Ya estamos recibiendo tu pedido en cocina
+                                </p>
+                            </div>
+                        )}
+
+                        {/* Tracker visual */}
+                        <div className="bg-card border-2 border-primary/30 rounded-2xl p-5 shadow-md">
+                            <div className="flex items-center w-full gap-0 py-2">
+                                {(['pending', 'dispatched'] as const).map((step, i) => {
+                                    const effectiveEstado = pedidoEstado || 'pending'
+                                    const normalizedEstado = (['preparing', 'ready'].includes(effectiveEstado)) ? 'pending' : effectiveEstado
+                                    const stepOrder = ['pending', 'dispatched']
+                                    const currentIdx = stepOrder.indexOf(normalizedEstado)
+                                    const isDelivered = effectiveEstado === 'delivered'
+                                    const isCompleted = isDelivered || (currentIdx >= 0 && i < currentIdx)
+                                    const isCurrent = !isDelivered && step === normalizedEstado
+                                    const label = step === 'pending' ? 'Recibido' : 'En camino'
+
+                                    return (
+                                        <div key={step} className="flex items-center flex-1 min-w-0">
+                                            <div className="flex flex-col items-center gap-1.5 flex-1 min-w-0">
+                                                <div className={`
+                                                    w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0 transition-all duration-500
+                                                    ${isCompleted || isDelivered
+                                                        ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/30'
+                                                        : isCurrent
+                                                            ? 'bg-primary text-primary-foreground shadow-md shadow-primary/30 ring-4 ring-primary/20 animate-pulse'
+                                                            : 'bg-muted text-muted-foreground'}
+                                                `}>
+                                                    {isCompleted || isDelivered
+                                                        ? <CheckCircle2 className="w-5 h-5" />
+                                                        : (i + 1)}
+                                                </div>
+                                                <span className={`text-xs font-semibold text-center leading-tight
+                                                    ${isCurrent ? 'text-primary font-bold' : isCompleted || isDelivered ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}
+                                                `}>
+                                                    {label}
+                                                </span>
+                                            </div>
+                                            {i < 1 && (
+                                                <div className={`h-0.5 flex-1 mx-2 rounded-full -mt-5 transition-all duration-500
+                                                    ${(isCompleted || isDelivered) ? 'bg-emerald-500' : 'bg-border'}
+                                                `} />
+                                            )}
+                                        </div>
+                                    )
+                                })}
+                            </div>
                         </div>
 
-                        {/* Delivery / Takeaway info card */}
+                        {/* Info card */}
                         <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
-                            {/* Payment method info */}
-                            {orderInfo.metodoPago === 'transferencia' && (
-                                orderInfo.cucuruAlias ? (
-                                    <div className="p-4 border-b border-border bg-primary/5">
-                                        <div className="flex items-center justify-between mb-2">
-                                            <p className="text-sm font-bold text-primary/80">Alias de transferencia</p>
-                                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
-                                                Verificación automática
-                                            </span>
-                                        </div>
-                                        <Button
-                                            variant="outline"
-                                            className="w-full h-11 text-base font-bold rounded-xl border-primary/20 hover:bg-primary/10"
-                                            onClick={() => handleCopyAlias(orderInfo.cucuruAlias)}
-                                        >
-                                            <Copy className="w-4 h-4 mr-2 text-primary" />
-                                            {orderInfo.cucuruAlias}
-                                        </Button>
-                                        <p className="text-xs mt-2 text-center text-muted-foreground">Tu pedido comenzará a prepararse una vez recibido el pago.</p>
-                                    </div>
-                                ) : transferenciaAlias ? (
-                                    <div className="p-4 border-b border-border bg-primary/5">
-                                        <p className="text-sm font-bold text-primary/80 mb-2">Transferí a este alias:</p>
-                                        <Button
-                                            variant="outline"
-                                            className="w-full h-11 text-base font-bold rounded-xl border-primary/20 hover:bg-primary/10"
-                                            onClick={() => handleCopyAlias(transferenciaAlias)}
-                                        >
-                                            <Copy className="w-4 h-4 mr-2 text-primary" />
-                                            {transferenciaAlias}
-                                        </Button>
-                                        <p className="text-xs mt-2 text-center text-muted-foreground">Tu pedido comenzará a prepararse una vez recibido el pago.</p>
-                                    </div>
-                                ) : null
-                            )}
+                            {/* Payment info: only show if NOT dispatched yet */}
+                            {!pedidoEstado || !['dispatched', 'delivered'].includes(pedidoEstado) ? (
+                                <>
+                                    {orderInfo.metodoPago === 'transferencia' && (
+                                        orderInfo.cucuruAlias ? (
+                                            <div className="p-4 border-b border-border bg-primary/5">
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <p className="text-sm font-bold text-primary/80">Alias de transferencia</p>
+                                                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
+                                                        Verificación automática
+                                                    </span>
+                                                </div>
+                                                <Button
+                                                    variant="outline"
+                                                    className="w-full h-11 text-base font-bold rounded-xl border-primary/20 hover:bg-primary/10"
+                                                    onClick={() => handleCopyAlias(orderInfo.cucuruAlias)}
+                                                >
+                                                    <Copy className="w-4 h-4 mr-2 text-primary" />
+                                                    {orderInfo.cucuruAlias}
+                                                </Button>
+                                                <p className="text-xs mt-2 text-center text-muted-foreground">Tu pedido comenzará a prepararse una vez recibido el pago.</p>
+                                            </div>
+                                        ) : transferenciaAlias ? (
+                                            <div className="p-4 border-b border-border bg-primary/5">
+                                                <p className="text-sm font-bold text-primary/80 mb-2">Transferí a este alias:</p>
+                                                <Button
+                                                    variant="outline"
+                                                    className="w-full h-11 text-base font-bold rounded-xl border-primary/20 hover:bg-primary/10"
+                                                    onClick={() => handleCopyAlias(transferenciaAlias)}
+                                                >
+                                                    <Copy className="w-4 h-4 mr-2 text-primary" />
+                                                    {transferenciaAlias}
+                                                </Button>
+                                                <p className="text-xs mt-2 text-center text-muted-foreground">Tu pedido comenzará a prepararse una vez recibido el pago.</p>
+                                            </div>
+                                        ) : null
+                                    )}
 
-                            {orderInfo.metodoPago === 'efectivo' && (
-                                <div className="p-4 border-b border-border bg-emerald-50 dark:bg-emerald-950/20 text-center">
-                                    <p className="text-sm font-bold text-emerald-800 dark:text-emerald-400">Pago en Efectivo</p>
-                                    <p className="text-xs mt-1 text-muted-foreground">Aboná el importe exacto al recibir tu pedido.</p>
-                                </div>
-                            )}
+                                    {orderInfo.metodoPago === 'efectivo' && (
+                                        <div className="p-4 border-b border-border bg-emerald-50 dark:bg-emerald-950/20 text-center">
+                                            <p className="text-sm font-bold text-emerald-800 dark:text-emerald-400">Pago en Efectivo</p>
+                                            <p className="text-xs mt-1 text-muted-foreground">Aboná el importe exacto al recibir tu pedido.</p>
+                                        </div>
+                                    )}
+                                </>
+                            ) : null}
 
                             {/* Delivery / Takeaway info */}
                             <div className="p-4">
@@ -476,7 +546,9 @@ const SuccessDelivery = () => {
                                     </div>
                                     <div className="space-y-1.5 min-w-0">
                                         <h3 className="font-bold text-base leading-none">
-                                            {tipoPedido === 'delivery' ? 'Delivery en camino' : 'Retiro en local'}
+                                            {pedidoEstado === 'dispatched'
+                                                ? '¡Tu pedido va en camino!'
+                                                : tipoPedido === 'delivery' ? 'Delivery' : 'Retiro en local'}
                                         </h3>
                                         {tipoPedido === 'delivery' && direccion ? (
                                             <div className="space-y-1">
@@ -485,7 +557,9 @@ const SuccessDelivery = () => {
                                                     <span className="truncate">{direccion}</span>
                                                 </div>
                                                 <p className="text-xs text-muted-foreground leading-snug">
-                                                    Tu pedido será enviado a esta dirección.
+                                                    {pedidoEstado === 'dispatched'
+                                                        ? 'El repartidor se dirige a tu dirección.'
+                                                        : 'Tu pedido será enviado a esta dirección.'}
                                                 </p>
                                             </div>
                                         ) : tipoPedido === 'takeaway' ? (
