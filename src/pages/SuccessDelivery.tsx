@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router'
 import { Button } from '@/components/ui/button'
-import { CheckCircle2, Copy, Loader2, Store, Truck, Utensils, MapPin, Clock } from 'lucide-react'
+import { CheckCircle2, Copy, Loader2, Store, Truck, Utensils, MapPin, Clock, Package } from 'lucide-react'
 import { toast } from 'sonner'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { MisPedidosDrawer } from '@/components/MisPedidosDrawer'
 
 const SuccessDelivery = () => {
     const username = 'alfajor'
@@ -15,6 +16,7 @@ const SuccessDelivery = () => {
     const [restauranteData, setRestauranteData] = useState<any>(null)
     const [isLoadingRestaurante, setIsLoadingRestaurante] = useState(true)
     const [isCreatingMP, setIsCreatingMP] = useState(false)
+    const [misPedidosOpen, setMisPedidosOpen] = useState(false)
 
     useEffect(() => {
         const savedInfo = sessionStorage.getItem('deliveryOrderInfo')
@@ -281,7 +283,16 @@ const SuccessDelivery = () => {
             <div className="w-full fixed top-0 z-20 bg-background/80 backdrop-blur-md border-b border-border/50">
                 <div className="max-w-xl mx-auto px-4 py-3 flex items-center justify-between">
                     <span className="font-semibold text-lg bg-linear-to-r from-primary to-primary bg-clip-text text-transparent opacity-80">Piru</span>
-                    <ThemeToggle />
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setMisPedidosOpen(true)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-primary hover:bg-primary/10 transition-colors border border-primary/20"
+                        >
+                            <Package className="w-3.5 h-3.5" />
+                            Mis Pedidos
+                        </button>
+                        <ThemeToggle />
+                    </div>
                 </div>
             </div>
 
@@ -516,6 +527,12 @@ const SuccessDelivery = () => {
                     </div>
                 )}
             </div>
+
+            <MisPedidosDrawer
+                open={misPedidosOpen}
+                onOpenChange={setMisPedidosOpen}
+                restauranteId={restauranteData?.id ?? null}
+            />
         </div>
     )
 }

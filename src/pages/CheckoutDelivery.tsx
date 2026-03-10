@@ -7,8 +7,9 @@ import { RadioGroup } from '@/components/ui/radio-group'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from 'sonner'
 import { ThemeToggle } from '@/components/ThemeToggle'
-import { ArrowLeft, Loader2, MapPin, Store, Zap, Truck, AlertTriangle } from 'lucide-react'
+import { ArrowLeft, Loader2, MapPin, Store, Zap, Truck, AlertTriangle, Package } from 'lucide-react'
 import { AddressAutocomplete } from '@/components/AddressAutocomplete'
+import { MisPedidosDrawer } from '@/components/MisPedidosDrawer'
 //
 const CheckoutDelivery = () => {
     const navigate = useNavigate()
@@ -46,6 +47,7 @@ const CheckoutDelivery = () => {
     const [metodoPago, setMetodoPago] = useState<'efectivo' | 'transferencia' | 'mercadopago' | null>(null)
     const [restauranteData, setRestauranteData] = useState<any>(null)
     const [isLoadingRestaurante, setIsLoadingRestaurante] = useState(true)
+    const [misPedidosOpen, setMisPedidosOpen] = useState(false)
 
     useEffect(() => {
         const fetchRestaurante = async () => {
@@ -280,7 +282,16 @@ const CheckoutDelivery = () => {
                         </Button>
                         <span className="font-semibold">Checkout</span>
                     </div>
-                    <ThemeToggle />
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setMisPedidosOpen(true)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-primary hover:bg-primary/10 transition-colors border border-primary/20"
+                        >
+                            <Package className="w-3.5 h-3.5" />
+                            Mis Pedidos
+                        </button>
+                        <ThemeToggle />
+                    </div>
                 </div>
             </div>
 
@@ -521,6 +532,12 @@ const CheckoutDelivery = () => {
                     {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : fueraDeZona && tipoPedido === 'delivery' ? 'Dirección fuera de zona' : 'Confirmar Datos y Pedir'}
                 </Button>
             </div >
+
+            <MisPedidosDrawer
+                open={misPedidosOpen}
+                onOpenChange={setMisPedidosOpen}
+                restauranteId={restauranteData?.id ?? cart?.restauranteId ?? null}
+            />
         </div >
     )
 }

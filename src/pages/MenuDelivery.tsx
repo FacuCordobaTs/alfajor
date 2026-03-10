@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { ProductDetailDrawer } from '@/components/ProductDetailDrawer'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { MisPedidosDrawer } from '@/components/MisPedidosDrawer'
 
 type HorarioTurno = { diaSemana: number; horaApertura: string; horaCierre: string }
 
@@ -96,6 +97,7 @@ const MenuDelivery = () => {
     const [puntosCliente, setPuntosCliente] = useState<number | null>(null)
     const [loadingPuntos, setLoadingPuntos] = useState(false)
     const [modalPuntosOpen, setModalPuntosOpen] = useState(false)
+    const [misPedidosOpen, setMisPedidosOpen] = useState(false)
 
     // Function to fetch points
     const fetchPuntos = useCallback(async (telefono: string, restauranteId: number) => {
@@ -386,6 +388,13 @@ const MenuDelivery = () => {
                         <div className="flex items-center gap-2">
                             <ThemeToggle />
                         </div>
+                        <button
+                            onClick={() => setMisPedidosOpen(true)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-primary hover:bg-primary/10 transition-colors border border-primary/20"
+                        >
+                            <Package className="w-3.5 h-3.5" />
+                            Mis Pedidos
+                        </button>
                     </div>
                 </div>
             </div>
@@ -696,6 +705,12 @@ const MenuDelivery = () => {
                 open={drawerOpen}
                 onClose={cerrarProductoDrawer}
                 onAddToOrder={agregarAlPedido}
+            />
+
+            <MisPedidosDrawer
+                open={misPedidosOpen}
+                onOpenChange={setMisPedidosOpen}
+                restauranteId={restaurante?.id ?? null}
             />
         </div>
     )
