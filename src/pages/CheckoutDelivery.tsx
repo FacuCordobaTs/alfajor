@@ -153,7 +153,7 @@ const CheckoutDelivery = () => {
                 restauranteId: cart.restauranteId,
                 nombreCliente: nombre,
                 telefono: telefono,
-                notas: notas,
+                notas: notas.replace(/[^\x20-\x7E\xA0-\xFF\n]/g, '').trim(),
                 items: cart.items.map((i: any) => ({
                     productoId: i.productoId,
                     cantidad: i.cantidad,
