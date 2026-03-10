@@ -37,7 +37,7 @@ const ESTADO_LABELS: Record<string, string> = {
     dispatched: 'En camino',
     delivered: 'Entregado',
     cancelled: 'Cancelado',
-    archived: 'Archivado',
+    archived: 'Entregado',
 }
 
 const DELIVERY_STEPS = ['pending', 'dispatched'] as const
