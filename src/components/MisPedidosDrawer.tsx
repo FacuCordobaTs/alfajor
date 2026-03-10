@@ -60,37 +60,39 @@ function OrderTracker({ estado, tipo }: { estado: string; tipo: 'delivery' | 'ta
     const normalizedEstado = (['preparing', 'ready'].includes(estado)) ? 'pending' : estado
     const currentIdx = steps.indexOf(normalizedEstado as any)
     const isDelivered = estado === 'delivered'
+    const isDispatched = estado === 'dispatched'
 
     return (
         <div className="flex items-center w-full gap-0 py-2">
             {steps.map((step, i) => {
-                const isCompleted = isDelivered || (currentIdx >= 0 && i < currentIdx)
-                const isCurrent = !isDelivered && step === normalizedEstado
+                const allDone = isDelivered || isDispatched
+                const isCompleted = allDone || (currentIdx >= 0 && i < currentIdx)
+                const isCurrent = !allDone && step === normalizedEstado
 
                 return (
                     <div key={step} className="flex items-center flex-1 min-w-0">
                         <div className="flex flex-col items-center gap-1.5 flex-1 min-w-0">
                             <div className={`
                                 w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 transition-all duration-500
-                                ${isCompleted || isDelivered
+                                ${isCompleted
                                     ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/30'
                                     : isCurrent
                                         ? 'bg-primary text-primary-foreground shadow-md shadow-primary/30 ring-4 ring-primary/20 animate-pulse'
                                         : 'bg-muted text-muted-foreground'}
                             `}>
-                                {isCompleted || isDelivered
+                                {isCompleted
                                     ? <CheckCircle2 className="w-4 h-4" />
                                     : (i + 1)}
                             </div>
                             <span className={`text-[10px] font-medium text-center leading-tight truncate w-full px-0.5
-                                ${isCurrent ? 'text-primary font-bold' : isCompleted || isDelivered ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}
+                                ${isCurrent ? 'text-primary font-bold' : isCompleted ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}
                             `}>
                                 {labels[step]}
                             </span>
                         </div>
                         {i < steps.length - 1 && (
                             <div className={`h-0.5 flex-1 mx-1 rounded-full -mt-5 transition-all duration-500
-                                ${(isCompleted || isDelivered) ? 'bg-emerald-500' : 'bg-border'}
+                                ${isCompleted ? 'bg-emerald-500' : 'bg-border'}
                             `} />
                         )}
                     </div>

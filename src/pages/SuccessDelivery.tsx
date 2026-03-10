@@ -471,9 +471,9 @@ const SuccessDelivery = () => {
                                     const normalizedEstado = (['preparing', 'ready'].includes(effectiveEstado)) ? 'pending' : effectiveEstado
                                     const stepOrder = ['pending', 'dispatched']
                                     const currentIdx = stepOrder.indexOf(normalizedEstado)
-                                    const isDelivered = effectiveEstado === 'delivered'
-                                    const isCompleted = isDelivered || (currentIdx >= 0 && i < currentIdx)
-                                    const isCurrent = !isDelivered && step === normalizedEstado
+                                    const allDone = effectiveEstado === 'delivered' || effectiveEstado === 'dispatched'
+                                    const isCompleted = allDone || (currentIdx >= 0 && i < currentIdx)
+                                    const isCurrent = !allDone && step === normalizedEstado
                                     const label = step === 'pending' ? 'Recibido' : 'En camino'
 
                                     return (
@@ -481,25 +481,25 @@ const SuccessDelivery = () => {
                                             <div className="flex flex-col items-center gap-1.5 flex-1 min-w-0">
                                                 <div className={`
                                                     w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0 transition-all duration-500
-                                                    ${isCompleted || isDelivered
+                                                    ${isCompleted
                                                         ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/30'
                                                         : isCurrent
                                                             ? 'bg-primary text-primary-foreground shadow-md shadow-primary/30 ring-4 ring-primary/20 animate-pulse'
                                                             : 'bg-muted text-muted-foreground'}
                                                 `}>
-                                                    {isCompleted || isDelivered
+                                                    {isCompleted
                                                         ? <CheckCircle2 className="w-5 h-5" />
                                                         : (i + 1)}
                                                 </div>
                                                 <span className={`text-xs font-semibold text-center leading-tight
-                                                    ${isCurrent ? 'text-primary font-bold' : isCompleted || isDelivered ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}
+                                                    ${isCurrent ? 'text-primary font-bold' : isCompleted ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}
                                                 `}>
                                                     {label}
                                                 </span>
                                             </div>
                                             {i < 1 && (
                                                 <div className={`h-0.5 flex-1 mx-2 rounded-full -mt-5 transition-all duration-500
-                                                    ${(isCompleted || isDelivered) ? 'bg-emerald-500' : 'bg-border'}
+                                                    ${isCompleted ? 'bg-emerald-500' : 'bg-border'}
                                                 `} />
                                             )}
                                         </div>
