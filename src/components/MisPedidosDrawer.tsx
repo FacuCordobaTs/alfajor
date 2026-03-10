@@ -124,25 +124,37 @@ export function MisPedidosDrawer({
     onOpenChange: (open: boolean) => void
     restauranteId: number | null
 }) {
-    const [telefono, setTelefono] = useState(localStorage.getItem('cliente_telefono') || '')
+    const [telefono, setTelefono] = useState('')
     const [pedidos, setPedidos] = useState<Pedido[]>([])
     const [loading, setLoading] = useState(false)
     const [fetched, setFetched] = useState(false)
+    const [error, setError] = useState<string | null>(null)
+
+    useEffect(() => {
+        if (open && !telefono) {
+            const saved = localStorage.getItem('cliente_telefono') || ''
+            setTelefono(saved)
+        }
+    }, [open])
 
     const fetchPedidos = useCallback(async (tel: string) => {
-        if (!tel || !restauranteId) return
+        if (!tel.trim() || !restauranteId) return
         setLoading(true)
+        setError(null)
         try {
             const url = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
-            const res = await fetch(`${url}/public/restaurante/${restauranteId}/mis-pedidos/${encodeURIComponent(tel)}`)
-            if (res.ok) {
-                const data = await res.json()
-                if (data.success) {
-                    setPedidos(data.data.filter((p: Pedido) => p.pagado))
-                }
+            const res = await fetch(`${url}/public/restaurante/${restauranteId}/mis-pedidos/${encodeURIComponent(tel.trim())}`)
+            const data = await res.json()
+            if (data.success) {
+                setPedidos(data.data ?? [])
+            } else {
+                setPedidos([])
+                setError(data.message || 'Error al buscar pedidos')
             }
-        } catch (error) {
-            console.error('Error fetching pedidos:', error)
+        } catch (err) {
+            console.error('Error fetching pedidos:', err)
+            setPedidos([])
+            setError('No se pudo conectar con el servidor')
         } finally {
             setLoading(false)
             setFetched(true)
@@ -155,13 +167,14 @@ export function MisPedidosDrawer({
         }
         if (!open) {
             setFetched(false)
+            setError(null)
         }
-    }, [open, telefono, restauranteId, fetchPedidos])
+    }, [open, restauranteId])
 
     const handleSubmitTelefono = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault()
         const fd = new FormData(e.currentTarget)
-        const tel = fd.get('telefono') as string
+        const tel = (fd.get('telefono') as string)?.trim()
         if (tel) {
             localStorage.setItem('cliente_telefono', tel)
             setTelefono(tel)
@@ -173,6 +186,7 @@ export function MisPedidosDrawer({
         setTelefono('')
         setPedidos([])
         setFetched(false)
+        setError(null)
     }
 
     const activos = pedidos.filter(p => ACTIVE_STATES.includes(p.estado))
@@ -224,12 +238,14 @@ export function MisPedidosDrawer({
                                 <Loader2 className="w-8 h-8 animate-spin text-primary" />
                                 <p className="text-sm text-muted-foreground">Buscando pedidos...</p>
                             </div>
-                        ) : fetched && pedidos.length === 0 ? (
+                        ) : fetched && (pedidos.length === 0 || error) ? (
                             <div className="flex flex-col items-center justify-center py-20 text-center space-y-3 px-6">
                                 <div className="bg-secondary p-5 rounded-full">
                                     <Package className="w-10 h-10 text-muted-foreground" />
                                 </div>
-                                <p className="font-medium text-muted-foreground">No encontramos pedidos para este número.</p>
+                                <p className="font-medium text-muted-foreground">
+                                    {error || 'No encontramos pedidos pagados para este número.'}
+                                </p>
                                 <Button variant="link" onClick={handleChangeTelefono} className="text-primary">
                                     Probar con otro número
                                 </Button>
