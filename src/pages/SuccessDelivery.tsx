@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { CheckCircle2, Copy, Loader2, Store, Truck, Utensils, MapPin, Clock, Package } from 'lucide-react'
@@ -18,6 +18,7 @@ const SuccessDelivery = () => {
     const [isCreatingMP, setIsCreatingMP] = useState(false)
     const [misPedidosOpen, setMisPedidosOpen] = useState(false)
     const [pedidoEstado, setPedidoEstado] = useState<string | null>(null)
+    const metaPurchaseTracked = useRef(false)
 
     useEffect(() => {
         const savedInfo = sessionStorage.getItem('deliveryOrderInfo')
@@ -107,7 +108,7 @@ const SuccessDelivery = () => {
                         })
                     } else if (data.type === 'PEDIDO_ESTADO_ACTUALIZADO') {
                         setPedidoEstado(data.payload.estado)
-                        if (data.payload.estado === 'dispatched') {
+                        if (data.payload.estado === 'dispatched' || data.payload.estado === 'archived') {
                             toast.success('¡Tu pedido va en camino!', {
                                 icon: <Truck className="w-5 h-5 text-blue-500" />,
                                 duration: 6000
@@ -181,6 +182,23 @@ const SuccessDelivery = () => {
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
     }, [status, orderInfo]);
+
+    // Meta Pixel: disparar Purchase solo cuando el pago está confirmado (Cucuru/webhook)
+    useEffect(() => {
+        if (status !== 'confirmed' || !orderInfo || metaPurchaseTracked.current) return
+        const total = parseFloat(orderInfo.total)
+        if (isNaN(total) || total <= 0) return
+
+        metaPurchaseTracked.current = true
+        try {
+            const fbq = (window as any).fbq
+            if (typeof fbq === 'function') {
+                fbq('track', 'Purchase', { currency: 'ARS', value: total })
+            }
+        } catch {
+            // No romper la app si Meta Pixel falla
+        }
+    }, [status, orderInfo])
 
     if (!orderInfo) return null
 
@@ -441,7 +459,7 @@ const SuccessDelivery = () => {
                 {status === 'confirmed' && (
                     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 w-full">
                         {/* Header: changes based on dispatched status */}
-                        {pedidoEstado === 'dispatched' ? (
+                        {(pedidoEstado === 'dispatched' || pedidoEstado === 'archived') ? (
                             <div className="text-center space-y-3">
                                 <div className="mx-auto w-24 h-24 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center mb-2 ring-8 ring-blue-50 dark:ring-blue-900/10">
                                     <Truck className="w-12 h-12 text-blue-600 dark:text-blue-400" />
@@ -468,10 +486,10 @@ const SuccessDelivery = () => {
                             <div className="flex items-center w-full gap-0 py-2">
                                 {(['pending', 'dispatched'] as const).map((step, i) => {
                                     const effectiveEstado = pedidoEstado || 'pending'
-                                    const normalizedEstado = (['preparing', 'ready'].includes(effectiveEstado)) ? 'pending' : effectiveEstado
+                                    const normalizedEstado = (['preparing', 'ready'].includes(effectiveEstado)) ? 'pending' : (effectiveEstado === 'archived' ? 'dispatched' : effectiveEstado)
                                     const stepOrder = ['pending', 'dispatched']
                                     const currentIdx = stepOrder.indexOf(normalizedEstado)
-                                    const allDone = effectiveEstado === 'delivered' || effectiveEstado === 'dispatched'
+                                    const allDone = effectiveEstado === 'delivered' || effectiveEstado === 'dispatched' || effectiveEstado === 'archived'
                                     const isCompleted = allDone || (currentIdx >= 0 && i < currentIdx)
                                     const isCurrent = !allDone && step === normalizedEstado
                                     const label = step === 'pending' ? 'Recibido' : 'En camino'
@@ -511,7 +529,7 @@ const SuccessDelivery = () => {
                         {/* Info card */}
                         <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
                             {/* Payment info: only show if NOT dispatched yet */}
-                            {!pedidoEstado || !['dispatched', 'delivered'].includes(pedidoEstado) ? (
+                            {!pedidoEstado || !['dispatched', 'delivered', 'archived'].includes(pedidoEstado) ? (
                                 <>
                                     {orderInfo.metodoPago === 'transferencia' && (
                                         orderInfo.cucuruAlias ? (
@@ -565,7 +583,7 @@ const SuccessDelivery = () => {
                                     </div>
                                     <div className="space-y-1.5 min-w-0">
                                         <h3 className="font-bold text-base leading-none">
-                                            {pedidoEstado === 'dispatched'
+                                            {(pedidoEstado === 'dispatched' || pedidoEstado === 'archived')
                                                 ? '¡Tu pedido va en camino!'
                                                 : tipoPedido === 'delivery' ? 'Delivery' : 'Retiro en local'}
                                         </h3>
@@ -576,7 +594,7 @@ const SuccessDelivery = () => {
                                                     <span className="truncate">{direccion}</span>
                                                 </div>
                                                 <p className="text-xs text-muted-foreground leading-snug">
-                                                    {pedidoEstado === 'dispatched'
+                                                    {(pedidoEstado === 'dispatched' || pedidoEstado === 'archived')
                                                         ? 'El repartidor se dirige a tu dirección.'
                                                         : 'Tu pedido será enviado a esta dirección.'}
                                                 </p>
