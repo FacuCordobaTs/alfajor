@@ -108,7 +108,7 @@ const SuccessDelivery = () => {
                         })
                     } else if (data.type === 'PEDIDO_ESTADO_ACTUALIZADO') {
                         setPedidoEstado(data.payload.estado)
-                        if (data.payload.estado === 'dispatched' || data.payload.estado === 'archived') {
+                        if (['dispatched', 'archived', 'delivered'].includes(data.payload.estado)) {
                             toast.success('¡Tu pedido va en camino!', {
                                 icon: <Truck className="w-5 h-5 text-blue-500" />,
                                 duration: 6000
@@ -459,7 +459,7 @@ const SuccessDelivery = () => {
                 {status === 'confirmed' && (
                     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 w-full">
                         {/* Header: changes based on dispatched status */}
-                        {(pedidoEstado === 'dispatched' || pedidoEstado === 'archived') ? (
+                        {(pedidoEstado === 'dispatched' || pedidoEstado === 'archived' || pedidoEstado === 'delivered') ? (
                             <div className="text-center space-y-3">
                                 <div className="mx-auto w-24 h-24 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center mb-2 ring-8 ring-blue-50 dark:ring-blue-900/10">
                                     <Truck className="w-12 h-12 text-blue-600 dark:text-blue-400" />
@@ -486,7 +486,7 @@ const SuccessDelivery = () => {
                             <div className="flex items-center w-full gap-0 py-2">
                                 {(['pending', 'dispatched'] as const).map((step, i) => {
                                     const effectiveEstado = pedidoEstado || 'pending'
-                                    const normalizedEstado = (['preparing', 'ready'].includes(effectiveEstado)) ? 'pending' : (effectiveEstado === 'archived' ? 'dispatched' : effectiveEstado)
+                                    const normalizedEstado = (['preparing', 'ready'].includes(effectiveEstado)) ? 'pending' : (['archived', 'delivered'].includes(effectiveEstado) ? 'dispatched' : effectiveEstado)
                                     const stepOrder = ['pending', 'dispatched']
                                     const currentIdx = stepOrder.indexOf(normalizedEstado)
                                     const allDone = effectiveEstado === 'delivered' || effectiveEstado === 'dispatched' || effectiveEstado === 'archived'
@@ -583,7 +583,7 @@ const SuccessDelivery = () => {
                                     </div>
                                     <div className="space-y-1.5 min-w-0">
                                         <h3 className="font-bold text-base leading-none">
-                                            {(pedidoEstado === 'dispatched' || pedidoEstado === 'archived')
+                                            {(pedidoEstado === 'dispatched' || pedidoEstado === 'archived' || pedidoEstado === 'delivered')
                                                 ? '¡Tu pedido va en camino!'
                                                 : tipoPedido === 'delivery' ? 'Delivery' : 'Retiro en local'}
                                         </h3>
@@ -594,7 +594,7 @@ const SuccessDelivery = () => {
                                                     <span className="truncate">{direccion}</span>
                                                 </div>
                                                 <p className="text-xs text-muted-foreground leading-snug">
-                                                    {(pedidoEstado === 'dispatched' || pedidoEstado === 'archived')
+                                                    {(pedidoEstado === 'dispatched' || pedidoEstado === 'archived' || pedidoEstado === 'delivered')
                                                         ? 'El repartidor se dirige a tu dirección.'
                                                         : 'Tu pedido será enviado a esta dirección.'}
                                                 </p>

@@ -28,14 +28,14 @@ type Pedido = {
     }[]
 }
 
-const ACTIVE_STATES = ['pending', 'preparing', 'ready', 'dispatched', 'archived']
+const ACTIVE_STATES = ['pending', 'preparing', 'ready', 'dispatched', 'archived', 'delivered']
 
 const ESTADO_LABELS: Record<string, string> = {
     pending: 'Recibido',
     preparing: 'En preparación',
     ready: 'Listo',
     dispatched: 'En camino',
-    delivered: 'Entregado',
+    delivered: 'En camino', // Para el cliente: delivered = despachado (se muestra como "En camino")
     cancelled: 'Cancelado',
     archived: 'En camino', // Para el cliente: archived = despachado (se muestra como "En camino")
 }
@@ -57,15 +57,14 @@ function OrderTracker({ estado, tipo }: { estado: string; tipo: 'delivery' | 'ta
     const steps = tipo === 'delivery' ? DELIVERY_STEPS : TAKEAWAY_STEPS
     const labels = tipo === 'delivery' ? STEP_LABELS_DELIVERY : STEP_LABELS_TAKEAWAY
 
-    const normalizedEstado = (['preparing', 'ready'].includes(estado)) ? 'pending' : (estado === 'archived' ? 'dispatched' : estado)
+    const normalizedEstado = (['preparing', 'ready'].includes(estado)) ? 'pending' : (['archived', 'delivered'].includes(estado) ? 'dispatched' : estado)
     const currentIdx = steps.indexOf(normalizedEstado as any)
-    const isDelivered = estado === 'delivered'
-    const isDispatched = estado === 'dispatched' || estado === 'archived'
+    const isDispatched = estado === 'dispatched' || estado === 'archived' || estado === 'delivered'
 
     return (
         <div className="flex items-center w-full gap-0 py-2">
             {steps.map((step, i) => {
-                const allDone = isDelivered || isDispatched
+                const allDone = isDispatched
                 const isCompleted = allDone || (currentIdx >= 0 && i < currentIdx)
                 const isCurrent = !allDone && step === normalizedEstado
 
