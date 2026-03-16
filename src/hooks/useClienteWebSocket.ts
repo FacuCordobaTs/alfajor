@@ -55,7 +55,7 @@ export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
   const {
     qrToken, clienteId, clienteNombre, setClientes, setPedidoId,
     setPedidoCerrado, clearPedidoCerrado, setSubtotalesPagados, pedidoId, sessionEnded, endSession,
-    setPedido, setPedidoListo
+    setPedido, setPedidoListo, setCheckoutDeliveryData, setCheckoutEditSemaphore
   } = useMesaStore()
   const { clearCarrito } = useCarritoStore()
   const [state, setState] = useState<WebSocketState | null>(null)
@@ -220,6 +220,8 @@ export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
                 })
                 setClientes(data.payload.clientes || [])
                 setPedidoId(nuevoPedidoId)
+                setCheckoutDeliveryData(data.payload.checkoutDeliveryData || null)
+                setCheckoutEditSemaphore(data.payload.checkoutEditSemaphore || null)
                 break
 
               case 'CLIENTE_UNIDO':
@@ -413,6 +415,34 @@ export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
               case 'PEDIDO_LISTO_PARA_RETIRAR':
                 console.log('¡Pedido listo para retirar!', data.payload)
                 setPedidoListo(true)
+                break
+
+              case 'CHECKOUT_EDITANDO':
+                setCheckoutDeliveryData(data.payload.checkoutData || null)
+                setCheckoutEditSemaphore(data.payload.editandoPor || null)
+                break
+
+              case 'CHECKOUT_DATOS_ACTUALIZADOS':
+                setCheckoutDeliveryData(data.payload.checkoutData || null)
+                setCheckoutEditSemaphore(data.payload.editandoPor || null)
+                break
+
+              case 'SALA_PEDIDO_CREADO':
+                const payload = data.payload
+                sessionStorage.setItem('salaOrderInfo', JSON.stringify({
+                  token: payload.token,
+                  pedidoId: payload.pedidoId,
+                  tipoPedido: payload.tipoPedido,
+                  total: payload.total,
+                  items: payload.items,
+                  cucuruAlias: payload.cucuruAlias,
+                  cucuruAccountNumber: payload.cucuruAccountNumber,
+                  deliveryFee: payload.deliveryFee,
+                  zonaNombre: payload.zonaNombre,
+                  direccion: payload.direccion,
+                  metodoPago: 'transferencia',
+                }))
+                window.location.href = `/sala/${payload.token}/success`
                 break
             }
           } catch (err) {

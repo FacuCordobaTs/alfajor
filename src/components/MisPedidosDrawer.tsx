@@ -16,6 +16,7 @@ type Pedido = {
     createdAt: string
     deliveredAt: string | null
     totalItems: number
+    rapiboyTrackingUrl?: string | null
     items: {
         id: number
         productoId: number
@@ -205,9 +206,9 @@ export function MisPedidosDrawer({
             try {
                 const data = JSON.parse(event.data)
                 if (data.type === 'PEDIDO_ESTADO_ACTUALIZADO') {
-                    const { pedidoId, tipo, estado } = data.payload
+                    const { pedidoId, tipo, estado, trackingUrl } = data.payload
                     setPedidos(prev => prev.map(p =>
-                        p.id === pedidoId && p.tipo === tipo ? { ...p, estado } : p
+                        p.id === pedidoId && p.tipo === tipo ? { ...p, estado, rapiboyTrackingUrl: trackingUrl || p.rapiboyTrackingUrl } : p
                     ))
                 }
             } catch {}
@@ -380,6 +381,15 @@ function ActiveOrderCard({ pedido }: { pedido: Pedido }) {
                         <p className="text-xs text-muted-foreground">+{pedido.items.length - 3} items más</p>
                     )}
                 </div>
+                {pedido.tipo === 'delivery' && pedido.rapiboyTrackingUrl && (
+                    <Button
+                        className="w-full h-10 mt-2 rounded-xl border border-orange-200 text-orange-700 bg-orange-50 hover:bg-orange-100 font-bold shadow-sm text-sm"
+                        onClick={() => window.open(pedido.rapiboyTrackingUrl!, '_blank')}
+                    >
+                        <Truck className="mr-2 h-4 w-4" />
+                        Rastrear pedido en vivo
+                    </Button>
+                )}
                 <div className="flex justify-between items-center pt-2 border-t border-border/50">
                     <span className="text-sm font-bold">{pedido.totalItems} items</span>
                     <span className="text-lg font-black">${parseFloat(pedido.total).toFixed(2)}</span>

@@ -144,7 +144,7 @@ const CheckoutDelivery = () => {
         if (!telefono.trim()) return toast.error('Ingresa tu celular')
         if (tipoPedido === 'delivery' && !direccion.trim()) return toast.error('Ingresa tu dirección')
         if (tipoPedido === 'delivery' && (lat === null || lng === null)) return toast.error('Selecciona una dirección de las sugerencias')
-        if (!isLoadingRestaurante && !metodoPago) return toast.error('Selecciona un método de pago')
+        if (!isLoadingRestaurante && !metodoPago && !cucuruConfigurado) return toast.error('Selecciona un método de pago')
 
         setLoading(true)
         try {
@@ -165,8 +165,11 @@ const CheckoutDelivery = () => {
                 }))
             }
 
+            // Siempre enviar metodoPago: con Cucuru es transferencia (única opción)
             if (metodoPago) {
                 payload.metodoPago = metodoPago
+            } else if (cucuruConfigurado) {
+                payload.metodoPago = 'transferencia'
             }
 
             if (tipoPedido === 'delivery') {

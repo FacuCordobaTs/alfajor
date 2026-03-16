@@ -17,6 +17,7 @@ import EsperandoPedido from './pages/EsperandoPedido'
 import MenuDelivery from './pages/MenuDelivery'
 import CheckoutDelivery from './pages/CheckoutDelivery'
 import SuccessDelivery from './pages/SuccessDelivery'
+import SuccessGrupal from './pages/SuccessGrupal'
 
 const router = createBrowserRouter([
   {
@@ -26,6 +27,18 @@ const router = createBrowserRouter([
   {
     path: "/mesa/:qrToken",
     element: <Nombre />,
+  },
+  {
+    path: "/sala/:qrToken/nombre",
+    element: <Nombre />,
+  },
+  {
+    path: "/sala/:qrToken",
+    element: <Menu />,
+  },
+  {
+    path: "/sala/:qrToken/success",
+    element: <SuccessGrupal />,
   },
   {
     path: "/menu",

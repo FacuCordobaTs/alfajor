@@ -10,6 +10,8 @@ import {
 import { ProductDetailDrawer } from '@/components/ProductDetailDrawer'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { MisPedidosDrawer } from '@/components/MisPedidosDrawer'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
 
 type HorarioTurno = { diaSemana: number; horaApertura: string; horaCierre: string }
 
@@ -74,6 +76,10 @@ const MenuDelivery = () => {
     const [loading, setLoading] = useState(true)
     const [horarios, setHorarios] = useState<HorarioTurno[]>([])
     const [estadoAbierto, setEstadoAbierto] = useState<{ abierto: boolean; proximaApertura: string | null }>({ abierto: true, proximaApertura: null })
+
+    const [modalSalaOpen, setModalSalaOpen] = useState(false)
+    const [nombreSala, setNombreSala] = useState('')
+    const [creandoSala, setCreandoSala] = useState(false)
 
     const [cartItems, setCartItems] = useState<any[]>(() => {
         const saved = localStorage.getItem(`deliveryCart_${username}`)
@@ -319,6 +325,45 @@ const MenuDelivery = () => {
     const puntosEnCarrito = () => cartItems.reduce((sum, item) => sum + (item.esCanjePuntos ? item.puntosNecesarios * item.cantidad : 0), 0)
     const puntosGanadosCarrito = () => cartItems.reduce((sum, item) => sum + (!item.esCanjePuntos && item.puntosGanados ? item.puntosGanados * item.cantidad : 0), 0)
 
+    const crearSala = async (nombreParaSala: string) => {
+        if (!nombreParaSala.trim() || !restaurante?.id) return
+        setCreandoSala(true)
+        try {
+            const url = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+            const res = await fetch(`${url}/public/sala/create`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ restauranteId: restaurante.id, nombreCliente: nombreParaSala.trim() })
+            })
+            const data = await res.json()
+            if (data.success && data.data?.token) {
+                localStorage.setItem('cliente_nombre', nombreParaSala.trim())
+                navigate(`/sala/${data.data.token}/nombre`)
+            } else {
+                toast.error('Error al crear el pedido entre amigos')
+            }
+        } catch (e) {
+            toast.error('Error al conectar con el servidor')
+        } finally {
+            setCreandoSala(false)
+            setModalSalaOpen(false)
+        }
+    }
+
+    const handleCrearSala = async (e: React.FormEvent) => {
+        e.preventDefault()
+        await crearSala(nombreSala)
+    }
+
+    const onArmarPedidoClick = () => {
+        const storedName = localStorage.getItem('cliente_nombre')
+        if (storedName) {
+            crearSala(storedName)
+        } else {
+            setModalSalaOpen(true)
+        }
+    }
+
     const cachedThemeStr = sessionStorage.getItem(`theme_${username}`)
     const cachedTheme = cachedThemeStr ? JSON.parse(cachedThemeStr) : null
 
@@ -435,6 +480,21 @@ const MenuDelivery = () => {
                         </div> */}
                     </div>
                 </section>
+
+                {/* BOTON ARMAR PEDIDO ENTRE AMIGOS (solo si orderGroupEnabled) */}
+                {restaurante?.orderGroupEnabled !== false && (
+                <section className="bg-primary/5 hover:bg-primary/10 transition-colors border border-primary/20 p-4 rounded-2xl flex items-center justify-between shadow-sm cursor-pointer" onClick={onArmarPedidoClick}>
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+                            <UtensilsCrossed className="w-5 h-5 text-primary" />
+                        </div>
+                        <div className="flex flex-col">
+                            <span className="font-semibold text-foreground text-sm">Armar pedido entre amigos</span>
+                            <span className="text-xs text-muted-foreground">Comparte un link y pidan juntos</span>
+                        </div>
+                    </div>
+                </section>
+                )}
 
                 {restaurante?.sistemaPuntos && (
                     <section className="bg-primary/10 border border-primary/20 p-4 rounded-xl flex items-center justify-between shadow-sm">
@@ -712,6 +772,40 @@ const MenuDelivery = () => {
                 onOpenChange={setMisPedidosOpen}
                 restauranteId={restaurante?.id ?? null}
             />
+
+            <Dialog open={modalSalaOpen} onOpenChange={setModalSalaOpen}>
+                <DialogContent className="max-w-sm rounded-3xl p-6">
+                    <DialogHeader className="text-center sm:text-center">
+                        <div className="mx-auto w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                            <UtensilsCrossed className="w-8 h-8 text-primary" />
+                        </div>
+                        <DialogTitle className="text-xl">Pedido Grupal</DialogTitle>
+                        <DialogDescription className="text-center pt-2">
+                            Crearemos una sala virtual para que invites a tus amigos a agregar productos.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={handleCrearSala} className="mt-4 space-y-4">
+                        <Input
+                            placeholder="¿Cuál es tu nombre?"
+                            value={nombreSala}
+                            onChange={(e) => setNombreSala(e.target.value)}
+                            required
+                            autoComplete="off"
+                            className="h-12 text-center rounded-xl"
+                        />
+                        <DialogFooter className="flex-col gap-2 sm:gap-2 pt-2">
+                            <Button
+                                type="submit"
+                                size="lg"
+                                disabled={creandoSala || !nombreSala.trim()}
+                                className="w-full rounded-2xl font-semibold"
+                            >
+                                {creandoSala ? 'Creando...' : 'Crear y continuar'}
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }

@@ -168,14 +168,23 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
                   <p className="text-sm text-muted-foreground">{product.categoria || 'Sin categoría'}</p>
                 </div>
                 <div className="text-right">
-                  {product.descuento && product.descuento > 0 ? (
-                    <>
-                      <p className="text-sm text-muted-foreground line-through">${(parseFloat(String(product.precio)) * quantity).toFixed(2)}</p>
-                      <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">${(parseFloat(String(product.precio)) * (1 - product.descuento / 100) * quantity).toFixed(2)}</p>
-                    </>
-                  ) : (
-                    <p className="text-2xl font-bold text-primary">${(parseFloat(String(product.precio)) * quantity).toFixed(2)}</p>
-                  )}
+                  {(() => {
+                    const precioBase = parseFloat(String(product.precio))
+                    const precioConDescuento = product.descuento && product.descuento > 0
+                      ? precioBase * (1 - product.descuento / 100)
+                      : precioBase
+                    const precioAgregados = (agregadosSeleccionados || []).reduce((sum, ag) => sum + parseFloat(ag.precio || '0'), 0)
+                    const precioUnitario = precioConDescuento + precioAgregados
+                    const total = precioUnitario * quantity
+                    return product.descuento && product.descuento > 0 ? (
+                      <>
+                        <p className="text-sm text-muted-foreground line-through">${(precioBase * quantity).toFixed(2)}</p>
+                        <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">${total.toFixed(2)}</p>
+                      </>
+                    ) : (
+                      <p className="text-2xl font-bold text-primary">${total.toFixed(2)}</p>
+                    )
+                  })()}
                 </div>
               </div>
 

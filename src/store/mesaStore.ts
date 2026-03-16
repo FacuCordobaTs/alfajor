@@ -16,6 +16,31 @@ interface Restaurante {
   esCarrito: boolean | null
   splitPayment: boolean | null
   soloCartaDigital: boolean
+  disenoAlternativo?: boolean | null
+  direccion?: string | null
+  colorPrimario?: string | null
+  colorSecundario?: string | null
+  username?: string | null
+}
+
+// Datos de checkout grupal (sala)
+export interface CheckoutDeliveryData {
+  tipoPedido: 'delivery' | 'takeaway'
+  nombre: string
+  telefono: string
+  direccion: string
+  lat: number | null
+  lng: number | null
+  notas: string
+  deliveryFee: number
+  zonaNombre: string | null
+  itemsTotal: string
+  total: string
+}
+
+export interface CheckoutEditSemaphore {
+  clienteId: string
+  clienteNombre: string
 }
 
 interface Ingrediente {
@@ -97,6 +122,11 @@ interface MesaState {
   isHydrated: boolean
   // Modo carrito: indica si el pedido está listo para retirar
   pedidoListo: boolean
+  // Checkout grupal (sala)
+  checkoutDeliveryData: CheckoutDeliveryData | null
+  checkoutEditSemaphore: CheckoutEditSemaphore | null
+  setCheckoutDeliveryData: (data: CheckoutDeliveryData | null) => void
+  setCheckoutEditSemaphore: (sem: CheckoutEditSemaphore | null) => void
   setMesa: (mesa: Mesa) => void
   setRestaurante: (restaurante: Restaurante | null) => void
   setProductos: (productos: Producto[]) => void
@@ -135,7 +165,11 @@ export const useMesaStore = create<MesaState>()(
       sessionEnded: false,
       isHydrated: false,
       pedidoListo: false,
+      checkoutDeliveryData: null,
+      checkoutEditSemaphore: null,
 
+      setCheckoutDeliveryData: (data) => set({ checkoutDeliveryData: data }),
+      setCheckoutEditSemaphore: (sem) => set({ checkoutEditSemaphore: sem }),
       setMesa: (mesa) => set({ mesa }),
       setRestaurante: (restaurante) => set({ restaurante }),
       setProductos: (productos) => set({ productos }),
@@ -196,6 +230,8 @@ export const useMesaStore = create<MesaState>()(
         subtotalesPagados: [],
         sessionEnded: false,
         pedidoListo: false,
+        checkoutDeliveryData: null,
+        checkoutEditSemaphore: null,
       }),
     }),
     {

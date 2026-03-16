@@ -18,6 +18,7 @@ const SuccessDelivery = () => {
     const [isCreatingMP, setIsCreatingMP] = useState(false)
     const [misPedidosOpen, setMisPedidosOpen] = useState(false)
     const [pedidoEstado, setPedidoEstado] = useState<string | null>(null)
+    const [rapiboyTrackingUrl, setRapiboyTrackingUrl] = useState<string | null>(null)
     const metaPurchaseTracked = useRef(false)
 
     useEffect(() => {
@@ -66,6 +67,7 @@ const SuccessDelivery = () => {
                 if (data.success) {
                     if (data.pagado) setStatus('confirmed')
                     if (data.estado) setPedidoEstado(data.estado)
+                    if (data.rapiboyTrackingUrl) setRapiboyTrackingUrl(data.rapiboyTrackingUrl)
                 }
             } catch (err) {
                 console.error('Error fetching pedido status:', err)
@@ -108,6 +110,9 @@ const SuccessDelivery = () => {
                         })
                     } else if (data.type === 'PEDIDO_ESTADO_ACTUALIZADO') {
                         setPedidoEstado(data.payload.estado)
+                        if (data.payload.trackingUrl) {
+                            setRapiboyTrackingUrl(data.payload.trackingUrl)
+                        }
                         if (['dispatched', 'archived', 'delivered'].includes(data.payload.estado)) {
                             toast.success('¡Tu pedido va en camino!', {
                                 icon: <Truck className="w-5 h-5 text-blue-500" />,
@@ -620,6 +625,22 @@ const SuccessDelivery = () => {
                                     </div>
                                 </div>
                             </div>
+
+                            {/* Rapiboy Tracking Button */}
+                            {rapiboyTrackingUrl && (
+                                <div className="p-4 bg-orange-50 dark:bg-orange-950/20 border-t border-orange-100 dark:border-orange-900/30">
+                                    <Button
+                                        className="w-full h-12 rounded-xl font-bold bg-orange-500 hover:bg-orange-600 text-white shadow-md shadow-orange-500/20"
+                                        onClick={() => window.open(rapiboyTrackingUrl, '_blank')}
+                                    >
+                                        <Truck className="w-5 h-5 mr-2" />
+                                        Rastrear pedido en vivo
+                                    </Button>
+                                    <p className="text-xs text-orange-700 dark:text-orange-400 mt-2 text-center font-medium">
+                                        Seguí el recorrido de tu pedido de Rapiboy
+                                    </p>
+                                </div>
+                            )}
                         </div>
 
                         {/* Order summary always visible */}

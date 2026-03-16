@@ -1,36 +1,79 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router'
+import { useNavigate, useParams } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { useMesaStore } from '@/store/mesaStore'
 import { useClienteWebSocket } from '@/hooks/useClienteWebSocket'
+import { mesaApi } from '@/lib/api'
 import { toast } from 'sonner'
 import {
   Trash2, ArrowLeft,
   Wifi, WifiOff, Package, ChefHat, UtensilsCrossed, Receipt, Utensils,
-  BellRing, HandPlatter, Check, X, Users, Loader2
+  Check, X, Users, Loader2, Link as LinkIcon, Clock
 } from 'lucide-react'
 import { ProductDetailDrawer } from '@/components/ProductDetailDrawer'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { CheckoutDeliveryGrupal } from '@/components/CheckoutDeliveryGrupal'
+import { MisPedidosDrawer } from '@/components/MisPedidosDrawer'
+
+type HorarioTurno = { diaSemana: number; horaApertura: string; horaCierre: string }
+
+function checkIsOpen(horarios: HorarioTurno[]): { abierto: boolean; proximaApertura: string | null } {
+  if (!horarios || horarios.length === 0) return { abierto: true, proximaApertura: null }
+  const now = new Date()
+  const diaHoy = now.getDay()
+  const diaAyer = (diaHoy + 6) % 7
+  const hhmm = now.getHours() * 60 + now.getMinutes()
+  for (const h of horarios) {
+    const apertura = parseInt(h.horaApertura.split(':')[0]) * 60 + parseInt(h.horaApertura.split(':')[1])
+    const cierre = parseInt(h.horaCierre.split(':')[0]) * 60 + parseInt(h.horaCierre.split(':')[1])
+    if (cierre > apertura) {
+      if (h.diaSemana === diaHoy && hhmm >= apertura && hhmm < cierre) return { abierto: true, proximaApertura: null }
+    } else {
+      if (h.diaSemana === diaHoy && hhmm >= apertura) return { abierto: true, proximaApertura: null }
+      if (h.diaSemana === diaAyer && hhmm < cierre) return { abierto: true, proximaApertura: null }
+    }
+  }
+  const DIAS_NOMBRE = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+  let mejor: { minutos: number; texto: string } | null = null
+  for (const h of horarios) {
+    const apertura = parseInt(h.horaApertura.split(':')[0]) * 60 + parseInt(h.horaApertura.split(':')[1])
+    let diasHasta = (h.diaSemana - diaHoy + 7) % 7
+    let minutosHasta = diasHasta * 1440 + (apertura - hhmm)
+    if (minutosHasta <= 0) minutosHasta += 7 * 1440
+    if (!mejor || minutosHasta < mejor.minutos) {
+      const esHoy = diasHasta === 0 && apertura > hhmm
+      mejor = { minutos: minutosHasta, texto: esHoy ? `hoy a las ${h.horaApertura}` : `${DIAS_NOMBRE[h.diaSemana]} ${h.horaApertura}` }
+    }
+  }
+  return { abierto: false, proximaApertura: mejor?.texto || null }
+}
 
 const Menu = () => {
   const navigate = useNavigate()
-  const { mesa, productos, clientes, clienteNombre, clienteId, qrToken, isHydrated, sessionEnded, restaurante, pedido } = useMesaStore()
+  const { qrToken: urlQrToken } = useParams<{ qrToken?: string }>()
+  const { mesa, productos, clientes, clienteNombre, clienteId, qrToken, isHydrated, sessionEnded, restaurante, pedido, checkoutDeliveryData, checkoutEditSemaphore, setMesa, setProductos, setPedidoId, setPedido, setRestaurante, setQrToken, setClientes, setCheckoutDeliveryData, setCheckoutEditSemaphore } = useMesaStore()
   const { state: wsState, isConnected, sendMessage, confirmacionGrupal, confirmacionCancelada, clearConfirmacionCancelada } = useClienteWebSocket()
+
+  const [horarios, setHorarios] = useState<HorarioTurno[]>([])
+  const [estadoAbierto, setEstadoAbierto] = useState<{ abierto: boolean; proximaApertura: string | null }>({ abierto: true, proximaApertura: null })
 
   const [carritoAbierto, setCarritoAbierto] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<typeof productos[0] | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState<string>('All')
 
-  // ESTADOS PARA EL FLUJO DE LLAMAR AL MOZO
-  const [confirmarMozoOpen, setConfirmarMozoOpen] = useState(false) // Paso 1: Confirmación
-  const [mozoNotificadoOpen, setMozoNotificadoOpen] = useState(false) // Paso 2: Éxito
+  // ESTADO PARA MIS PEDIDOS (como MenuDelivery)
+  const [misPedidosOpen, setMisPedidosOpen] = useState(false)
 
   // ESTADO PARA EL MODAL DE CONFIRMACIÓN GRUPAL
   const [confirmacionGrupalOpen, setConfirmacionGrupalOpen] = useState(false)
+
+  // Para sala: mostrar checkout en lugar de ir directo a confirmación
+  const esSala = typeof window !== 'undefined' && window.location.pathname.includes('/sala/')
+  const [mostrarCheckoutEnCarrito, setMostrarCheckoutEnCarrito] = useState(false)
 
   const abrirCarrito = useCallback(() => {
     window.history.pushState({ drawer: 'carrito' }, '')
@@ -39,6 +82,7 @@ const Menu = () => {
 
   const cerrarCarrito = useCallback(() => {
     setCarritoAbierto(false)
+    setMostrarCheckoutEnCarrito(false)
     if (window.history.state?.drawer === 'carrito') {
       window.history.back()
     }
@@ -56,6 +100,30 @@ const Menu = () => {
       window.history.back()
     }
   }, [])
+
+  // Fetch horarios cuando tenemos restaurante (para check de horario como MenuDelivery)
+  useEffect(() => {
+    const username = restaurante?.username || 'alfajor'
+    if (!username) return
+    const fetchHorarios = async () => {
+      try {
+        const url = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+        const res = await fetch(`${url}/public/restaurante/${username}`)
+        const data = await res.json()
+        if (data.success && data.data?.horarios) {
+          setHorarios(data.data.horarios)
+          setEstadoAbierto(checkIsOpen(data.data.horarios))
+        }
+      } catch { /* ignore */ }
+    }
+    fetchHorarios()
+  }, [restaurante?.username])
+
+  useEffect(() => {
+    if (horarios.length === 0) return
+    const interval = setInterval(() => setEstadoAbierto(checkIsOpen(horarios)), 60_000)
+    return () => clearInterval(interval)
+  }, [horarios])
 
   useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
@@ -75,13 +143,40 @@ const Menu = () => {
     return () => window.removeEventListener('popstate', handlePopState)
   }, [carritoAbierto, drawerOpen])
 
+  // Sincronizar sala cuando la URL tiene un token distinto al del store (ej: usuario entró por otro link)
+  useEffect(() => {
+    if (!isHydrated || !esSala || !urlQrToken) return
+    if (urlQrToken === qrToken) return
+    const syncSala = async () => {
+      try {
+        const response = await mesaApi.join(urlQrToken) as { success?: boolean; data?: any }
+        if (response.success && response.data) {
+          setQrToken(urlQrToken)
+          setMesa(response.data.mesa)
+          setProductos(response.data.productos || [])
+          setPedidoId(response.data.pedido.id)
+          setPedido(response.data.pedido)
+          setRestaurante(response.data.restaurante || null)
+          setClientes([])
+          setCheckoutDeliveryData(null)
+          setCheckoutEditSemaphore(null)
+        }
+      } catch {
+        toast.error('No se pudo cargar la sala')
+      }
+    }
+    syncSala()
+  }, [isHydrated, esSala, urlQrToken, qrToken])
+
   useEffect(() => {
     if (!isHydrated) return
     if (sessionEnded) return
 
-    if (!clienteNombre || !qrToken) {
+    if (!clienteNombre || (!qrToken && !urlQrToken)) {
       toast.error('Debes ingresar tu nombre primero')
-      navigate(`/mesa/${qrToken || 'invalid'}`)
+      const isSala = window.location.pathname.includes('/sala/')
+      const token = urlQrToken || qrToken || 'invalid'
+      navigate(isSala ? `/sala/${token}/nombre` : `/mesa/${token}`)
       return
     }
 
@@ -97,7 +192,7 @@ const Menu = () => {
         navigate('/pedido-cerrado')
       }
     }
-  }, [clienteNombre, qrToken, wsState?.estado, navigate, isHydrated, sessionEnded, restaurante?.esCarrito])
+  }, [clienteNombre, qrToken, urlQrToken, wsState?.estado, navigate, isHydrated, sessionEnded, restaurante?.esCarrito])
 
   // Lógica de productos y categorías (se mantiene igual)
   const categorias = ['All', ...Array.from(new Set(productos.map(p => p.categoria).filter(Boolean)))]
@@ -128,13 +223,19 @@ const Menu = () => {
 
   const agregarAlPedido = (producto: typeof productos[0] | any, cantidad: number = 1, ingredientesExcluidos?: number[], agregados?: any[]) => {
     if (!clienteNombre) return
+    let precioBase = parseFloat(String(producto.precio))
+    if (producto.descuento && producto.descuento > 0) {
+      precioBase = precioBase * (1 - producto.descuento / 100)
+    }
+    const precioAgregados = (agregados || []).reduce((sum: number, ag: any) => sum + parseFloat(ag.precio || '0'), 0)
+    const precioUnitario = (precioBase + precioAgregados).toFixed(2)
     sendMessage({
       type: 'AGREGAR_ITEM',
       payload: {
         productoId: producto.id,
         clienteNombre,
         cantidad,
-        precioUnitario: String(producto.precio),
+        precioUnitario,
         imagenUrl: producto.imagenUrl,
         ingredientesExcluidos: ingredientesExcluidos || [],
         agregados: agregados || []
@@ -150,9 +251,31 @@ const Menu = () => {
 
   // --- LÓGICA DE CONFIRMACIÓN GRUPAL ---
 
+  // Botón principal del carrito: "Continuar" (sala) o "Confirmar Pedido" (mesa)
+  const handleBotonPrincipalCarrito = () => {
+    if (!clienteNombre || !clienteId) return
+    if (!estadoAbierto.abierto) {
+      toast.error('El restaurante está cerrado en este momento')
+      return
+    }
+
+    if (esSala) {
+      // Sala: mostrar checkout de delivery/takeaway
+      setMostrarCheckoutEnCarrito(true)
+      return
+    }
+
+    // Mesa: flujo original de confirmación grupal
+    iniciarConfirmacionPedido()
+  }
+
   // Iniciar el proceso de confirmación grupal
   const iniciarConfirmacionPedido = () => {
     if (!clienteNombre || !clienteId) return
+    if (!estadoAbierto.abierto) {
+      toast.error('El restaurante está cerrado en este momento')
+      return
+    }
 
     // Si solo hay un cliente, confirmar directamente (compatibilidad)
     if (clientes.length <= 1) {
@@ -173,6 +296,10 @@ const Menu = () => {
   // Confirmar mi parte en la confirmación grupal
   const confirmarMiParte = () => {
     if (!clienteId) return
+    if (!estadoAbierto.abierto) {
+      toast.error('El restaurante está cerrado en este momento')
+      return
+    }
     sendMessage({
       type: 'USUARIO_CONFIRMO',
       payload: { clienteId }
@@ -210,32 +337,91 @@ const Menu = () => {
   const yaConfirme = confirmacionGrupal?.confirmaciones.find(c => c.clienteId === clienteId)?.confirmado ?? false
   const totalConfirmados = confirmacionGrupal?.confirmaciones.filter(c => c.confirmado).length ?? 0
   const totalClientes = confirmacionGrupal?.confirmaciones.length ?? 0
+  const todosConfirmaron = esSala && totalClientes > 0 && totalConfirmados === totalClientes
 
-  // --- LÓGICA REDISEÑADA PARA LLAMAR AL MOZO ---
-
-  // 1. Solo abre el diálogo de confirmación
-  const iniciarLlamadaMozo = () => {
-    setConfirmarMozoOpen(true)
-  }
-
-  // 2. Ejecuta la llamada real
-  const confirmarLlamada = () => {
-    if (!clienteNombre) return
-
-    sendMessage({
-      type: 'LLAMAR_MOZO',
-      payload: { clienteNombre }
-    })
-
-    setConfirmarMozoOpen(false)
-    setMozoNotificadoOpen(true) // Muestra el éxito
-  }
+  // Fallback: cuando todos confirmaron en sala, poll por el pedido creado (por si el WS no llega)
+  useEffect(() => {
+    if (!todosConfirmaron || !urlQrToken) return
+    const token = urlQrToken
+    const poll = async () => {
+      try {
+        const url = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+        const res = await fetch(`${url}/public/sala/${token}/order-created`)
+        const data = await res.json()
+        if (data.success && data.order) {
+          sessionStorage.setItem('salaOrderInfo', JSON.stringify({
+            token: data.order.token,
+            pedidoId: data.order.pedidoId,
+            tipoPedido: data.order.tipoPedido,
+            total: data.order.total,
+            items: data.order.items,
+            cucuruAlias: data.order.cucuruAlias,
+            cucuruAccountNumber: data.order.cucuruAccountNumber,
+            deliveryFee: data.order.deliveryFee,
+            zonaNombre: data.order.zonaNombre,
+            direccion: data.order.direccion,
+            metodoPago: 'transferencia',
+          }))
+          window.location.href = `/sala/${data.order.token}/success`
+        }
+      } catch { /* ignore */ }
+    }
+    const t = setTimeout(poll, 500)
+    const interval = setInterval(poll, 1500)
+    return () => {
+      clearTimeout(t)
+      clearInterval(interval)
+    }
+  }, [todosConfirmaron, urlQrToken])
 
   const todosLosItems = wsState?.items || []
   const totalPedido = wsState?.total || '0.00'
 
+  // Colores hardcodeados para single tenant
+  const primario = '#0a331d'
+  const secundario = '#eae7e0'
+
+  const themeStyles = (
+    <style dangerouslySetInnerHTML={{
+      __html: `
+      :root {
+        --background: ${secundario};
+        --foreground: ${primario};
+        --card: ${secundario};
+        --card-foreground: ${primario};
+        --popover: ${secundario};
+        --popover-foreground: ${primario};
+        --primary: ${primario};
+        --primary-foreground: ${secundario};
+        --secondary: ${primario}18;
+        --secondary-foreground: ${primario};
+        --muted: ${primario}15;
+        --muted-foreground: ${primario}99;
+        --border: ${primario}30;
+        --input: ${primario}30;
+      }
+      .dark {
+        --background: ${primario};
+        --foreground: ${secundario};
+        --card: ${primario};
+        --card-foreground: ${secundario};
+        --popover: ${primario};
+        --popover-foreground: ${secundario};
+        --primary: ${secundario};
+        --primary-foreground: ${primario};
+        --secondary: ${secundario}18;
+        --secondary-foreground: ${secundario};
+        --muted: ${secundario}15;
+        --muted-foreground: ${secundario}b3;
+        --border: ${secundario}30;
+        --input: ${secundario}30;
+      }
+    `}} />
+  )
+
   return (
     <div className="min-h-screen pb-32 bg-background font-sans selection:bg-primary/20">
+      {themeStyles}
 
       {/* --- HEADER --- */}
       <div className="sticky top-0 z-20 bg-background/80 backdrop-blur-md border-b border-border/50 supports-backdrop-filter:bg-background/60">
@@ -248,23 +434,29 @@ const Menu = () => {
             </div>
 
             <div className="flex items-center gap-2">
-              {/* BOTÓN REDISEÑADO: Píldora explicita */}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={iniciarLlamadaMozo}
-                className="rounded-full h-9 px-4 gap-2 bg-primary/5 hover:bg-primary/10 text-primary border border-primary/10 transition-all active:scale-95"
-              >
-                <HandPlatter className="w-4 h-4" />
-                <span className="text-xs font-semibold hidden xs:inline-block">Asistencia</span>
-                <span className="text-xs font-semibold inline-block xs:hidden">LLamar Mozo</span>
-              </Button>
-
               <ThemeToggle />
+              <button
+                onClick={() => setMisPedidosOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-primary hover:bg-primary/10 transition-colors border border-primary/20"
+              >
+                <Package className="w-3.5 h-3.5" />
+                Mis Pedidos
+              </button>
             </div>
           </div>
         </div>
       </div>
+
+      {!estadoAbierto.abierto && (
+        <div className="bg-red-600 text-white">
+          <div className="max-w-2xl mx-auto px-5 py-3 flex items-center justify-center gap-2">
+            <Clock className="w-4 h-4 shrink-0" />
+            <p className="text-sm font-semibold text-center">
+              Estamos cerrados{estadoAbierto.proximaApertura ? `. Abrimos ${estadoAbierto.proximaApertura}` : ''}
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="max-w-2xl mx-auto px-5 pt-4 space-y-6">
 
@@ -273,19 +465,19 @@ const Menu = () => {
           <div className="flex items-end justify-between px-1">
             <div>
               <p className="text-sm text-muted-foreground font-medium mb-0.5">Bienvenido,</p>
-              <h1 className="text-3xl font-extrabold tracking-tight bg-linear-to-r from-orange-800 to-orange-400 bg-clip-text text-transparent dark:from-orange-400 dark:to-orange-200">
+              <h1 className="text-3xl font-extrabold tracking-tight text-primary">
                 {clienteNombre}
               </h1>
             </div>
             <div className="text-right">
               {restaurante?.esCarrito && pedido?.nombrePedido ? (
                 <>
-                  <span className="text-xs font-semibold text-orange-600 dark:text-orange-400 uppercase tracking-wider block">Pedido</span>
+                  <span className="text-xs font-semibold text-primary uppercase tracking-wider block">Pedido</span>
                   <span className="text-sm font-medium">de {pedido.nombrePedido}</span>
                 </>
               ) : (
                 <>
-                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">Mesa</span>
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">Pedido</span>
                   <span className="text-sm font-medium">{mesa?.nombre}</span>
                 </>
               )}
@@ -296,7 +488,7 @@ const Menu = () => {
           <div>
             <div className="flex items-center gap-2 mb-2 px-1">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                En la mesa:
+                En el pedido:
               </p>
             </div>
 
@@ -310,6 +502,21 @@ const Menu = () => {
                 </div>
                 <span className="text-xs font-medium truncate max-w-[60px] text-center">Tú</span>
               </div>
+
+              {/* Botón compartir si es sala */}
+              {window.location.pathname.includes('/sala/') && (
+                <div className="flex flex-col items-center gap-1.5 min-w-[56px] snap-start" onClick={() => {
+                  navigator.clipboard.writeText(window.location.href);
+                  toast.success('¡Link copiado al portapapeles!');
+                }}>
+                  <div className="relative cursor-pointer hover:scale-105 transition-transform">
+                    <div className="w-12 h-12 rounded-xl border-2 shadow-sm border-primary/30 bg-primary/10 text-primary flex items-center justify-center">
+                      <LinkIcon className="w-5 h-5" />
+                    </div>
+                  </div>
+                  <span className="text-xs font-medium text-primary text-center cursor-pointer">Compartir</span>
+                </div>
+              )}
 
               {/* Otros usuarios */}
               {clientes.filter(c => c.nombre !== clienteNombre).map((cliente) => (
@@ -384,6 +591,7 @@ const Menu = () => {
                           key={producto.id}
                           producto={producto}
                           onClick={() => abrirDetalleProducto(producto)}
+                          disenoAlternativo={restaurante?.disenoAlternativo!}
                         />
                       ))}
                       {/* Spacer for last item padding */}
@@ -407,6 +615,7 @@ const Menu = () => {
                       key={producto.id}
                       producto={producto}
                       onClick={() => abrirDetalleProducto(producto)}
+                      disenoAlternativo={restaurante?.disenoAlternativo!}
                       fullWidth
                     />
                   ))}
@@ -458,12 +667,32 @@ const Menu = () => {
               </Button>
               <div>
                 <SheetTitle className="text-xl">Tu Pedido</SheetTitle>
-                <p className="text-xs text-muted-foreground mt-0.5">Mesa {mesa?.nombre} • {todosLosItems.length} items</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Pedido {mesa?.nombre} • {todosLosItems.length} items</p>
               </div>
             </div>
 
             <div className="flex-1 overflow-y-auto px-5 py-6 space-y-4">
-              {todosLosItems.length === 0 ? (
+              {mostrarCheckoutEnCarrito && esSala ? (
+                <div className="space-y-4">
+                  <Button variant="ghost" size="sm" className="-ml-2 -mt-2" onClick={() => setMostrarCheckoutEnCarrito(false)}>
+                    <ArrowLeft className="w-4 h-4 mr-1" />
+                    Volver al pedido
+                  </Button>
+                  <CheckoutDeliveryGrupal
+                    restauranteId={restaurante?.id ?? 0}
+                    itemsTotal={totalPedido}
+                    totalItems={todosLosItems.length}
+                    onConfirmarClick={iniciarConfirmacionPedido}
+                    sendMessage={sendMessage}
+                    clienteId={clienteId ?? ''}
+                    clienteNombre={clienteNombre ?? ''}
+                    checkoutData={checkoutDeliveryData}
+                    editSemaphore={checkoutEditSemaphore}
+                    restauranteDireccion={restaurante?.direccion ?? undefined}
+                    confirmarDisabled={!estadoAbierto.abierto}
+                  />
+                </div>
+              ) : todosLosItems.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-center space-y-4 opacity-60">
                   <div className="bg-secondary p-6 rounded-full">
                     <UtensilsCrossed className="w-10 h-10" />
@@ -472,7 +701,8 @@ const Menu = () => {
                   <Button variant="link" onClick={cerrarCarrito}>Ir al menú</Button>
                 </div>
               ) : (
-                todosLosItems.map((item) => {
+                <>
+                {todosLosItems.map((item) => {
                   const esMio = item.clienteNombre === clienteNombre;
                   const prodOriginal = productos.find(p => p.id === (item.productoId || item.id));
                   const imagen = item.imagenUrl || prodOriginal?.imagenUrl;
@@ -486,7 +716,7 @@ const Menu = () => {
                           <img src={imagen} alt="img" className="w-full h-full object-cover" />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                            <Utensils className="w-6 h-6 text-orange-500" />
+                            <Utensils className="w-6 h-6 text-primary" />
                           </div>
                         )}
                       </div>
@@ -501,7 +731,7 @@ const Menu = () => {
                               </Badge>
                             </div>
                             {(item as any).ingredientesExcluidosNombres?.length > 0 && (
-                              <p className="text-xs text-orange-600 dark:text-orange-400 font-medium mt-1">
+                              <p className="text-xs text-primary font-medium mt-1">
                                 ⚠️ Sin: {(item as any).ingredientesExcluidosNombres.join(', ')}
                               </p>
                             )}
@@ -509,7 +739,10 @@ const Menu = () => {
                               <div className="mt-1">
                                 {(item as any).agregados.map((ag: any) => (
                                   <p key={ag.id} className="text-xs text-muted-foreground font-medium flex items-center gap-1">
-                                    <span>+ {ag.nombre}</span>
+                                    <span>+ {ag.nombre || 'Extra'}</span>
+                                    {ag.precio && parseFloat(ag.precio) > 0 && (
+                                      <span className="text-primary/80">(+${parseFloat(ag.precio).toFixed(0)})</span>
+                                    )}
                                   </p>
                                 ))}
                               </div>
@@ -534,25 +767,31 @@ const Menu = () => {
                       </div>
                     </div>
                   )
-                })
+                })}
+                </>
               )}
             </div>
 
-            {todosLosItems.length > 0 && (
+            {(todosLosItems.length > 0 && !mostrarCheckoutEnCarrito) && (
               <div className="p-5 bg-background border-t border-border shadow-[0_-5px_20px_rgba(0,0,0,0.05)] z-20">
                 <div className="flex justify-between items-center mb-4">
                   <span className="text-muted-foreground text-sm">Total a pagar</span>
                   <span className="text-2xl font-black tracking-tight">${totalPedido}</span>
                 </div>
                 {!restaurante?.soloCartaDigital && (
-                  <Button className="w-full h-14 text-base font-bold rounded-2xl shadow-lg shadow-primary/20" size="lg" onClick={iniciarConfirmacionPedido}>
-                    Confirmar Pedido
-                    <ArrowLeft className="w-5 h-5 ml-2 rotate-180" />
+                  <Button
+                    className={`w-full h-14 text-base font-bold rounded-2xl shadow-lg ${!estadoAbierto.abierto ? 'bg-muted text-muted-foreground cursor-not-allowed' : 'shadow-primary/20'}`}
+                    size="lg"
+                    onClick={handleBotonPrincipalCarrito}
+                    disabled={!estadoAbierto.abierto}
+                  >
+                    {!estadoAbierto.abierto ? 'Restaurante cerrado' : (esSala ? 'Continuar' : 'Confirmar Pedido')}
+                    {estadoAbierto.abierto && <ArrowLeft className="w-5 h-5 ml-2 rotate-180" />}
                   </Button>
                 )}
                 {restaurante?.soloCartaDigital && (
-                  <div className="text-center text-sm font-medium text-orange-600 dark:text-orange-400 py-3 bg-orange-100/50 dark:bg-orange-900/20 rounded-xl">
-                    Léele tu pedido al mozo cuando pase 😊
+                  <div className="text-center text-sm font-medium text-primary py-3 bg-primary/10 rounded-xl">
+                    Léele tu pedido al mozo o a la caja 😊
                   </div>
                 )}
               </div>
@@ -568,104 +807,73 @@ const Menu = () => {
         onAddToOrder={agregarAlPedido}
       />
 
-      {/* --- DIÁLOGO DE CONFIRMACIÓN (NUEVO) --- */}
-      <Dialog open={confirmarMozoOpen} onOpenChange={setConfirmarMozoOpen}>
-        <DialogContent className="max-w-sm rounded-3xl p-6">
-          <DialogHeader className="text-center sm:text-center">
-            <div className="mx-auto w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-              <HandPlatter className="w-8 h-8 text-primary" />
-            </div>
-            <DialogTitle className="text-xl">¿Necesitas asistencia?</DialogTitle>
-            <DialogDescription className="text-center pt-2">
-              ¿Quieres que el mozo se acerque a tu mesa?
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="flex-col gap-2 sm:gap-2 mt-4">
-            <Button
-              size="lg"
-              onClick={confirmarLlamada}
-              className="w-full rounded-2xl font-semibold"
-            >
-              Sí, llamar al mozo
-            </Button>
-            <Button
-              variant="ghost"
-              size="lg"
-              onClick={() => setConfirmarMozoOpen(false)}
-              className="w-full rounded-2xl"
-            >
-              Cancelar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* --- DIÁLOGO DE ÉXITO (MODIFICADO) --- */}
-      <Dialog open={mozoNotificadoOpen} onOpenChange={setMozoNotificadoOpen}>
-        <DialogContent className="max-w-sm rounded-3xl p-6">
-          <DialogHeader className="text-center sm:text-center">
-            <div className="mx-auto w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mb-4">
-              <BellRing className="w-8 h-8 text-green-600 dark:text-green-400" />
-            </div>
-            <DialogTitle className="text-xl text-green-600 dark:text-green-400">¡Aviso enviado!</DialogTitle>
-            <DialogDescription className="text-center pt-2">
-              El mozo ha sido notificado y se acercará a la mesa <strong>{mesa?.nombre}</strong> en breve.
-            </DialogDescription>
-          </DialogHeader>
-          <Button
-            onClick={() => setMozoNotificadoOpen(false)}
-            variant="outline"
-            className="w-full h-12 mt-6 rounded-2xl border-green-200 hover:bg-green-50 text-green-700 dark:border-green-800 dark:hover:bg-green-900/20 dark:text-green-300"
-          >
-            Entendido
-          </Button>
-        </DialogContent>
-      </Dialog>
+      <MisPedidosDrawer
+        open={misPedidosOpen}
+        onOpenChange={setMisPedidosOpen}
+        restauranteId={restaurante?.id ?? null}
+      />
 
       {/* --- MODAL DE CONFIRMACIÓN GRUPAL --- */}
       <Dialog open={confirmacionGrupalOpen} onOpenChange={() => { }}>
-        <DialogContent className="max-w-sm rounded-3xl p-6" onPointerDownOutside={(e) => e.preventDefault()}>
-          <DialogHeader className="text-center sm:text-center">
-            <div className="mx-auto w-16 h-16 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center mb-4">
-              <Users className="w-8 h-8 text-orange-600 dark:text-orange-400" />
+        <DialogContent className="max-w-sm rounded-2xl p-4 sm:p-5 max-h-[85dvh] flex flex-col" onPointerDownOutside={(e) => e.preventDefault()}>
+          <DialogHeader className="text-center shrink-0">
+            <div className="mx-auto w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-primary/10 flex items-center justify-center mb-2 sm:mb-3">
+              <Users className="w-6 h-6 sm:w-7 sm:h-7 text-primary" />
             </div>
-            <DialogTitle className="text-xl">Confirmación del Pedido</DialogTitle>
-            <DialogDescription className="text-center pt-2">
+            <DialogTitle className="text-lg sm:text-xl">Confirmación del Pedido</DialogTitle>
+            <DialogDescription className="text-center pt-1 text-sm">
               {confirmacionGrupal?.iniciadaPorNombre === clienteNombre
-                ? 'Esperando que todos confirmen el pedido...'
-                : `${confirmacionGrupal?.iniciadaPorNombre} quiere confirmar el pedido`
+                ? 'Esperando que todos confirmen...'
+                : `${confirmacionGrupal?.iniciadaPorNombre} quiere confirmar`
               }
             </DialogDescription>
           </DialogHeader>
 
-          {/* Lista de usuarios con estado de confirmación */}
-          <div className="mt-4 space-y-3">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide text-center">
+          {/* Resumen del pedido (sala: datos de envío) - compacto */}
+          {esSala && checkoutDeliveryData && (
+            <div className="mt-2 sm:mt-3 p-3 rounded-xl bg-secondary/50 border border-border/50 space-y-1 text-left shrink-0 overflow-hidden">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Resumen</p>
+              <p className="text-xs truncate"><span className="text-muted-foreground">Nombre:</span> {checkoutDeliveryData.nombre}</p>
+              <p className="text-xs truncate"><span className="text-muted-foreground">Celular:</span> {checkoutDeliveryData.telefono}</p>
+              {checkoutDeliveryData.tipoPedido === 'delivery' && (
+                <p className="text-xs truncate"><span className="text-muted-foreground">Dirección:</span> {checkoutDeliveryData.direccion}</p>
+              )}
+              {checkoutDeliveryData.tipoPedido === 'delivery' && checkoutDeliveryData.deliveryFee > 0 && (
+                <p className="text-xs"><span className="text-muted-foreground">Envío:</span> ${checkoutDeliveryData.deliveryFee.toFixed(2)}</p>
+              )}
+              <p className="text-sm font-bold pt-1.5 border-t border-border/50">Total: ${checkoutDeliveryData.total}</p>
+            </div>
+          )}
+
+          {/* Lista de usuarios - scroll interno si hace falta */}
+          <div className="mt-2 sm:mt-3 min-h-0 flex-1 overflow-y-auto">
+            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide text-center mb-2">
               {totalConfirmados}/{totalClientes} confirmados
+              {todosConfirmaron && <span className="block text-primary font-normal normal-case mt-1">Procesando pedido...</span>}
             </p>
 
-            <div className="flex flex-wrap justify-center gap-4 py-4">
+            <div className="flex flex-wrap justify-center gap-2 sm:gap-3 py-2">
               {confirmacionGrupal?.confirmaciones.map((conf) => {
                 const esYo = conf.clienteId === clienteId
                 return (
-                  <div key={conf.clienteId} className="flex flex-col items-center gap-1.5">
-                    <div className={`relative w-14 h-14 rounded-xl border-2 shadow-sm flex items-center justify-center font-bold text-sm transition-all duration-300 ${conf.confirmado
-                      ? 'bg-orange-500 border-orange-600 text-white ring-2 ring-orange-300 dark:ring-orange-700'
+                  <div key={conf.clienteId} className="flex flex-col items-center gap-1">
+                    <div className={`relative w-11 h-11 sm:w-12 sm:h-12 rounded-lg border-2 shadow-sm flex items-center justify-center font-bold text-xs transition-all duration-300 ${conf.confirmado
+                      ? 'bg-primary border-primary text-primary-foreground ring-2 ring-primary/30'
                       : 'bg-zinc-200 dark:bg-zinc-700 border-zinc-300 dark:border-zinc-600 text-zinc-500 dark:text-zinc-400'
                       }`}>
                       {conf.nombre.slice(0, 2).toUpperCase()}
                       {conf.confirmado && (
-                        <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
-                          <Check className="w-3 h-3 text-white" />
+                        <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
+                          <Check className="w-2.5 h-2.5 text-white" />
                         </div>
                       )}
                       {!conf.confirmado && (
-                        <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-zinc-400 dark:bg-zinc-500 rounded-full flex items-center justify-center">
-                          <Loader2 className="w-3 h-3 text-white animate-spin" />
+                        <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-zinc-400 dark:bg-zinc-500 rounded-full flex items-center justify-center">
+                          <Loader2 className="w-2.5 h-2.5 text-white animate-spin" />
                         </div>
                       )}
                     </div>
-                    <span className={`text-xs font-medium truncate max-w-[60px] text-center ${esYo ? 'text-foreground' : 'text-muted-foreground'
+                    <span className={`text-[10px] font-medium truncate max-w-[48px] sm:max-w-[56px] text-center ${esYo ? 'text-foreground' : 'text-muted-foreground'
                       }`}>
                       {esYo ? 'Tú' : conf.nombre}
                     </span>
@@ -675,41 +883,42 @@ const Menu = () => {
             </div>
           </div>
 
-          <DialogFooter className="flex-col gap-2 sm:gap-2 mt-4">
+          <DialogFooter className="flex-col gap-2 shrink-0 mt-3 pt-3 border-t border-border/50">
             {!yaConfirme ? (
               <>
                 <Button
-                  size="lg"
+                  size="sm"
                   onClick={confirmarMiParte}
-                  className="w-full rounded-2xl font-semibold bg-orange-500 hover:bg-orange-600"
+                  className={`w-full h-11 rounded-xl font-semibold ${!estadoAbierto.abierto ? 'bg-muted text-muted-foreground cursor-not-allowed' : 'bg-primary hover:bg-primary/90'}`}
+                  disabled={!estadoAbierto.abierto}
                 >
-                  <Check className="w-5 h-5 mr-2" />
-                  Confirmar mi pedido
+                  <Check className="w-4 h-4 mr-2" />
+                  {!estadoAbierto.abierto ? 'Restaurante cerrado' : 'Confirmar mi pedido'}
                 </Button>
                 <Button
                   variant="ghost"
-                  size="lg"
+                  size="sm"
                   onClick={cancelarConfirmacion}
-                  className="w-full rounded-2xl text-destructive hover:text-destructive hover:bg-destructive/10"
+                  className="w-full h-10 rounded-xl text-destructive hover:bg-destructive/10"
                 >
-                  <X className="w-5 h-5 mr-2" />
+                  <X className="w-4 h-4 mr-2" />
                   Cancelar
                 </Button>
               </>
             ) : (
               <>
-                <div className="w-full py-3 px-4 rounded-2xl bg-orange-100 dark:bg-orange-900/30 text-center">
-                  <p className="text-sm font-medium text-orange-700 dark:text-orange-300">
+                <div className="w-full py-2 px-3 rounded-xl bg-primary/10 text-center">
+                  <p className="text-xs font-medium text-primary">
                     ✓ Ya confirmaste. Esperando a los demás...
                   </p>
                 </div>
                 <Button
                   variant="ghost"
-                  size="lg"
+                  size="sm"
                   onClick={cancelarConfirmacion}
-                  className="w-full rounded-2xl text-destructive hover:text-destructive hover:bg-destructive/10"
+                  className="w-full h-10 rounded-xl text-destructive hover:bg-destructive/10"
                 >
-                  <X className="w-5 h-5 mr-2" />
+                  <X className="w-4 h-4 mr-2" />
                   Cancelar para todos
                 </Button>
               </>
@@ -730,7 +939,46 @@ const EmptyState = () => (
   </div>
 )
 
-const ProductoCard = ({ producto, onClick, fullWidth }: { producto: any, onClick: () => void, fullWidth?: boolean }) => (
+const ProductoCard = ({ producto, onClick, fullWidth, disenoAlternativo }: { producto: any, onClick: () => void, fullWidth?: boolean, disenoAlternativo?: boolean }) => {
+  const tieneDescuento = !!(producto.descuento && producto.descuento > 0)
+  const precioOriginal = parseFloat(producto.precio)
+  const precioFinal = tieneDescuento ? precioOriginal * (1 - producto.descuento / 100) : precioOriginal
+
+  if (disenoAlternativo) {
+    return (
+      <div
+        className={`group relative flex flex-col ${fullWidth ? 'w-full' : 'w-48 shrink-0'} h-[260px] rounded-[24px] bg-card border border-border/50 shadow-md hover:shadow-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] overflow-hidden ${!fullWidth ? 'snap-start' : ''}`}
+        onClick={onClick}
+      >
+        <div className="w-full h-[130px] shrink-0 bg-zinc-900 relative">
+          {producto.imagenUrl ? (
+            <img src={producto.imagenUrl} alt={producto.nombre} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center bg-linear-to-br from-zinc-800 to-zinc-900">
+              <Utensils className="w-10 h-10 text-primary" />
+            </div>
+          )}
+          {tieneDescuento && (
+            <div className="absolute top-2.5 left-2.5 z-10">
+              <span className="bg-emerald-500 text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full shadow-lg uppercase tracking-wide">{producto.descuento}% OFF</span>
+            </div>
+          )}
+        </div>
+        <div className="p-3.5 flex flex-col flex-1 bg-card">
+          <div className="flex-1">
+            <h3 className="font-bold text-[14px] line-clamp-2 text-foreground leading-tight">{producto.nombre}</h3>
+            {producto.descripcion && <p className="mt-1 text-xs text-muted-foreground line-clamp-2 leading-snug font-medium">{producto.descripcion}</p>}
+          </div>
+          <div className="flex items-baseline gap-1.5 mt-2">
+            <span className={`font-black text-[17px] ${tieneDescuento ? 'text-emerald-600 dark:text-emerald-400' : 'text-primary'}`}>${precioFinal.toFixed(0)}</span>
+            {tieneDescuento && <span className="text-[11px] font-semibold text-muted-foreground line-through opacity-70">${precioOriginal.toFixed(0)}</span>}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
   <div
     className={`group relative ${fullWidth ? 'w-full' : 'w-44 shrink-0'} h-52 rounded-3xl overflow-hidden cursor-pointer ${!fullWidth ? 'snap-start' : ''} shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]`}
     onClick={onClick}
@@ -745,7 +993,7 @@ const ProductoCard = ({ producto, onClick, fullWidth }: { producto: any, onClick
         />
       ) : (
         <div className="w-full h-full flex items-center justify-center bg-linear-to-br from-zinc-800 to-zinc-900">
-          <Utensils className="w-12 h-12 text-orange-500" />
+          <Utensils className="w-12 h-12 text-primary" />
         </div>
       )}
     </div>
@@ -767,12 +1015,18 @@ const ProductoCard = ({ producto, onClick, fullWidth }: { producto: any, onClick
         <h3 className="font-semibold text-sm text-zinc-900 dark:text-white truncate leading-tight">
           {producto.nombre}
         </h3>
-        <span className="font-bold text-lg text-zinc-800 dark:text-white/90 mt-0.5 block">
-          ${parseFloat(producto.precio).toFixed(2)}
-        </span>
+        <div className="flex items-baseline gap-2 mt-0.5">
+          <span className={`font-bold text-lg ${tieneDescuento ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-800 dark:text-white/90'}`}>
+            ${precioFinal.toFixed(0)}
+          </span>
+          {tieneDescuento && (
+            <span className="text-xs text-zinc-500 dark:text-white/40 line-through">${precioOriginal.toFixed(0)}</span>
+          )}
+        </div>
       </div>
     </div>
   </div>
-)
+  )
+}
 
 export default Menu
