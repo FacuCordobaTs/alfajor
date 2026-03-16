@@ -165,7 +165,6 @@ const CheckoutDelivery = () => {
                 }))
             }
 
-            // Siempre enviar metodoPago: con Cucuru es transferencia (única opción)
             if (metodoPago) {
                 payload.metodoPago = metodoPago
             } else if (cucuruConfigurado) {

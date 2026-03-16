@@ -135,7 +135,7 @@ const SuccessGrupal = () => {
 
   if (!orderInfo) return null
 
-  const { items, tipoPedido, total, pedidoId, deliveryFee, direccion, cucuruAlias } = orderInfo
+  const { items, tipoPedido, total, pedidoId, deliveryFee, direccion, cucuruAlias, cucuruAccountNumber } = orderInfo
 
   const handleCopyAlias = async (aliasToCopy: string) => {
     try {
@@ -255,20 +255,30 @@ const SuccessGrupal = () => {
               <p className="font-medium text-primary/80 text-center">Total a transferir</p>
               <p className="text-4xl font-black text-center">${parseFloat(total || '0').toFixed(2)}</p>
 
-              {cucuruAlias ? (
+              {(cucuruAlias || cucuruAccountNumber) ? (
                 <>
                   <Button
                     className="w-full h-14 text-lg font-bold rounded-xl shadow-md gap-3 bg-purple-600 hover:bg-purple-700 text-white"
                     onClick={() => {
-                      handleCopyAlias(cucuruAlias)
+                      handleCopyAlias(cucuruAlias || cucuruAccountNumber!)
                       setStatus('verifying')
                     }}
                   >
                     <Copy className="w-5 h-5" />
-                    Copiar Alias: {cucuruAlias}
+                    Copiar Alias: {cucuruAlias || cucuruAccountNumber}
                   </Button>
+                  {cucuruAccountNumber && (
+                    <Button
+                      variant="outline"
+                      className="w-full h-11 text-sm font-mono rounded-xl border border-primary/30 hover:bg-primary/10 mt-2"
+                      onClick={() => handleCopyAlias(cucuruAccountNumber)}
+                    >
+                      <Copy className="w-4 h-4 mr-2" />
+                      CBU: {cucuruAccountNumber}
+                    </Button>
+                  )}
                   <p className="text-xs text-center text-muted-foreground mt-3 font-medium">
-                    Copiá el alias y transferí el monto exacto desde tu app bancaria. Todos verán cuando se confirme.
+                    Copiá el alias o CBU y transferí el monto exacto desde tu app bancaria. Todos verán cuando se confirme.
                   </p>
                 </>
               ) : (
@@ -294,18 +304,29 @@ const SuccessGrupal = () => {
               </div>
             </div>
 
-            {cucuruAlias && (
+            {(cucuruAlias || cucuruAccountNumber) && (
               <div className="bg-primary/5 border border-primary/20 rounded-2xl p-5 space-y-3 max-w-sm mx-auto w-full">
                 <p className="text-xs font-bold text-primary/80 text-center">Transferí este monto exacto:</p>
                 <p className="text-3xl font-black text-center">${parseFloat(total || '0').toFixed(2)}</p>
                 <Button
                   variant="outline"
                   className="w-full h-12 text-base font-bold rounded-xl border-primary/20 hover:bg-primary/10"
-                  onClick={() => handleCopyAlias(cucuruAlias)}
+                  onClick={() => handleCopyAlias(cucuruAlias || cucuruAccountNumber!)}
                 >
                   <Copy className="w-5 h-5 mr-2 text-primary" />
-                  {cucuruAlias}
+                  {cucuruAlias || cucuruAccountNumber}
                 </Button>
+                {cucuruAccountNumber && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full h-10 text-xs font-mono rounded-xl border-primary/20 hover:bg-primary/10"
+                    onClick={() => handleCopyAlias(cucuruAccountNumber)}
+                  >
+                    <Copy className="w-5 h-5 mr-2" />
+                    CBU: {cucuruAccountNumber}
+                  </Button>
+                )}
               </div>
             )}
 
@@ -378,10 +399,10 @@ const SuccessGrupal = () => {
             </div>
 
             <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
-              {cucuruAlias && (
+              {(cucuruAlias || cucuruAccountNumber) && (
                 <div className="p-4 border-b border-border bg-primary/5">
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-sm font-bold text-primary/80">Alias de transferencia</p>
+                    <p className="text-sm font-bold text-primary/80">Alias / CBU de transferencia</p>
                     <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
                       Verificación automática
                     </span>
@@ -389,11 +410,21 @@ const SuccessGrupal = () => {
                   <Button
                     variant="outline"
                     className="w-full h-11 text-base font-bold rounded-xl border-primary/20 hover:bg-primary/10"
-                    onClick={() => handleCopyAlias(cucuruAlias)}
+                    onClick={() => handleCopyAlias(cucuruAlias || cucuruAccountNumber!)}
                   >
                     <Copy className="w-4 h-4 mr-2 text-primary" />
-                    {cucuruAlias}
+                    {cucuruAlias || cucuruAccountNumber}
                   </Button>
+                  {cucuruAccountNumber && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full h-9 text-xs font-mono rounded-xl border-primary/20 hover:bg-primary/10 mt-2"
+                      onClick={() => handleCopyAlias(cucuruAccountNumber)}
+                    >
+                      <Copy className="w-4 h-4 mr-2" /> CBU: {cucuruAccountNumber}
+                    </Button>
+                  )}
                   <p className="text-xs mt-2 text-center text-muted-foreground">Total: ${parseFloat(total || '0').toFixed(2)}</p>
                 </div>
               )}
