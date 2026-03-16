@@ -267,16 +267,6 @@ const SuccessGrupal = () => {
                     <Copy className="w-5 h-5" />
                     Copiar Alias: {cucuruAlias || cucuruAccountNumber}
                   </Button>
-                  {cucuruAccountNumber && (
-                    <Button
-                      variant="outline"
-                      className="w-full h-11 text-sm font-mono rounded-xl border border-primary/30 hover:bg-primary/10 mt-2"
-                      onClick={() => handleCopyAlias(cucuruAccountNumber)}
-                    >
-                      <Copy className="w-4 h-4 mr-2" />
-                      CBU: {cucuruAccountNumber}
-                    </Button>
-                  )}
                   <p className="text-xs text-center text-muted-foreground mt-3 font-medium">
                     Copiá el alias o CBU y transferí el monto exacto desde tu app bancaria. Todos verán cuando se confirme.
                   </p>
@@ -316,17 +306,6 @@ const SuccessGrupal = () => {
                   <Copy className="w-5 h-5 mr-2 text-primary" />
                   {cucuruAlias || cucuruAccountNumber}
                 </Button>
-                {cucuruAccountNumber && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full h-10 text-xs font-mono rounded-xl border-primary/20 hover:bg-primary/10"
-                    onClick={() => handleCopyAlias(cucuruAccountNumber)}
-                  >
-                    <Copy className="w-5 h-5 mr-2" />
-                    CBU: {cucuruAccountNumber}
-                  </Button>
-                )}
               </div>
             )}
 
@@ -415,16 +394,6 @@ const SuccessGrupal = () => {
                     <Copy className="w-4 h-4 mr-2 text-primary" />
                     {cucuruAlias || cucuruAccountNumber}
                   </Button>
-                  {cucuruAccountNumber && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full h-9 text-xs font-mono rounded-xl border-primary/20 hover:bg-primary/10 mt-2"
-                      onClick={() => handleCopyAlias(cucuruAccountNumber)}
-                    >
-                      <Copy className="w-4 h-4 mr-2" /> CBU: {cucuruAccountNumber}
-                    </Button>
-                  )}
                   <p className="text-xs mt-2 text-center text-muted-foreground">Total: ${parseFloat(total || '0').toFixed(2)}</p>
                 </div>
               )}
