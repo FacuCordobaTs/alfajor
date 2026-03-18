@@ -202,8 +202,8 @@ const CheckoutDelivery = () => {
                     total: data.data.total ? parseFloat(data.data.total) : total,
                     items: cart.items,
                     metodoPago: metodoPago,
-                    cucuruAlias: data.data.cucuruAlias,
-                    cucuruAccountNumber: data.data.cucuruAccountNumber,
+                    aliasDinamico: data.data.aliasDinamico,
+                    cvuDinamico: data.data.cvuDinamico,
                     deliveryFee: data.data.deliveryFee,
                     zonaNombre: data.data.zonaNombre,
                     direccion: tipoPedido === 'delivery' ? direccion : null
