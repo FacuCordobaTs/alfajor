@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router'
 import { Button } from '@/components/ui/button'
-import { CheckCircle2, Copy, Loader2, Store, Truck, Utensils, MapPin, Clock, Package } from 'lucide-react'
+import { CheckCircle2, Copy, Loader2, Store, Truck, Utensils, MapPin, Clock, Package, MessageCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { MisPedidosDrawer } from '@/components/MisPedidosDrawer'
@@ -20,6 +20,9 @@ const SuccessDelivery = () => {
     const [pedidoEstado, setPedidoEstado] = useState<string | null>(null)
     const [rapiboyTrackingUrl, setRapiboyTrackingUrl] = useState<string | null>(null)
     const metaPurchaseTracked = useRef(false)
+    const [showInstagramHelp, setShowInstagramHelp] = useState(false)
+    const copyAliasTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const statusRef = useRef(status)
 
     // Minimal, reusable alias notice that matches the design (minimalist)
     const AliasNotice = ({ children }: { children?: React.ReactNode }) => (
@@ -38,6 +41,10 @@ const SuccessDelivery = () => {
             </div>
         </div>
     )
+
+    useEffect(() => {
+        statusRef.current = status
+    }, [status])
 
     useEffect(() => {
         const savedInfo = sessionStorage.getItem('deliveryOrderInfo')
@@ -206,6 +213,19 @@ const SuccessDelivery = () => {
         };
     }, [status, orderInfo]);
 
+    useEffect(() => {
+        if (status === 'confirmed' && copyAliasTimerRef.current) {
+            clearTimeout(copyAliasTimerRef.current)
+            copyAliasTimerRef.current = null
+        }
+    }, [status])
+
+    useEffect(() => {
+        return () => {
+            if (copyAliasTimerRef.current) clearTimeout(copyAliasTimerRef.current)
+        }
+    }, [])
+
     // Meta Pixel: disparar Purchase solo cuando el pago está confirmado (Cucuru/webhook)
     useEffect(() => {
         if (status !== 'confirmed' || !orderInfo || metaPurchaseTracked.current) return
@@ -232,6 +252,21 @@ const SuccessDelivery = () => {
         } catch (err) {
             toast.error('No se pudo copiar el alias')
         }
+    }
+
+    const handleCopyAliasAndStartTimer = async (aliasToCopy: string) => {
+        await handleCopyAlias(aliasToCopy)
+        setStatus('verifying')
+        setShowInstagramHelp(false)
+        if (copyAliasTimerRef.current) {
+            clearTimeout(copyAliasTimerRef.current)
+        }
+        copyAliasTimerRef.current = setTimeout(() => {
+            copyAliasTimerRef.current = null
+            if (statusRef.current !== 'confirmed') {
+                setShowInstagramHelp(true)
+            }
+        }, 150000)
     }
 
     const handleCrearMP = async () => {
@@ -399,10 +434,7 @@ const SuccessDelivery = () => {
 
                                                 <Button
                                                     className="w-full h-14 text-lg font-bold rounded-xl shadow-md gap-3 bg-purple-600 hover:bg-purple-700 text-white mt-3"
-                                                    onClick={() => {
-                                                        handleCopyAlias(cucuruAlias || cucuruAccountNumber!)
-                                                        setStatus('verifying')
-                                                    }}
+                                                    onClick={() => handleCopyAliasAndStartTimer(cucuruAlias || cucuruAccountNumber!)}
                                                 >
                                                     <Copy className="w-5 h-5" />
                                                     Copiar Alias: {cucuruAlias || cucuruAccountNumber}
@@ -488,6 +520,29 @@ const SuccessDelivery = () => {
 
                         {/* Order summary always visible while waiting */}
                         <OrderSummary />
+
+                        {/* Ayuda Instagram: si pasaron 2.5 min y aún no confirmaron */}
+                        {showInstagramHelp && (
+                            <div className="animate-in fade-in slide-in-from-bottom-2 duration-400 bg-primary/5 border border-primary/20 rounded-2xl p-5 space-y-4 max-w-sm mx-auto w-full">
+                                <div className="flex items-start gap-3">
+                                    <MessageCircle className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+                                    <div className="space-y-1 min-w-0">
+                                        <p className="font-semibold text-primary/90 text-sm">
+                                            ¿Ya transferiste y tu pedido sigue sin confirmarse?
+                                        </p>
+                                        <p className="text-xs text-muted-foreground leading-snug">
+                                            Escribinos por Instagram y te ayudamos al instante.
+                                        </p>
+                                    </div>
+                                </div>
+                                <Button
+                                    className="w-full h-12 rounded-xl font-bold shadow-md"
+                                    onClick={() => window.open('https://www.instagram.com/alfajorconpapas/', '_blank')}
+                                >
+                                    Contactar por Instagram
+                                </Button>
+                            </div>
+                        )}
                     </div>
                 )}
 
