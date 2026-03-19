@@ -7,7 +7,7 @@ import { RadioGroup } from '@/components/ui/radio-group'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from 'sonner'
 import { ThemeToggle } from '@/components/ThemeToggle'
-import { ArrowLeft, Loader2, MapPin, Store, Zap, Truck, AlertTriangle, Package } from 'lucide-react'
+import { ArrowLeft, Loader2, MapPin, Store, Zap, Truck, AlertTriangle, Package, Tag, X } from 'lucide-react'
 import { AddressAutocomplete } from '@/components/AddressAutocomplete'
 import { MisPedidosDrawer } from '@/components/MisPedidosDrawer'
 //
@@ -48,6 +48,13 @@ const CheckoutDelivery = () => {
     const [restauranteData, setRestauranteData] = useState<any>(null)
     const [isLoadingRestaurante, setIsLoadingRestaurante] = useState(true)
     const [misPedidosOpen, setMisPedidosOpen] = useState(false)
+    const codigoDescuentoEnabled = restauranteData?.codigoDescuentoEnabled === true
+
+    const [codigoInput, setCodigoInput] = useState('')
+    const [codigoDescuentoId, setCodigoDescuentoId] = useState<number | null>(null)
+    const [montoDescuento, setMontoDescuento] = useState(0)
+    const [validandoCodigo, setValidandoCodigo] = useState(false)
+    const [codigoError, setCodigoError] = useState<string | null>(null)
 
     useEffect(() => {
         const fetchRestaurante = async () => {
@@ -87,7 +94,55 @@ const CheckoutDelivery = () => {
     const globalDeliveryFee = cart?.deliveryFee ? parseFloat(cart.deliveryFee) : 0
     const deliveryFee = zonaDeliveryFee !== null ? zonaDeliveryFee : globalDeliveryFee
     const itemsTotal = cart?.items?.reduce((sum: number, item: any) => sum + (parseFloat(item.precio) * item.cantidad), 0) || 0
-    const total = tipoPedido === 'delivery' ? itemsTotal + deliveryFee : itemsTotal
+    const subtotalConEnvio = tipoPedido === 'delivery' ? itemsTotal + deliveryFee : itemsTotal
+    const total = Math.max(0, subtotalConEnvio - montoDescuento)
+
+    const handleValidarCodigo = async () => {
+        if (!codigoInput.trim() || !cart?.restauranteId) return
+        setValidandoCodigo(true)
+        setCodigoError(null)
+        try {
+            const url = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+            const res = await fetch(`${url}/public/descuentos/validar`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    restauranteId: cart.restauranteId,
+                    codigo: codigoInput.trim().toUpperCase(),
+                    totalCarrito: subtotalConEnvio,
+                }),
+            })
+            const data = await res.json()
+            if (data.success && data.data) {
+                setCodigoDescuentoId(data.data.codigoDescuentoId)
+                setMontoDescuento(parseFloat(data.data.montoDescuento))
+                toast.success(`Código aplicado: -$${parseFloat(data.data.montoDescuento).toFixed(0)}`)
+            } else {
+                setCodigoError(data.message || 'Código no válido')
+                setCodigoDescuentoId(null)
+                setMontoDescuento(0)
+            }
+        } catch {
+            setCodigoError('Error al validar')
+            setCodigoDescuentoId(null)
+            setMontoDescuento(0)
+        } finally {
+            setValidandoCodigo(false)
+        }
+    }
+
+    const quitarCodigo = () => {
+        setCodigoInput('')
+        setCodigoDescuentoId(null)
+        setMontoDescuento(0)
+        setCodigoError(null)
+    }
+
+    useEffect(() => {
+        if (!codigoDescuentoEnabled) {
+            quitarCodigo()
+        }
+    }, [codigoDescuentoEnabled])
 
     // Check zona when lat/lng change
     useEffect(() => {
@@ -170,6 +225,9 @@ const CheckoutDelivery = () => {
             } else if (cucuruConfigurado) {
                 payload.metodoPago = 'transferencia'
             }
+            if (codigoDescuentoId) {
+                payload.codigoDescuentoId = codigoDescuentoId
+            }
 
             if (tipoPedido === 'delivery') {
                 payload.direccion = direccion
@@ -206,7 +264,8 @@ const CheckoutDelivery = () => {
                     cvuDinamico: data.data.cvuDinamico,
                     deliveryFee: data.data.deliveryFee,
                     zonaNombre: data.data.zonaNombre,
-                    direccion: tipoPedido === 'delivery' ? direccion : null
+                    direccion: tipoPedido === 'delivery' ? direccion : null,
+                    montoDescuento: montoDescuento > 0 ? montoDescuento : undefined,
                 }))
                 navigate(`/success`)
             } else {
@@ -445,6 +504,38 @@ const CheckoutDelivery = () => {
                         <Textarea id="notas" placeholder="Ej: El timbre no anda, Piso 9 Departamento 1" className="min-h-[100px] rounded-xl resize-none" value={notas} onChange={(e: any) => setNotas(e.target.value)} />
                     </div>
 
+                    {codigoDescuentoEnabled && (
+                        <div className="space-y-2 pt-4 border-t border-border/50">
+                            <Label htmlFor="codigo">Código de descuento <span className="text-muted-foreground font-normal">(opcional)</span></Label>
+                            {codigoDescuentoId ? (
+                                <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
+                                    <div className="flex items-center gap-2">
+                                        <Tag className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                                        <span className="font-medium text-emerald-700 dark:text-emerald-300">Descuento aplicado: -${montoDescuento.toFixed(0)}</span>
+                                    </div>
+                                    <Button variant="ghost" size="sm" onClick={quitarCodigo} className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive">
+                                        <X className="w-4 h-4" />
+                                    </Button>
+                                </div>
+                            ) : (
+                                <div className="flex gap-2">
+                                    <Input
+                                        id="codigo"
+                                        placeholder="Ej: ALFAJOROPEN"
+                                        className="h-11 rounded-xl font-mono uppercase"
+                                        value={codigoInput}
+                                        onChange={(e) => { setCodigoInput(e.target.value.toUpperCase()); setCodigoError(null) }}
+                                        onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleValidarCodigo())}
+                                    />
+                                    <Button variant="outline" className="rounded-xl shrink-0" onClick={handleValidarCodigo} disabled={validandoCodigo || !codigoInput.trim()}>
+                                        {validandoCodigo ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Aplicar'}
+                                    </Button>
+                                </div>
+                            )}
+                            {codigoError && <p className="text-xs text-destructive font-medium">{codigoError}</p>}
+                        </div>
+                    )}
+
                     {cucuruConfigurado
                         ? !isLoadingRestaurante && (
                             <div className="space-y-4 pt-4 border-t border-border/50 animate-in fade-in slide-in-from-bottom-2">
@@ -518,6 +609,12 @@ const CheckoutDelivery = () => {
                             <span className="font-medium">
                                 {isCheckingZona ? <Loader2 className="w-3 h-3 animate-spin inline" /> : `$${deliveryFee.toFixed(2)}`}
                             </span>
+                        </div>
+                    )}
+                    {montoDescuento > 0 && (
+                        <div className="flex justify-between items-center text-sm mb-2">
+                            <span className="text-emerald-600 dark:text-emerald-400 font-medium">Descuento</span>
+                            <span className="text-emerald-600 dark:text-emerald-400 font-medium">-${montoDescuento.toFixed(2)}</span>
                         </div>
                     )}
                     <div className="flex justify-between items-center font-bold text-lg mt-4 pt-4 border-t-2 border-foreground/15">
