@@ -64,9 +64,6 @@ const CheckoutDelivery = () => {
                 const data = await response.json()
                 if (data.success && data.data.restaurante) {
                     setCucuruConfigurado(data.data.restaurante.cucuruConfigurado)
-                    if (data.data.restaurante.cucuruConfigurado) {
-                        setMetodoPago('transferencia')
-                    }
                     setMpConnected(data.data.restaurante.mpConnected)
                     setTransferenciaAlias(data.data.restaurante.transferenciaAlias)
                     setRestauranteData(data.data.restaurante)
@@ -90,12 +87,45 @@ const CheckoutDelivery = () => {
         }
     }, [username, navigate])
 
+    useEffect(() => {
+        if (isLoadingRestaurante || !restauranteData) return
+        const te = restauranteData.cucuruEnabled !== false
+        const cardOk = mpConnected && !!restauranteData.mpPublicKey && restauranteData.cardsPaymentsEnabled !== false
+        const transferCucuru = cucuruConfigurado && te
+        const transferAlias = !cucuruConfigurado && !!transferenciaAlias && te
+
+        setMetodoPago((prev) => {
+            if (cucuruConfigurado) {
+                if (prev === 'efectivo') {
+                    if (transferCucuru) return 'transferencia'
+                    if (cardOk) return 'mercadopago'
+                    return null
+                }
+                if (prev === 'transferencia' && !transferCucuru) return cardOk ? 'mercadopago' : null
+                if (prev === 'mercadopago' && !cardOk) return transferCucuru ? 'transferencia' : null
+                if (prev == null) {
+                    if (transferCucuru) return 'transferencia'
+                    if (cardOk) return 'mercadopago'
+                    return null
+                }
+                return prev
+            }
+            if (prev === 'transferencia' && !transferAlias) return null
+            if (prev === 'mercadopago' && !cardOk) return null
+            return prev
+        })
+    }, [isLoadingRestaurante, restauranteData, mpConnected, cucuruConfigurado, transferenciaAlias])
+
     const globalDeliveryFee = cart?.deliveryFee ? parseFloat(cart.deliveryFee) : 0
     const deliveryFee = zonaDeliveryFee !== null ? zonaDeliveryFee : globalDeliveryFee
     const itemsTotal = cart?.items?.reduce((sum: number, item: any) => sum + (parseFloat(item.precio) * item.cantidad), 0) || 0
     const subtotalConEnvio = tipoPedido === 'delivery' ? itemsTotal + deliveryFee : itemsTotal
     const total = Math.max(0, subtotalConEnvio - montoDescuento)
     const canPayWithCard = mpConnected && !!(restauranteData?.mpPublicKey)
+    const cardPaymentVisible = canPayWithCard && restauranteData?.cardsPaymentsEnabled !== false
+    const transferenciaCheckoutVisible = restauranteData?.cucuruEnabled !== false
+    const showTransferCucuru = cucuruConfigurado && transferenciaCheckoutVisible
+    const showTransferAlias = !cucuruConfigurado && !!transferenciaAlias && transferenciaCheckoutVisible
 
     const handleValidarCodigo = async () => {
         if (!codigoInput.trim() || !cart?.restauranteId) return
@@ -199,7 +229,7 @@ const CheckoutDelivery = () => {
         if (!telefono.trim()) return toast.error('Ingresa tu celular')
         if (tipoPedido === 'delivery' && !direccion.trim()) return toast.error('Ingresa tu dirección')
         if (tipoPedido === 'delivery' && (lat === null || lng === null)) return toast.error('Selecciona una dirección de las sugerencias')
-        if (!isLoadingRestaurante && !metodoPago && !cucuruConfigurado) return toast.error('Selecciona un método de pago')
+        if (!isLoadingRestaurante && !metodoPago) return toast.error('Selecciona un método de pago')
 
         setLoading(true)
         try {
@@ -222,8 +252,6 @@ const CheckoutDelivery = () => {
 
             if (metodoPago) {
                 payload.metodoPago = metodoPago
-            } else if (cucuruConfigurado) {
-                payload.metodoPago = 'transferencia'
             }
             if (codigoDescuentoId) {
                 payload.codigoDescuentoId = codigoDescuentoId
@@ -540,7 +568,9 @@ const CheckoutDelivery = () => {
                         ? !isLoadingRestaurante && (
                             <div className="space-y-4 pt-4 border-t border-border/50 animate-in fade-in slide-in-from-bottom-2">
                                 <Label className="text-base font-bold">Método de pago</Label>
-                                <div className={`grid gap-3 ${canPayWithCard ? 'grid-cols-1 sm:grid-cols-2' : ''}`}>
+                                {showTransferCucuru || cardPaymentVisible ? (
+                                <div className={`grid gap-3 ${showTransferCucuru && cardPaymentVisible ? 'grid-cols-1 sm:grid-cols-2' : ''}`}>
+                                    {showTransferCucuru && (
                                     <div className={`relative flex flex-col items-center justify-center p-4 w-full border-2 rounded-2xl cursor-pointer hover:bg-secondary/50 transition-colors ${metodoPago === 'transferencia' ? 'border-purple-500 bg-purple-500/5' : 'border-border'}`} onClick={() => setMetodoPago('transferencia')}>
                                         <div className="absolute -top-2.5 bg-linear-to-r from-purple-600 to-indigo-600 text-white text-[9px] font-extrabold px-2 py-0.5 rounded-full shadow-md flex items-center gap-1">
                                             <Zap className="w-3 h-3 fill-current" />
@@ -550,7 +580,8 @@ const CheckoutDelivery = () => {
                                             Transferencia
                                         </Label>
                                     </div>
-                                    {canPayWithCard && (
+                                    )}
+                                    {cardPaymentVisible && (
                                         <div className={`relative flex flex-col items-center justify-center gap-1 p-4 w-full border-2 rounded-2xl cursor-pointer hover:bg-secondary/50 transition-colors ${metodoPago === 'mercadopago' ? 'border-[#009EE3] bg-[#009EE3]/5' : 'border-border'}`} onClick={() => setMetodoPago('mercadopago')}>
                                             <CreditCard className={`w-6 h-6 ${metodoPago === 'mercadopago' ? 'text-[#009EE3]' : 'text-muted-foreground'}`} />
                                             <Label className="cursor-pointer font-semibold text-center text-[#009ee3]">
@@ -559,6 +590,9 @@ const CheckoutDelivery = () => {
                                         </div>
                                     )}
                                 </div>
+                                ) : (
+                                    <p className="text-sm text-muted-foreground">Este local no muestra opciones de pago online por ahora. Contactá al restaurante.</p>
+                                )}
                             </div>
                         )
                         : (
@@ -569,14 +603,14 @@ const CheckoutDelivery = () => {
                                         <Label className="cursor-pointer font-semibold">Efectivo</Label>
                                     </div>
 
-                                    {transferenciaAlias && (
+                                    {showTransferAlias && (
                                         <div className={`relative flex flex-col items-center justify-center p-4 w-full border-2 rounded-2xl cursor-pointer hover:bg-secondary/50 transition-colors ${metodoPago === 'transferencia' ? 'border-purple-500 bg-purple-500/5' : 'border-border'}`} onClick={() => setMetodoPago('transferencia')}>
                                             <Label className="cursor-pointer font-semibold text-center mt-1">
                                                 Transferencia
                                             </Label>
                                         </div>
                                     )}
-                                    {canPayWithCard && (
+                                    {cardPaymentVisible && (
                                         <div className={`relative flex flex-col items-center justify-center gap-1 p-4 border-2 rounded-2xl cursor-pointer hover:bg-secondary/50 transition-colors ${metodoPago === 'mercadopago' ? 'border-[#009EE3] bg-[#009EE3]/5' : 'border-border'}`} onClick={() => setMetodoPago('mercadopago')}>
                                             <CreditCard className={`w-5 h-5 ${metodoPago === 'mercadopago' ? 'text-[#009EE3]' : 'text-muted-foreground'}`} />
                                             <Label className="cursor-pointer font-semibold text-center text-[#009ee3] text-sm">Tarjeta</Label>
