@@ -7,7 +7,7 @@ import { RadioGroup } from '@/components/ui/radio-group'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from 'sonner'
 import { ThemeToggle } from '@/components/ThemeToggle'
-import { ArrowLeft, Loader2, MapPin, Store, Zap, Truck, AlertTriangle, Package, Tag, X } from 'lucide-react'
+import { ArrowLeft, Loader2, MapPin, Store, Zap, Truck, AlertTriangle, Package, Tag, X, CreditCard } from 'lucide-react'
 import { AddressAutocomplete } from '@/components/AddressAutocomplete'
 import { MisPedidosDrawer } from '@/components/MisPedidosDrawer'
 //
@@ -77,7 +77,6 @@ const CheckoutDelivery = () => {
                 setIsLoadingRestaurante(false)
             }
         }
-        console.log(mpConnected)
         if (username) fetchRestaurante()
     }, [username])
 
@@ -96,6 +95,7 @@ const CheckoutDelivery = () => {
     const itemsTotal = cart?.items?.reduce((sum: number, item: any) => sum + (parseFloat(item.precio) * item.cantidad), 0) || 0
     const subtotalConEnvio = tipoPedido === 'delivery' ? itemsTotal + deliveryFee : itemsTotal
     const total = Math.max(0, subtotalConEnvio - montoDescuento)
+    const canPayWithCard = mpConnected && !!(restauranteData?.mpPublicKey)
 
     const handleValidarCodigo = async () => {
         if (!codigoInput.trim() || !cart?.restauranteId) return
@@ -539,17 +539,25 @@ const CheckoutDelivery = () => {
                     {cucuruConfigurado
                         ? !isLoadingRestaurante && (
                             <div className="space-y-4 pt-4 border-t border-border/50 animate-in fade-in slide-in-from-bottom-2">
-                                <Label className="text-base font-bold">Metodo de pago</Label>
-                                <div className={`relative flex flex-col items-center justify-center p-4 w-full border-2 rounded-2xl cursor-pointer hover:bg-secondary/50 transition-colors ${metodoPago === 'transferencia' ? 'border-purple-500 bg-purple-500/5' : 'border-border'}`} onClick={() => setMetodoPago('transferencia')}>
-                                    {cucuruConfigurado && (
+                                <Label className="text-base font-bold">Método de pago</Label>
+                                <div className={`grid gap-3 ${canPayWithCard ? 'grid-cols-1 sm:grid-cols-2' : ''}`}>
+                                    <div className={`relative flex flex-col items-center justify-center p-4 w-full border-2 rounded-2xl cursor-pointer hover:bg-secondary/50 transition-colors ${metodoPago === 'transferencia' ? 'border-purple-500 bg-purple-500/5' : 'border-border'}`} onClick={() => setMetodoPago('transferencia')}>
                                         <div className="absolute -top-2.5 bg-linear-to-r from-purple-600 to-indigo-600 text-white text-[9px] font-extrabold px-2 py-0.5 rounded-full shadow-md flex items-center gap-1">
                                             <Zap className="w-3 h-3 fill-current" />
                                             AUTOMÁTICO
                                         </div>
+                                        <Label className="cursor-pointer font-semibold text-center mt-1">
+                                            Transferencia
+                                        </Label>
+                                    </div>
+                                    {canPayWithCard && (
+                                        <div className={`relative flex flex-col items-center justify-center gap-1 p-4 w-full border-2 rounded-2xl cursor-pointer hover:bg-secondary/50 transition-colors ${metodoPago === 'mercadopago' ? 'border-[#009EE3] bg-[#009EE3]/5' : 'border-border'}`} onClick={() => setMetodoPago('mercadopago')}>
+                                            <CreditCard className={`w-6 h-6 ${metodoPago === 'mercadopago' ? 'text-[#009EE3]' : 'text-muted-foreground'}`} />
+                                            <Label className="cursor-pointer font-semibold text-center text-[#009ee3]">
+                                                Tarjeta (Mercado Pago)
+                                            </Label>
+                                        </div>
                                     )}
-                                    <Label className="cursor-pointer font-semibold text-center mt-1">
-                                        Transferencia
-                                    </Label>
                                 </div>
                             </div>
                         )
@@ -568,11 +576,12 @@ const CheckoutDelivery = () => {
                                             </Label>
                                         </div>
                                     )}
-                                    {/* {mpConnected && (
-                                <div className={`relative flex flex-col items-center justify-center p-4 border-2 rounded-2xl cursor-pointer hover:bg-secondary/50 transition-colors ${metodoPago === 'mercadopago' ? 'border-[#009EE3] bg-[#009EE3]/5' : 'border-border'}`} onClick={() => setMetodoPago('mercadopago')}>
-                                    <Label className="cursor-pointer font-semibold text-[#009EE3]">Mercado Pago</Label>
-                                </div>
-                            )} */}
+                                    {canPayWithCard && (
+                                        <div className={`relative flex flex-col items-center justify-center gap-1 p-4 border-2 rounded-2xl cursor-pointer hover:bg-secondary/50 transition-colors ${metodoPago === 'mercadopago' ? 'border-[#009EE3] bg-[#009EE3]/5' : 'border-border'}`} onClick={() => setMetodoPago('mercadopago')}>
+                                            <CreditCard className={`w-5 h-5 ${metodoPago === 'mercadopago' ? 'text-[#009EE3]' : 'text-muted-foreground'}`} />
+                                            <Label className="cursor-pointer font-semibold text-center text-[#009ee3] text-sm">Tarjeta</Label>
+                                        </div>
+                                    )}
                                 </RadioGroup>
                             </div>
                         )

@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef } from 'react'
 import { useNavigate } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { CheckCircle2, Copy, Loader2, Store, Truck, Utensils, MapPin, Clock, Package, MessageCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { MisPedidosDrawer } from '@/components/MisPedidosDrawer'
+import { initMercadoPago, CardPayment } from '@mercadopago/sdk-react'
 
 const SuccessDelivery = () => {
     const username = 'alfajor'
@@ -81,6 +82,11 @@ const SuccessDelivery = () => {
         }
     }, [username])
 
+    useLayoutEffect(() => {
+        if (!orderInfo || orderInfo.metodoPago !== 'mercadopago' || !restauranteData?.mpPublicKey) return
+        initMercadoPago(restauranteData.mpPublicKey, { locale: 'es-AR' })
+    }, [orderInfo?.metodoPago, orderInfo?.pedidoId, restauranteData?.mpPublicKey])
+
     // Fetch current pedido status on mount (handles page reload)
     useEffect(() => {
         if (!orderInfo) return
@@ -129,7 +135,8 @@ const SuccessDelivery = () => {
                     const data = JSON.parse(event.data)
                     if (data.type === 'PAGO_ACREDITADO') {
                         setStatus('confirmed')
-                        toast.success('¡Transferencia recibida!', {
+                        const isCard = orderInfo?.metodoPago === 'mercadopago'
+                        toast.success(isCard ? '¡Pago confirmado!' : '¡Transferencia recibida!', {
                             icon: <CheckCircle2 className="w-5 h-5 text-green-500" />,
                             duration: 6000
                         })
@@ -182,7 +189,8 @@ const SuccessDelivery = () => {
 
                 if (data.success && data.pagado) {
                     setStatus('confirmed');
-                    toast.success('¡Transferencia recibida!', {
+                    const isCard = orderInfo?.metodoPago === 'mercadopago'
+                    toast.success(isCard ? '¡Pago confirmado!' : '¡Transferencia recibida!', {
                         icon: <CheckCircle2 className="w-5 h-5 text-green-500" />,
                         duration: 6000
                     });
@@ -269,27 +277,69 @@ const SuccessDelivery = () => {
         }, 150000)
     }
 
-    const handleCrearMP = async () => {
+    const handleCardPaymentSubmit = async (formData: {
+        token: string
+        issuer_id: string
+        payment_method_id: string
+        transaction_amount: number
+        installments: number
+        payer: { email?: string; identification?: { type?: string; number?: string } }
+    }) => {
         setIsCreatingMP(true)
         try {
             const url = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
-            const response = await fetch(`${url}/mp/crear-preferencia-externo`, {
+            const response = await fetch(`${url}/mp/process-brick`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    pedidoId: orderInfo.pedidoId,
-                    tipoPedido: orderInfo.tipoPedido
+                    token: formData.token,
+                    installments: formData.installments,
+                    payment_method_id: formData.payment_method_id,
+                    issuer_id: formData.issuer_id,
+                    payer: {
+                        email: formData.payer?.email,
+                        identification: formData.payer?.identification
+                            ? {
+                                type: formData.payer.identification.type,
+                                number: formData.payer.identification.number
+                            }
+                            : undefined
+                    },
+                    pedidoId: orderInfo.pedidoId
                 })
             })
             const data = await response.json()
-            if (data.success && data.url_pago) {
-                window.location.href = data.url_pago
-            } else {
-                toast.error('Error', { description: 'No se pudo generar el pago con MercadoPago' })
+
+            if (data.success) {
+                if (data.status === 'approved') {
+                    setStatus('confirmed')
+                    return
+                }
+                if (data.status === 'pending') {
+                    setStatus('verifying')
+                    toast.message('Pago en proceso', {
+                        description: 'Te avisamos cuando se acredite. No cierres esta pantalla.'
+                    })
+                    return
+                }
+                if (data.status === 'rejected') {
+                    toast.error('Pago rechazado', {
+                        description: data.message || 'Revisá los datos o probá con otra tarjeta.'
+                    })
+                    throw new Error('mp_rejected')
+                }
+                toast.error('No se pudo completar el pago', { description: 'Intentá de nuevo.' })
+                throw new Error('mp_error')
             }
+
+            toast.error('No se pudo procesar el pago', { description: data.error || 'Intentá de nuevo' })
+            throw new Error('mp_error')
         } catch (err) {
-            toast.error('Error conectando con MP')
             console.error(err)
+            if (err instanceof Error && err.message !== 'mp_rejected' && err.message !== 'mp_error') {
+                toast.error('Error de conexión al procesar el pago')
+            }
+            throw err
         } finally {
             setIsCreatingMP(false)
         }
@@ -416,7 +466,9 @@ const SuccessDelivery = () => {
 
                         {/* Payment action */}
                         <div className="bg-primary/5 border border-primary/20 rounded-2xl p-6 shadow-sm mx-auto max-w-sm w-full space-y-4">
-                            <p className="font-medium text-primary/80 text-center">Total a transferir</p>
+                            <p className="font-medium text-primary/80 text-center">
+                                {orderInfo.metodoPago === 'mercadopago' ? 'Total a pagar' : 'Total a transferir'}
+                            </p>
                             <p className="text-4xl font-black text-center">${total?.toFixed(2)}</p>
 
                             <div className="pt-2">
@@ -467,15 +519,37 @@ const SuccessDelivery = () => {
                                         )}
                                     </>
                                 ) : orderInfo.metodoPago === 'mercadopago' ? (
-                                    <>
-                                        <Button
-                                            className="w-full h-14 text-lg font-bold rounded-xl shadow-md gap-3 bg-[#009EE3] hover:bg-[#008DD0] text-white"
-                                            onClick={handleCrearMP}
-                                            disabled={isCreatingMP}
-                                        >
-                                            {isCreatingMP ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Pagar con MercadoPago'}
-                                        </Button>
-                                    </>
+                                    restauranteData?.mpPublicKey ? (
+                                        <div className="w-full relative mt-1 space-y-2">
+                                            {isCreatingMP && (
+                                                <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 backdrop-blur-sm rounded-xl min-h-[120px]">
+                                                    <Loader2 className="w-8 h-8 text-primary animate-spin" />
+                                                </div>
+                                            )}
+                                            <p className="text-xs text-center text-muted-foreground">
+                                                Completá los datos de tu tarjeta. El cobro lo procesa Mercado Pago de forma segura.
+                                            </p>
+                                            <CardPayment
+                                                locale="es-AR"
+                                                initialization={{ amount: Number(total) }}
+                                                customization={{
+                                                    paymentMethods: {
+                                                        maxInstallments: 12
+                                                    }
+                                                }}
+                                                onSubmit={handleCardPaymentSubmit}
+                                                onError={() => {
+                                                    toast.error('No se pudo cargar el formulario de pago', {
+                                                        description: 'Actualizá la página o probá más tarde.'
+                                                    })
+                                                }}
+                                            />
+                                        </div>
+                                    ) : (
+                                        <p className="text-sm text-center text-muted-foreground">
+                                            Este local no tiene habilitado el pago con tarjeta. Elegí transferencia al hacer el pedido o contactá al restaurante.
+                                        </p>
+                                    )
                                 ) : null}
                             </div>
                         </div>
@@ -493,13 +567,28 @@ const SuccessDelivery = () => {
                                 <Loader2 className="w-14 h-14 text-primary animate-spin absolute" />
                             </div>
                             <div className="space-y-1">
-                                <h2 className="text-xl font-bold">Aguardando transferencia...</h2>
-                                <p className="text-muted-foreground text-sm animate-pulse">Realizá el pago y no cierres esta pantalla</p>
+                                <h2 className="text-xl font-bold">
+                                    {orderInfo.metodoPago === 'mercadopago'
+                                        ? 'Confirmando pago con tarjeta...'
+                                        : 'Aguardando transferencia...'}
+                                </h2>
+                                <p className="text-muted-foreground text-sm animate-pulse">
+                                    {orderInfo.metodoPago === 'mercadopago'
+                                        ? 'Mercado Pago puede tardar unos segundos. No cierres esta pantalla.'
+                                        : 'Realizá el pago y no cierres esta pantalla'}
+                                </p>
                             </div>
                         </div>
 
+                        {orderInfo.metodoPago === 'mercadopago' && (
+                            <div className="bg-primary/5 border border-primary/20 rounded-2xl p-5 max-w-sm mx-auto w-full text-center">
+                                <p className="text-xs font-semibold text-primary/80">Monto del pedido</p>
+                                <p className="text-3xl font-black mt-1">${total?.toFixed(2)}</p>
+                            </div>
+                        )}
+
                         {/* Alias/CBU to copy (always accessible while waiting) */}
-                        {(aliasDinamico || cvuDinamico) && (
+                        {orderInfo.metodoPago !== 'mercadopago' && (aliasDinamico || cvuDinamico) && (
                             <div className="bg-primary/5 border border-primary/20 rounded-2xl p-5 space-y-3 max-w-sm mx-auto w-full">
                                 <AliasNotice>
                                     Recordá: el alias es único por pedido. Copialo para evitar errores y que la verificación sea automática.
@@ -521,8 +610,8 @@ const SuccessDelivery = () => {
                         {/* Order summary always visible while waiting */}
                         <OrderSummary />
 
-                        {/* Ayuda Instagram: si pasaron 2.5 min y aún no confirmaron */}
-                        {showInstagramHelp && (
+                        {/* Ayuda Instagram: si pasaron 2.5 min y aún no confirmaron (solo flujo transferencia) */}
+                        {showInstagramHelp && orderInfo.metodoPago !== 'mercadopago' && (
                             <div className="animate-in fade-in slide-in-from-bottom-2 duration-400 bg-primary/5 border border-primary/20 rounded-2xl p-5 space-y-4 max-w-sm mx-auto w-full">
                                 <div className="flex items-start gap-3">
                                     <MessageCircle className="w-5 h-5 text-primary shrink-0 mt-0.5" />
