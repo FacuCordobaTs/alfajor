@@ -18,6 +18,7 @@ import MenuDelivery from './pages/MenuDelivery'
 import CheckoutDelivery from './pages/CheckoutDelivery'
 import SuccessDelivery from './pages/SuccessDelivery'
 import SuccessGrupal from './pages/SuccessGrupal'
+import PedidoStatus from './pages/PedidoStatus'
 
 const router = createBrowserRouter([
   {
@@ -97,6 +98,10 @@ const router = createBrowserRouter([
   {
     path: "/checkout",
     element: <CheckoutDelivery />,
+  },
+  {
+    path: "/pedido/:id",
+    element: <PedidoStatus />,
   },
   {
     path: "/success",
