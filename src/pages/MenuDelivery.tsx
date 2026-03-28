@@ -70,6 +70,7 @@ const MenuDelivery = () => {
     const [selectedProduct, setSelectedProduct] = useState<any>(null)
     const [drawerOpen, setDrawerOpen] = useState(false)
     const [selectedCategory, setSelectedCategory] = useState<string>('All')
+    const [cartAnimation, setCartAnimation] = useState(false)
 
     const [restaurante, setRestaurante] = useState<any>(null)
     const [productos, setProductos] = useState<any[]>([])
@@ -304,7 +305,11 @@ const MenuDelivery = () => {
         }
 
         setCartItems(prev => [...prev, newItem])
-        setTimeout(() => abrirCarrito(), 350)
+        
+        setTimeout(() => {
+            setCartAnimation(true)
+            setTimeout(() => setCartAnimation(false), 300)
+        }, 850)
     }
 
     const handleEliminarItem = (itemId: string) => {
@@ -625,9 +630,10 @@ const MenuDelivery = () => {
             bg-zinc-900 text-white shadow-zinc-900/20
             dark:bg-white/10 dark:text-white dark:backdrop-blur-xl 
             dark:border dark:border-white/10 dark:shadow-[0_0_20px_rgba(255,255,255,0.05)]
+            ${cartAnimation ? 'scale-105' : 'scale-100'}
           `}
                 >
-                    <div className="absolute -top-2 -right-1 bg-red-500 text-white text-[10px] font-bold h-5 min-w-[20px] px-1 flex items-center justify-center rounded-full border-2 border-background z-10">
+                    <div className={`absolute -top-2 -right-1 bg-red-500 text-white text-[10px] font-bold h-5 min-w-[20px] px-1 flex items-center justify-center rounded-full border-2 border-background z-10 transition-transform duration-300 ${cartAnimation ? 'scale-125' : 'scale-100'}`}>
                         {cartItems.length}
                     </div>
                     <div className="flex items-center gap-2.5">

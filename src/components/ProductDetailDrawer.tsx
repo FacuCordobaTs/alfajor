@@ -12,7 +12,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { Utensils, ChevronLeft } from 'lucide-react'
+import { Utensils, ChevronLeft, Check } from 'lucide-react'
 
 interface Ingrediente {
   id: number
@@ -50,6 +50,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
   const [agregadosSeleccionados, setAgregadosSeleccionados] = useState<Agregado[]>([])
   const [modalView, setModalView] = useState<'main' | 'ingredientes' | 'carne' | 'extras'>('main')
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isAdded, setIsAdded] = useState(false)
 
   // Resetear estado cuando se abre/cierra el drawer o cambia el producto
   useEffect(() => {
@@ -59,6 +60,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
       setQuantity(1)
       setModalView('main')
       setIsModalOpen(false)
+      setIsAdded(false)
     }
   }, [open, product?.id])
 
@@ -83,11 +85,16 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
 
   const handleAdd = () => {
     if (!product) return
+    setIsAdded(true)
     onAddToOrder(product, quantity, ingredientesExcluidos.length > 0 ? ingredientesExcluidos : undefined, agregadosSeleccionados.length > 0 ? agregadosSeleccionados : undefined)
-    setQuantity(1)
-    setIngredientesExcluidos([])
-    setAgregadosSeleccionados([])
-    onClose()
+    
+    setTimeout(() => {
+      setQuantity(1)
+      setIngredientesExcluidos([])
+      setAgregadosSeleccionados([])
+      setIsAdded(false)
+      onClose()
+    }, 600)
   }
 
   const tieneIngredientes = product?.ingredientes && product.ingredientes.length > 0
@@ -385,9 +392,14 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
                 <Button
                   size="lg"
                   onClick={handleAdd}
-                  className="rounded-2xl px-8 h-14 bg-primary hover:bg-primary/90 font-bold w-full transition-all duration-200 active:scale-[0.98] shadow-lg shadow-primary/20"
+                  disabled={isAdded}
+                  className={`rounded-2xl px-8 h-14 font-bold w-full transition-all duration-300 shadow-lg ${isAdded ? 'bg-emerald-500 text-white scale-[1.02] disabled:opacity-100 disabled:pointer-events-none' : 'bg-primary hover:bg-primary/90 active:scale-[0.98] shadow-primary/20'}`}
                 >
-                  Agregar al pedido
+                  {isAdded ? (
+                    <span className="flex items-center justify-center gap-2 animate-in zoom-in-50 duration-200">
+                      <Check className="w-5 h-5" /> ¡Agregado!
+                    </span>
+                  ) : "Agregar al pedido"}
                 </Button>
               </div>
             </div>
