@@ -32,12 +32,21 @@ export function AddressAutocomplete({
 
     const stableOnChange = useCallback(onChange, [])
 
+const SANTA_FE_BOUNDS = {
+    north: -31.5400,
+    south: -31.6900,
+    east: -60.6400,
+    west: -60.7500
+}
+
     // Initialize Google Places Autocomplete
     useEffect(() => {
         if (!isLoaded || !inputRef.current || autocompleteRef.current) return
 
         const autocomplete = new google.maps.places.Autocomplete(inputRef.current, {
             componentRestrictions: { country: 'ar' },
+            bounds: SANTA_FE_BOUNDS,
+            strictBounds: true,
             fields: ['formatted_address', 'geometry', 'address_components'],
             types: ['address']
         })
