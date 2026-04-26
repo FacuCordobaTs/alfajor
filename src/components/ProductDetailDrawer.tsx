@@ -4,6 +4,7 @@ import {
   DrawerContent
 } from '@/components/ui/drawer'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
   Dialog,
@@ -136,6 +137,12 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
 
   const opcionVeggie = agregadosCarne.find(a => a.nombre.includes('Veggie'))
   const opcionesMedallones = agregadosCarne.filter(a => !a.nombre.includes('Veggie'))
+
+  const hayModificaciones =
+    agregadosSeleccionados.length > 0 || ingredientesExcluidos.length > 0
+  const ingredientesExcluidosDetalle = (product?.ingredientes ?? []).filter((ing) =>
+    ingredientesExcluidos.includes(ing.id)
+  )
 
   return (
     <Drawer open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
@@ -385,6 +392,34 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
                   </Dialog>
                 )}
               </div>
+
+              {hayModificaciones && (
+                <div className="space-y-2 pt-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    Tu pedido así
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {agregadosSeleccionados.map((ag) => (
+                      <Badge
+                        key={ag.id}
+                        variant="default"
+                        className="rounded-lg px-2.5 py-1 text-[11px] font-semibold shadow-sm ring-1 ring-primary/20"
+                      >
+                        + {ag.nombre}
+                      </Badge>
+                    ))}
+                    {ingredientesExcluidosDetalle.map((ing) => (
+                      <Badge
+                        key={ing.id}
+                        variant="destructive"
+                        className="rounded-lg px-2.5 py-1 text-[11px] font-semibold shadow-sm"
+                      >
+                        − Sin {ing.nombre}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Total Amount & Add Button */}
               <div className="flex items-center justify-between pt-4 border-t border-border">

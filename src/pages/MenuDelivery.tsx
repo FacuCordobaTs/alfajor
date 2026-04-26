@@ -1,11 +1,12 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useLayoutEffect, useCallback, type Dispatch, type SetStateAction } from 'react'
+import { flushSync } from 'react-dom'
 import { useNavigate } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { toast } from 'sonner'
 import {
     Trash2, ArrowLeft,
-    Package, Receipt, UtensilsCrossed, Utensils, Clock
+    Package, Receipt, UtensilsCrossed, Utensils, Clock, Sparkles, Check
 } from 'lucide-react'
 import { ProductDetailDrawer } from '@/components/ProductDetailDrawer'
 import { ThemeToggle } from '@/components/ThemeToggle'
@@ -60,6 +61,132 @@ function checkIsOpen(horarios: HorarioTurno[]): { abierto: boolean; proximaApert
     }
 
     return { abierto: false, proximaApertura: mejor?.texto || null }
+}
+
+const DELIVERY_ADD_CLONE_TOAST_ID = 'piru-delivery-add-clone'
+
+/** Sonner remonta el toast; el flash del botón se guarda por línea plantilla. */
+const agregadoFlashUntilByLineId = new Map<string, number>()
+const AGREGADO_FLASH_MS = 600
+
+function DeliveryAddCloneToast({
+    template,
+    puntosCliente,
+    setCartItems,
+    bumpCart,
+}: {
+    template: any
+    puntosCliente: number | null
+    setCartItems: Dispatch<SetStateAction<any[]>>
+    bumpCart: () => void
+}) {
+    const lineId = String(template.id)
+    const [flashEndTs, setFlashEndTs] = useState<number | null>(null)
+
+    const showAgregado = flashEndTs != null && Date.now() < flashEndTs
+
+    useLayoutEffect(() => {
+        const until = agregadoFlashUntilByLineId.get(lineId)
+        if (until != null && Date.now() < until) {
+            setFlashEndTs(until)
+        }
+    }, [lineId])
+
+    useEffect(() => {
+        if (flashEndTs == null || Date.now() >= flashEndTs) return
+        const ms = Math.max(0, flashEndTs - Date.now())
+        const id = window.setTimeout(() => {
+            agregadoFlashUntilByLineId.delete(lineId)
+            setFlashEndTs(null)
+        }, ms)
+        return () => window.clearTimeout(id)
+    }, [flashEndTs, lineId])
+
+    const startAgregadoFlash = () => {
+        const end = Date.now() + AGREGADO_FLASH_MS
+        agregadoFlashUntilByLineId.set(lineId, end)
+        setFlashEndTs(end)
+    }
+
+    const addIdenticalLine = () => {
+        if (showAgregado) return
+        let added = false
+        flushSync(() => {
+            setCartItems((prev) => {
+                if (template.esCanjePuntos) {
+                    const puntosOcupados = prev.reduce(
+                        (sum, item) =>
+                            sum + (item.esCanjePuntos ? item.puntosNecesarios * item.cantidad : 0),
+                        0
+                    )
+                    const costo = (template.puntosNecesarios || 0) * (template.cantidad || 1)
+                    if ((puntosCliente || 0) - puntosOcupados - costo < 0) {
+                        toast.error('No tienes suficientes puntos para agregar este producto.')
+                        return prev
+                    }
+                }
+                added = true
+                const clone = {
+                    ...template,
+                    id: Math.random().toString(36).substring(2, 11),
+                }
+                return [...prev, clone]
+            })
+        })
+        if (added) {
+            startAgregadoFlash()
+            bumpCart()
+        }
+    }
+
+    return (
+        <div
+            className={`
+                w-[min(100vw-1.25rem,22rem)] sm:w-[min(100vw-2rem,24rem)]
+                rounded-2xl border border-primary/20 bg-card/95 text-card-foreground shadow-[0_20px_50px_-12px_rgba(0,0,0,0.35),0_0_0_1px_rgba(255,255,255,0.06)_inset]
+                dark:shadow-[0_24px_60px_-12px_rgba(0,0,0,0.65),0_0_0_1px_rgba(255,255,255,0.08)_inset]
+                backdrop-blur-xl overflow-hidden
+            `}
+        >
+            <div className="p-3.5 sm:p-4 space-y-3 relative">
+                <div className="flex gap-3 items-start">
+                    <div className="shrink-0 w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center text-primary ring-1 ring-primary/25">
+                        <Sparkles className="w-5 h-5" strokeWidth={2.2} />
+                    </div>
+                    <div className="min-w-0 flex-1 space-y-1">
+                        <p className="text-[13px] sm:text-sm font-extrabold leading-tight tracking-tight text-foreground">
+                            ¡Gran elección! 🔥
+                        </p>
+                        <p className="text-xs sm:text-[13px] font-semibold text-primary line-clamp-2 leading-snug">
+                            {template.nombre}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground font-medium">
+                            ¿Otro igual sin volver al menú? Un toque y listo.
+                        </p>
+                    </div>
+                </div>
+                <Button
+                    type="button"
+                    size="sm"
+                    onClick={addIdenticalLine}
+                    disabled={showAgregado}
+                    className={`w-full h-11 sm:h-10 rounded-xl font-bold text-sm shadow-md transition-all duration-300 ${
+                        showAgregado
+                            ? 'bg-emerald-500 text-white shadow-emerald-500/25 scale-[1.02] disabled:opacity-100 disabled:pointer-events-none'
+                            : 'shadow-primary/15 bg-primary hover:bg-primary/90 text-primary-foreground active:scale-[0.98]'
+                    }`}
+                >
+                    {showAgregado ? (
+                        <span className="flex items-center justify-center gap-2 animate-in zoom-in-50 duration-200">
+                            <Check className="w-5 h-5" /> ¡Agregado!
+                        </span>
+                    ) : (
+                        '¡Quiero otro igual!'
+                    )}
+                </Button>
+            </div>
+        </div>
+    )
 }
 
 const MenuDelivery = () => {
@@ -305,11 +432,30 @@ const MenuDelivery = () => {
         }
 
         setCartItems(prev => [...prev, newItem])
-        
-        setTimeout(() => {
-            setCartAnimation(true)
-            setTimeout(() => setCartAnimation(false), 300)
-        }, 850)
+
+        const bumpCart = () => {
+            setTimeout(() => {
+                setCartAnimation(true)
+                setTimeout(() => setCartAnimation(false), 300)
+            }, 850)
+        }
+
+        bumpCart()
+
+        toast.custom(
+            () => (
+                <DeliveryAddCloneToast
+                    template={newItem}
+                    puntosCliente={puntosCliente}
+                    setCartItems={setCartItems}
+                    bumpCart={bumpCart}
+                />
+            ),
+            {
+                id: DELIVERY_ADD_CLONE_TOAST_ID,
+                duration: 14_000,
+            }
+        )
     }
 
     const handleEliminarItem = (itemId: string) => {

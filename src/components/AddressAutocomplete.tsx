@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
 import { cn } from '@/lib/utils'
-import { MapPin, X, Loader2, Search } from 'lucide-react'
+import { MapPin, X, Loader2, Search, AlertCircle } from 'lucide-react'
 import { useGoogleMapsScript } from '@/hooks/useGoogleMapsScript'
 
 interface AddressAutocompleteProps {
@@ -22,6 +22,7 @@ export function AddressAutocomplete({
     const [isFocused, setIsFocused] = useState(false)
     const [internalValue, setInternalValue] = useState(value)
     const [hasSelectedPlace, setHasSelectedPlace] = useState(!!value)
+    const [error, setError] = useState<string | null>(null)
 
     const isLoaded = useGoogleMapsScript()
 
@@ -32,12 +33,12 @@ export function AddressAutocomplete({
 
     const stableOnChange = useCallback(onChange, [])
 
-const SANTA_FE_BOUNDS = {
-    north: -31.5400,
-    south: -31.6900,
-    east: -60.6400,
-    west: -60.7500
-}
+    const SANTA_FE_BOUNDS = {
+        north: -31.5400,
+        south: -31.6900,
+        east: -60.6400,
+        west: -60.7500
+    }
 
     // Initialize Google Places Autocomplete
     useEffect(() => {
@@ -47,12 +48,29 @@ const SANTA_FE_BOUNDS = {
             componentRestrictions: { country: 'ar' },
             bounds: SANTA_FE_BOUNDS,
             strictBounds: true,
-            fields: ['formatted_address', 'geometry', 'address_components'],
+            fields: ['formatted_address', 'geometry', 'address_components', 'name'],
             types: ['address']
         })
 
         autocomplete.addListener('place_changed', () => {
+            setError(null)
             const place = autocomplete.getPlace()
+
+            const hasStreetNumber = place.address_components?.some(
+                (component) => component.types.includes('street_number')
+            )
+
+            if (!hasStreetNumber) {
+                setError('Por favor, ingresá el número de la calle (ej: San Martín 2050)')
+                setInternalValue(place.name || '')
+                setHasSelectedPlace(false)
+                stableOnChange('', null, null)
+                // Focus the input to let user append street number
+                if (inputRef.current) {
+                    inputRef.current.focus()
+                }
+                return
+            }
 
             if (place.geometry?.location) {
                 const lat = place.geometry.location.lat()
@@ -71,6 +89,7 @@ const SANTA_FE_BOUNDS = {
     const handleClear = () => {
         setInternalValue('')
         setHasSelectedPlace(false)
+        setError(null)
         stableOnChange('', null, null)
         inputRef.current?.focus()
     }
@@ -79,6 +98,7 @@ const SANTA_FE_BOUNDS = {
         const val = e.target.value
         setInternalValue(val)
         setHasSelectedPlace(false)
+        setError(null)
         // When typing manually, clear lat/lng since it's not a selected place
         stableOnChange(val, null, null)
     }
@@ -89,14 +109,16 @@ const SANTA_FE_BOUNDS = {
                 className={cn(
                     'relative flex items-center h-12 w-full rounded-xl border bg-transparent px-3 text-base transition-all duration-300',
                     'shadow-xs',
-                    isFocused
-                        ? 'border-primary ring-primary/25 ring-[3px] shadow-primary/10 shadow-md'
-                        : 'border-input hover:border-primary/40',
-                    hasSelectedPlace && !isFocused && 'border-emerald-500/50 bg-emerald-500/5',
+                    error 
+                        ? 'border-red-500/50 ring-red-500/20 ring-[3px]' 
+                        : isFocused
+                            ? 'border-primary ring-primary/25 ring-[3px] shadow-primary/10 shadow-md'
+                            : 'border-input hover:border-primary/40',
+                    hasSelectedPlace && !isFocused && !error && 'border-emerald-500/50 bg-emerald-500/5',
                     className
                 )}
             >
-                {hasSelectedPlace ? (
+                {hasSelectedPlace && !error ? (
                     <MapPin
                         className={cn(
                             'w-4.5 h-4.5 mr-2.5 shrink-0 transition-colors duration-300',
@@ -107,7 +129,7 @@ const SANTA_FE_BOUNDS = {
                     <Search
                         className={cn(
                             'w-4.5 h-4.5 mr-2.5 shrink-0 transition-colors duration-300',
-                            isFocused ? 'text-primary' : 'text-muted-foreground'
+                            error ? 'text-red-500' : isFocused ? 'text-primary' : 'text-muted-foreground'
                         )}
                     />
                 )}
@@ -123,7 +145,8 @@ const SANTA_FE_BOUNDS = {
                     className={cn(
                         'flex-1 h-full bg-transparent outline-none text-foreground',
                         'placeholder:text-muted-foreground/60',
-                        'text-sm'
+                        'text-sm',
+                        error && 'text-red-600 dark:text-red-400 font-medium'
                     )}
                     autoComplete="off"
                 />
@@ -149,15 +172,22 @@ const SANTA_FE_BOUNDS = {
                 )}
             </div>
 
+            {error && (
+                <div className="flex items-center gap-1.5 mt-1.5 ml-1 animate-in fade-in slide-in-from-top-1 duration-200">
+                    <AlertCircle className="w-3.5 h-3.5 text-red-500" />
+                    <p className="text-[12px] font-medium text-red-500">{error}</p>
+                </div>
+            )}
+
             {/* Subtle helper text */}
-            {isFocused && !internalValue && (
+            {isFocused && !internalValue && !error && (
                 <p className="text-[11px] text-muted-foreground/70 mt-1.5 ml-1 animate-in fade-in slide-in-from-top-1 duration-200">
-                    Escribe tu calle y número para ver sugerencias
+                    Escribí tu calle y número para ver sugerencias
                 </p>
             )}
 
             {/* Confirmed address indicator */}
-            {hasSelectedPlace && !isFocused && internalValue && (
+            {hasSelectedPlace && !isFocused && internalValue && !error && (
                 <div className="flex items-center gap-1.5 mt-1.5 ml-1 animate-in fade-in slide-in-from-bottom-1 duration-300">
                     <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                     <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
