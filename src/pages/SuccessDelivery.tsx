@@ -5,6 +5,8 @@ import { CheckCircle2, Copy, Loader2, Store, Truck, Utensils, MapPin, Clock, Pac
 import { toast } from 'sonner'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { MisPedidosDrawer } from '@/components/MisPedidosDrawer'
+import { OrderSummaryItemDetails } from '@/components/OrderSummaryItemDetails'
+import { orderItemLineSubtotalSession } from '@/lib/orderSummaryItem'
 import { initMercadoPago, CardPayment } from '@mercadopago/sdk-react'
 
 const MP_CHECKOUT_LAUNCHED_KEY = 'mpCheckoutLaunchedPedidoId'
@@ -510,26 +512,21 @@ const SuccessDelivery = () => {
                     <div key={i} className="flex justify-between items-start gap-2">
                         <div className="flex gap-2 min-w-0">
                             <span className="font-semibold text-primary/90 min-w-4 shrink-0">{item.cantidad}x</span>
-                            <div className="min-w-0">
-                                <p className="font-medium text-sm leading-tight truncate">{item.nombreProducto || item.nombre}</p>
-                                {item.ingredientesExcluidosNombres?.length > 0 && (
-                                    <p className="text-xs text-muted-foreground mt-0.5">
-                                        Sin: {item.ingredientesExcluidosNombres.join(', ')}
-                                    </p>
-                                )}
-                            </div>
+                            <OrderSummaryItemDetails item={item} />
                         </div>
                         <span className="text-sm font-medium shrink-0">
-                            ${(parseFloat(item.precio) * item.cantidad).toFixed(2)}
+                            ${orderItemLineSubtotalSession(item).toFixed(2)}
                         </span>
                     </div>
                 ))}
             </div>
-            {tipoPedido === 'delivery' && deliveryFee && (
+            {tipoPedido === 'delivery' && (
                 <div className="flex justify-between items-center pt-2 border-t border-border/50">
                     <span className="text-sm text-muted-foreground">Envío</span>
                     <span className="text-sm font-medium">
-                        {parseFloat(deliveryFee) === 0 ? 'GRATIS' : `$${parseFloat(deliveryFee).toFixed(2)}`}
+                        {parseFloat(String(deliveryFee ?? 0)) === 0
+                            ? 'GRATIS'
+                            : `$${parseFloat(String(deliveryFee)).toFixed(2)}`}
                     </span>
                 </div>
             )}

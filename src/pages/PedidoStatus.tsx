@@ -5,6 +5,8 @@ import { CheckCircle2, Copy, Loader2, Store, Truck, Utensils, MapPin, Clock, Pac
 import { toast } from 'sonner'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { MisPedidosDrawer } from '@/components/MisPedidosDrawer'
+import { OrderSummaryItemDetails } from '@/components/OrderSummaryItemDetails'
+import { inferDeliveryFeeCobrado, orderItemLineSubtotalsFromApi } from '@/lib/orderSummaryItem'
 import { initMercadoPago, CardPayment } from '@mercadopago/sdk-react'
 
 const MP_CHECKOUT_LAUNCHED_KEY = 'mpCheckoutLaunchedPedidoId'
@@ -86,16 +88,31 @@ const PedidoStatus = () => {
                 const response = await fetch(`${url}/public/pedido-info/${id}`)
                 const data = await response.json()
                 if (data.success && data.data) {
-                    const { pedido, items, restaurante } = data.data
+                    const { pedido, items, restaurante, deliveryFeeCobrado } = data.data
+                    const totalNum = parseFloat(pedido.total)
+                    const feeParsed =
+                        deliveryFeeCobrado != null && deliveryFeeCobrado !== ''
+                            ? parseFloat(String(deliveryFeeCobrado))
+                            : NaN
+                    const feeFromApi = Number.isFinite(feeParsed) ? feeParsed : null
+                    const deliveryFeeResolved =
+                        pedido.tipo === 'delivery'
+                            ? feeFromApi ??
+                              inferDeliveryFeeCobrado(items || [], {
+                                  orderTotal: totalNum,
+                                  montoDescuento: pedido.montoDescuento,
+                                  tipoPedido: pedido.tipo,
+                              })
+                            : 0
                     const orderData = {
                         pedidoId: pedido.id,
                         tipoPedido: pedido.tipo,
-                        total: parseFloat(pedido.total),
+                        total: totalNum,
                         metodoPago: pedido.metodoPago,
                         nombreCliente: pedido.nombreCliente,
                         direccion: pedido.direccion,
                         items,
-                        deliveryFee: restaurante?.deliveryFee,
+                        deliveryFee: deliveryFeeResolved,
                         montoDescuento: pedido.montoDescuento,
                     }
                     setOrderInfo(orderData)
@@ -358,27 +375,36 @@ const PedidoStatus = () => {
         )}`
         : null
 
+    const lineSubtotals = orderItemLineSubtotalsFromApi(items || [], {
+        orderTotal: typeof total === 'number' ? total : parseFloat(String(total)),
+        deliveryFeeCobrado: deliveryFee,
+        tipoPedido,
+        montoDescuento: orderInfo?.montoDescuento,
+    })
+
     const OrderSummary = ({ compact = false }: { compact?: boolean }) => (
         <div className={`bg-card border border-border rounded-2xl ${compact ? 'p-4' : 'p-5'} shadow-sm space-y-3`}>
             <h4 className="font-semibold text-xs uppercase tracking-wider text-muted-foreground">Tu pedido</h4>
             <div className="flex flex-col gap-2.5">
                 {items?.map((item: any, i: number) => (
-                    <div key={i} className="flex justify-between items-start gap-2">
+                    <div key={item.id ?? i} className="flex justify-between items-start gap-2">
                         <div className="flex gap-2 min-w-0">
                             <span className="font-semibold text-primary/90 min-w-4 shrink-0">{item.cantidad}x</span>
-                            <p className="font-medium text-sm leading-tight truncate">{item.nombreProducto || item.nombre}</p>
+                            <OrderSummaryItemDetails item={item} />
                         </div>
                         <span className="text-sm font-medium shrink-0">
-                            ${(parseFloat(item.precio) * item.cantidad).toFixed(2)}
+                            ${(lineSubtotals[i] ?? 0).toFixed(2)}
                         </span>
                     </div>
                 ))}
             </div>
-            {tipoPedido === 'delivery' && deliveryFee && (
+            {tipoPedido === 'delivery' && (
                 <div className="flex justify-between items-center pt-2 border-t border-border/50">
                     <span className="text-sm text-muted-foreground">Envío</span>
                     <span className="text-sm font-medium">
-                        {parseFloat(deliveryFee) === 0 ? 'GRATIS' : `$${parseFloat(deliveryFee).toFixed(2)}`}
+                        {parseFloat(String(deliveryFee ?? 0)) === 0
+                            ? 'GRATIS'
+                            : `$${parseFloat(String(deliveryFee)).toFixed(2)}`}
                     </span>
                 </div>
             )}
