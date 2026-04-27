@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useCallback, type Dispatch, type SetStateAction } from 'react'
+import { useState, useEffect, useLayoutEffect, useCallback, useRef, type Dispatch, type SetStateAction } from 'react'
 import { flushSync } from 'react-dom'
 import { useNavigate } from 'react-router'
 import { Button } from '@/components/ui/button'
@@ -6,7 +6,7 @@ import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { toast } from 'sonner'
 import {
     Trash2, ArrowLeft,
-    Package, Receipt, UtensilsCrossed, Utensils, Clock, Sparkles, Check
+    Package, Receipt, UtensilsCrossed, Utensils, Clock, Sparkles, Check, X
 } from 'lucide-react'
 import { ProductDetailDrawer } from '@/components/ProductDetailDrawer'
 import { ThemeToggle } from '@/components/ThemeToggle'
@@ -69,6 +69,8 @@ const DELIVERY_ADD_CLONE_TOAST_ID = 'piru-delivery-add-clone'
 const agregadoFlashUntilByLineId = new Map<string, number>()
 const AGREGADO_FLASH_MS = 600
 
+const CLONE_TOAST_SWIPE_DISMISS_PX = 72
+
 function DeliveryAddCloneToast({
     template,
     puntosCliente,
@@ -82,6 +84,17 @@ function DeliveryAddCloneToast({
 }) {
     const lineId = String(template.id)
     const [flashEndTs, setFlashEndTs] = useState<number | null>(null)
+    const [dragX, setDragX] = useState(0)
+    const [isDragging, setIsDragging] = useState(false)
+    const swipeRef = useRef<{ startX: number; pointerId: number | null; active: boolean }>({
+        startX: 0,
+        pointerId: null,
+        active: false,
+    })
+
+    const dismissCloneToast = useCallback(() => {
+        toast.dismiss(DELIVERY_ADD_CLONE_TOAST_ID)
+    }, [])
 
     const showAgregado = flashEndTs != null && Date.now() < flashEndTs
 
@@ -139,16 +152,72 @@ function DeliveryAddCloneToast({
         }
     }
 
+    const onSwipePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+        if ((e.target as HTMLElement).closest('[data-clone-toast-no-swipe]')) return
+        if (e.button !== 0) return
+        swipeRef.current = { startX: e.clientX, pointerId: e.pointerId, active: true }
+        setIsDragging(true)
+        e.currentTarget.setPointerCapture(e.pointerId)
+    }
+
+    const onSwipePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+        if (!swipeRef.current.active || swipeRef.current.pointerId !== e.pointerId) return
+        setDragX(e.clientX - swipeRef.current.startX)
+    }
+
+    const endSwipe = (e: React.PointerEvent<HTMLDivElement>) => {
+        if (!swipeRef.current.active) return
+        const { startX, pointerId: wasId } = swipeRef.current
+        const dx = e.clientX - startX
+        swipeRef.current = { startX: 0, pointerId: null, active: false }
+        setIsDragging(false)
+        if (wasId != null) {
+            try {
+                e.currentTarget.releasePointerCapture(wasId)
+            } catch {
+                /* already released */
+            }
+        }
+        if (Math.abs(dx) >= CLONE_TOAST_SWIPE_DISMISS_PX) {
+            dismissCloneToast()
+            setDragX(0)
+            return
+        }
+        setDragX(0)
+    }
+
+    const dragOpacity = 1 - Math.min(Math.abs(dragX) / 180, 0.38)
+
     return (
         <div
+            role="presentation"
+            onPointerDown={onSwipePointerDown}
+            onPointerMove={onSwipePointerMove}
+            onPointerUp={endSwipe}
+            onPointerCancel={endSwipe}
+            style={{
+                transform: `translateX(${dragX}px)`,
+                opacity: dragOpacity,
+                transition: isDragging ? 'none' : 'transform 0.22s ease-out, opacity 0.22s ease-out',
+                touchAction: 'none',
+            }}
             className={`
-                w-[min(100vw-1.25rem,22rem)] sm:w-[min(100vw-2rem,24rem)]
+                w-[min(100vw-1.25rem,22rem)] sm:w-[min(100vw-2rem,24rem)] cursor-grab active:cursor-grabbing
                 rounded-2xl border border-primary/20 bg-card/95 text-card-foreground shadow-[0_20px_50px_-12px_rgba(0,0,0,0.35),0_0_0_1px_rgba(255,255,255,0.06)_inset]
                 dark:shadow-[0_24px_60px_-12px_rgba(0,0,0,0.65),0_0_0_1px_rgba(255,255,255,0.08)_inset]
-                backdrop-blur-xl overflow-hidden
+                backdrop-blur-xl overflow-hidden select-none
             `}
         >
             <div className="p-3.5 sm:p-4 space-y-3 relative">
+                <button
+                    type="button"
+                    data-clone-toast-no-swipe
+                    onClick={dismissCloneToast}
+                    className="absolute top-2 right-2 z-10 rounded-full p-1 text-muted-foreground/55 hover:text-muted-foreground hover:bg-muted/50 opacity-80 hover:opacity-100 transition-[opacity,background-color,color] duration-150"
+                    aria-label="Cerrar aviso"
+                >
+                    <X className="w-3.5 h-3.5" strokeWidth={2.25} />
+                </button>
                 <div className="flex gap-3 items-start">
                     <div className="shrink-0 w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center text-primary ring-1 ring-primary/25">
                         <Sparkles className="w-5 h-5" strokeWidth={2.2} />
@@ -167,6 +236,7 @@ function DeliveryAddCloneToast({
                 </div>
                 <Button
                     type="button"
+                    data-clone-toast-no-swipe
                     size="sm"
                     onClick={addIdenticalLine}
                     disabled={showAgregado}
