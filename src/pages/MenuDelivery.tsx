@@ -18,7 +18,7 @@ type HorarioTurno = { diaSemana: number; horaApertura: string; horaCierre: strin
 
 function checkIsOpen(horarios: HorarioTurno[]): { abierto: boolean; proximaApertura: string | null } {
     if (!horarios || horarios.length === 0) return { abierto: true, proximaApertura: null }
-
+    return { abierto: true, proximaApertura: null }
     const now = new Date()
     const diaHoy = now.getDay()
     const diaAyer = (diaHoy + 6) % 7
