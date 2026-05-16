@@ -9,6 +9,7 @@ import { toast } from 'sonner'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { ArrowLeft, Loader2, MapPin, Store, Zap, Truck, AlertTriangle, Package, Tag, X, CreditCard, Wallet, Home, Building2 } from 'lucide-react'
 import { AddressAutocomplete } from '@/components/AddressAutocomplete'
+import { AddressMapPreview } from '@/components/AddressMapPreview'
 import { MisPedidosDrawer } from '@/components/MisPedidosDrawer'
 
 type MetodoPublico = { id: string; label: string; automatico: boolean }
@@ -447,6 +448,9 @@ const CheckoutDelivery = () => {
                                         onChange={handleAddressChange}
                                         placeholder="Ej: Necochea 3601, Santa Fe"
                                     />
+                                    {lat !== null && lng !== null && (
+                                        <AddressMapPreview lat={lat} lng={lng} />
+                                    )}
                                     {/* Zone status after address selection */}
                                     {lat !== null && lng !== null && direccion && (
                                         <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
