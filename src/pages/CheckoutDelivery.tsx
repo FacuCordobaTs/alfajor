@@ -71,6 +71,12 @@ const CheckoutDelivery = () => {
                     const methods: MetodoPublico[] = Array.isArray(r.metodosPago) ? r.metodosPago : []
                     setAvailablePaymentMethods(methods)
                     setRestauranteData(r)
+
+                    // Auto-select tipo pedido if only one is enabled
+                    const delEn = r.deliveryEnabled !== false
+                    const tkEn = r.takeawayEnabled !== false
+                    if (delEn && !tkEn) setTipoPedido('delivery')
+                    else if (!delEn && tkEn) setTipoPedido('takeaway')
                 }
             } catch (err) {
                 console.error('Error fetching restaurante data', err)
@@ -414,18 +420,32 @@ const CheckoutDelivery = () => {
 
                 <section className="space-y-4">
                     <Label className="text-base">¿Cómo vas a recibir tu pedido?</Label>
-                    <RadioGroup defaultValue="delivery" value={tipoPedido} onValueChange={(v: any) => setTipoPedido(v)} className="grid grid-cols-2 gap-4">
-                        <div className={`relative flex flex-col items-center justify-center p-4 border-2 rounded-2xl cursor-pointer hover:bg-secondary/50 transition-colors ${tipoPedido === 'delivery' ? 'border-primary bg-primary/5' : 'border-border'}`} onClick={() => setTipoPedido('delivery')}>
-                            <MapPin className={`w-8 h-8 mb-2 ${tipoPedido === 'delivery' ? 'text-primary' : 'text-muted-foreground'}`} />
-                            <Label className="cursor-pointer font-semibold mb-1">Delivery</Label>
-                            <span className="text-xs text-muted-foreground text-center">Te lo llevamos</span>
-                        </div>
-                        <div className={`relative flex flex-col items-center justify-center p-4 border-2 rounded-2xl cursor-pointer hover:bg-secondary/50 transition-colors ${tipoPedido === 'takeaway' ? 'border-primary bg-primary/5' : 'border-border'}`} onClick={() => setTipoPedido('takeaway')}>
-                            <Store className={`w-8 h-8 mb-2 ${tipoPedido === 'takeaway' ? 'text-primary' : 'text-muted-foreground'}`} />
-                            <Label className="cursor-pointer font-semibold mb-1">Take Away</Label>
-                            <span className="text-xs text-muted-foreground text-center">Lo pasas a buscar</span>
-                        </div>
-                    </RadioGroup>
+                    {(() => {
+                        const delEn = restauranteData?.deliveryEnabled !== false
+                        const tkEn = restauranteData?.takeawayEnabled !== false
+                        if (!delEn && !tkEn) {
+                            return (
+                                <div className="flex items-center gap-3 p-4 rounded-2xl bg-destructive/10 border border-destructive/30">
+                                    <AlertTriangle className="w-5 h-5 text-destructive shrink-0" />
+                                    <p className="text-sm text-destructive font-medium">El local no está aceptando pedidos en este momento.</p>
+                                </div>
+                            )
+                        }
+                        return (
+                            <RadioGroup defaultValue="delivery" value={tipoPedido} onValueChange={(v: any) => setTipoPedido(v)} className="grid grid-cols-2 gap-4">
+                                <div className={`relative flex flex-col items-center justify-center p-4 border-2 rounded-2xl transition-colors ${!delEn ? 'opacity-40 cursor-not-allowed border-border' : `cursor-pointer hover:bg-secondary/50 ${tipoPedido === 'delivery' ? 'border-primary bg-primary/5' : 'border-border'}`}`} onClick={() => delEn && setTipoPedido('delivery')}>
+                                    <MapPin className={`w-8 h-8 mb-2 ${tipoPedido === 'delivery' ? 'text-primary' : 'text-muted-foreground'}`} />
+                                    <Label className={`font-semibold mb-1 ${delEn ? 'cursor-pointer' : 'cursor-not-allowed'}`}>Delivery</Label>
+                                    <span className="text-xs text-muted-foreground text-center">{delEn ? 'Te lo llevamos' : 'No disponible'}</span>
+                                </div>
+                                <div className={`relative flex flex-col items-center justify-center p-4 border-2 rounded-2xl transition-colors ${!tkEn ? 'opacity-40 cursor-not-allowed border-border' : `cursor-pointer hover:bg-secondary/50 ${tipoPedido === 'takeaway' ? 'border-primary bg-primary/5' : 'border-border'}`}`} onClick={() => tkEn && setTipoPedido('takeaway')}>
+                                    <Store className={`w-8 h-8 mb-2 ${tipoPedido === 'takeaway' ? 'text-primary' : 'text-muted-foreground'}`} />
+                                    <Label className={`font-semibold mb-1 ${tkEn ? 'cursor-pointer' : 'cursor-not-allowed'}`}>Take Away</Label>
+                                    <span className="text-xs text-muted-foreground text-center">{tkEn ? 'Lo pasas a buscar' : 'No disponible'}</span>
+                                </div>
+                            </RadioGroup>
+                        )
+                    })()}
                 </section>
                 <section className="space-y-4">
                     {editMode ? (
@@ -741,7 +761,7 @@ const CheckoutDelivery = () => {
                 <Button
                     className="w-full h-14 text-lg font-bold rounded-2xl bg-primary hover:bg-primary/90 shadow-lg"
                     onClick={handleConfirm}
-                    disabled={loading || (tipoPedido === 'delivery' && (isCheckingZona || fueraDeZona))}
+                    disabled={loading || (tipoPedido === 'delivery' && (isCheckingZona || fueraDeZona)) || (restauranteData?.deliveryEnabled === false && restauranteData?.takeawayEnabled === false)}
                 >
                     {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : fueraDeZona && tipoPedido === 'delivery' ? 'Dirección fuera de zona' : 'Confirmar Datos y Pedir'}
                 </Button>
