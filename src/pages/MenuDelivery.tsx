@@ -678,11 +678,14 @@ const MenuDelivery = () => {
             </div>
 
             {!estadoAbierto.abierto && (
-                <div className="bg-red-600 text-white">
+                <div className={restaurante?.permitirPedidosProgramados ? "bg-amber-500 text-white" : "bg-red-600 text-white"}>
                     <div className="max-w-2xl mx-auto px-5 py-3 flex items-center justify-center gap-2">
                         <Clock className="w-4 h-4 shrink-0" />
                         <p className="text-sm font-semibold text-center">
-                            Estamos cerrados{estadoAbierto.proximaApertura ? `. Abrimos ${estadoAbierto.proximaApertura}` : ''}
+                            {restaurante?.permitirPedidosProgramados
+                                ? 'Estamos cerrados. Podés programar tu pedido para después'
+                                : `Estamos cerrados${estadoAbierto.proximaApertura ? `. Abrimos ${estadoAbierto.proximaApertura}` : ''}`
+                            }
                         </p>
                     </div>
                 </div>

@@ -863,9 +863,14 @@ const CheckoutDelivery = () => {
                 <Button
                     className="w-full h-14 text-lg font-bold rounded-2xl bg-primary hover:bg-primary/90 shadow-lg"
                     onClick={handleConfirm}
-                    disabled={loading || (tipoPedido === 'delivery' && (isCheckingZona || fueraDeZona)) || (restauranteData?.deliveryEnabled === false && restauranteData?.takeawayEnabled === false)}
+                    disabled={
+                        loading ||
+                        (tipoPedido === 'delivery' && (isCheckingZona || fueraDeZona)) ||
+                        (restauranteData?.deliveryEnabled === false && restauranteData?.takeawayEnabled === false) ||
+                        (programarPedido && restauranteData?.usarFranjasHorario && franjas.length > 0 && !horarioProgramado)
+                    }
                 >
-                    {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : fueraDeZona && tipoPedido === 'delivery' ? 'Dirección fuera de zona' : 'Confirmar Datos y Pedir'}
+                    {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : fueraDeZona && tipoPedido === 'delivery' ? 'Dirección fuera de zona' : programarPedido && restauranteData?.usarFranjasHorario && franjas.length > 0 && !horarioProgramado ? 'Seleccioná un horario' : 'Confirmar Datos y Pedir'}
                 </Button>
             </div >
 
