@@ -683,7 +683,7 @@ const MenuDelivery = () => {
                         <Clock className="w-4 h-4 shrink-0" />
                         <p className="text-sm font-semibold text-center">
                             {restaurante?.permitirPedidosProgramados
-                                ? 'Estamos cerrados. Podés programar tu pedido para después'
+                                ? 'Arma tu pedido y programa el horario al que quieres recibirlo.'
                                 : `Estamos cerrados${estadoAbierto.proximaApertura ? `. Abrimos ${estadoAbierto.proximaApertura}` : ''}`
                             }
                         </p>
