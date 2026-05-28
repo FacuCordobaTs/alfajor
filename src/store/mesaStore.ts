@@ -36,6 +36,12 @@ export interface CheckoutDeliveryData {
   zonaNombre: string | null
   itemsTotal: string
   total: string
+  codigoDescuentoId?: number | null
+  montoDescuento?: number
+  metodoPago?: string | null
+  horarioProgramado?: string
+  sucursalId?: number | null
+  tipoDomicilio?: 'casa' | 'departamento' | null
 }
 
 export interface CheckoutEditSemaphore {

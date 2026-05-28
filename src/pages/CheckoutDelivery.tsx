@@ -7,12 +7,33 @@ import { RadioGroup } from '@/components/ui/radio-group'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from 'sonner'
 import { ThemeToggle } from '@/components/ThemeToggle'
-import { ArrowLeft, Loader2, MapPin, Store, Zap, Truck, AlertTriangle, Package, Tag, X, CreditCard, Wallet, Home, Building2 } from 'lucide-react'
+import { ArrowLeft, Loader2, MapPin, Store, Zap, Truck, AlertTriangle, Package, Tag, X, CreditCard, Wallet, Home, Building2, Clock } from 'lucide-react'
 import { AddressAutocomplete } from '@/components/AddressAutocomplete'
 import { AddressMapPreview } from '@/components/AddressMapPreview'
 import { MisPedidosDrawer } from '@/components/MisPedidosDrawer'
 
 type MetodoPublico = { id: string; label: string; automatico: boolean }
+type HorarioTurno = { diaSemana: number; horaApertura: string; horaCierre: string }
+type FranjaHorario = { id: number; nombre: string; horaInicio: string; horaFin: string }
+
+function checkIsOpen(horarios: HorarioTurno[]): boolean {
+    if (!horarios || horarios.length === 0) return true
+    const now = new Date()
+    const diaHoy = now.getDay()
+    const diaAyer = (diaHoy + 6) % 7
+    const hhmm = now.getHours() * 60 + now.getMinutes()
+    for (const h of horarios) {
+        const apertura = parseInt(h.horaApertura.split(':')[0]) * 60 + parseInt(h.horaApertura.split(':')[1])
+        const cierre = parseInt(h.horaCierre.split(':')[0]) * 60 + parseInt(h.horaCierre.split(':')[1])
+        if (cierre > apertura) {
+            if (h.diaSemana === diaHoy && hhmm >= apertura && hhmm < cierre) return true
+        } else {
+            if (h.diaSemana === diaHoy && hhmm >= apertura) return true
+            if (h.diaSemana === diaAyer && hhmm < cierre) return true
+        }
+    }
+    return false
+}
 
 const CheckoutDelivery = () => {
     const navigate = useNavigate()
@@ -34,6 +55,10 @@ const CheckoutDelivery = () => {
         return saved ? parseFloat(saved) : null
     })
     const [notas, setNotas] = useState('')
+    const [programarPedido, setProgramarPedido] = useState(false)
+    const [horarioProgramado, setHorarioProgramado] = useState('')
+    const [restauranteAbierto, setRestauranteAbierto] = useState(true)
+    const [franjas, setFranjas] = useState<FranjaHorario[]>([])
 
     // Zona de delivery dinámica
     const [zonaDeliveryFee, setZonaDeliveryFee] = useState<number | null>(null)
@@ -71,6 +96,17 @@ const CheckoutDelivery = () => {
                     const methods: MetodoPublico[] = Array.isArray(r.metodosPago) ? r.metodosPago : []
                     setAvailablePaymentMethods(methods)
                     setRestauranteData(r)
+
+                    // Calcular si el restaurante está abierto
+                    const horarios: HorarioTurno[] = Array.isArray(data.data.horarios) ? data.data.horarios : []
+                    const abierto = checkIsOpen(horarios)
+                    setRestauranteAbierto(abierto)
+                    if (!abierto && r.permitirPedidosProgramados) {
+                        setProgramarPedido(true)
+                    }
+                    if (Array.isArray(data.data.franjas)) {
+                        setFranjas(data.data.franjas)
+                    }
 
                     // Auto-select tipo pedido if only one is enabled
                     const delEn = r.deliveryEnabled !== false
@@ -231,12 +267,19 @@ const CheckoutDelivery = () => {
     }, [])
 
     const handleConfirm = async () => {
+        if (!restauranteAbierto && !restauranteData?.permitirPedidosProgramados) {
+            return toast.error('El restaurante está cerrado. No acepta pedidos por ahora.')
+        }
+        if (!restauranteAbierto && restauranteData?.permitirPedidosProgramados && !programarPedido) {
+            return toast.error('El restaurante está cerrado. Debes programar tu pedido para después.')
+        }
         if (!nombre.trim()) return toast.error('Ingresa tu nombre')
         if (!telefono.trim()) return toast.error('Ingresa tu celular')
         if (tipoPedido === 'delivery' && !direccion.trim()) return toast.error('Ingresa tu dirección')
         if (tipoPedido === 'delivery' && (lat === null || lng === null)) return toast.error('Selecciona una dirección de las sugerencias')
         if (tipoPedido === 'delivery' && !tipoDomicilio) return toast.error('Indicá si es casa o departamento')
         if (tipoPedido === 'delivery' && tipoDomicilio === 'departamento' && (!piso.trim() || !numeroDepartamento.trim())) return toast.error('Ingresá el piso y el número de departamento')
+        if (programarPedido && !horarioProgramado.trim()) return toast.error('Ingresa el horario para tu pedido')
         const allowedIds = new Set(availablePaymentMethods.map((m) => m.id))
         if (!isLoadingRestaurante && (!metodoPago || !allowedIds.has(metodoPago))) {
             return toast.error('Selecciona un método de pago')
@@ -277,6 +320,9 @@ const CheckoutDelivery = () => {
                 payload.direccion = direccion
                 payload.lat = lat
                 payload.lng = lng
+            }
+            if (programarPedido && horarioProgramado) {
+                payload.horarioProgramado = horarioProgramado
             }
 
             const res = await fetch(`${url}${endpoint}`, {
@@ -610,6 +656,62 @@ const CheckoutDelivery = () => {
                     <div className="space-y-2 pt-4 border-t border-border/50">
                         <Label htmlFor="notas">Notas adicionales <span className="text-muted-foreground font-normal">(opcional)</span></Label>
                         <Textarea id="notas" placeholder="Ej: El timbre no anda, llamar al llegar..." className="min-h-[100px] rounded-xl resize-none" value={notas} onChange={(e: any) => setNotas(e.target.value)} />
+                    </div>
+
+                    <div className="space-y-3 pt-4 border-t border-border/50">
+                        <div
+                            className={`flex items-center justify-between p-4 rounded-xl border-2 transition-colors ${!restauranteAbierto && restauranteData?.permitirPedidosProgramados ? 'border-primary bg-primary/5 cursor-default' : 'cursor-pointer border-border hover:bg-secondary/50'} ${programarPedido && (restauranteAbierto || !restauranteData?.permitirPedidosProgramados) ? 'border-primary bg-primary/5' : ''}`}
+                            onClick={() => {
+                                if (!restauranteAbierto && restauranteData?.permitirPedidosProgramados) return
+                                setProgramarPedido(!programarPedido)
+                                if (programarPedido) setHorarioProgramado('')
+                            }}
+                        >
+                            <div className="flex items-center gap-3">
+                                <Clock className={`w-5 h-5 ${programarPedido ? 'text-primary' : 'text-muted-foreground'}`} />
+                                <div>
+                                    <p className={`font-semibold text-sm ${programarPedido ? 'text-primary' : 'text-foreground'}`}>
+                                        {!restauranteAbierto && restauranteData?.permitirPedidosProgramados ? 'Pedido programado (requerido)' : 'Programar para después'}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">
+                                        {!restauranteAbierto && restauranteData?.permitirPedidosProgramados
+                                            ? 'El local está cerrado, elegí un horario para tu pedido'
+                                            : 'Indicá a qué hora querés recibirlo'}
+                                    </p>
+                                </div>
+                            </div>
+                            <div className={`w-5 h-5 rounded-full border-2 transition-colors flex items-center justify-center ${programarPedido ? 'border-primary bg-primary' : 'border-muted-foreground'}`}>
+                                {programarPedido && <div className="w-2 h-2 rounded-full bg-primary-foreground" />}
+                            </div>
+                        </div>
+                        {programarPedido && (
+                            <div className="animate-in fade-in slide-in-from-top-2 space-y-1.5">
+                                <Label htmlFor="horario-programado">¿A qué hora lo querés?</Label>
+                                {restauranteData?.usarFranjasHorario && franjas.length > 0 ? (
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {franjas.map(f => (
+                                            <div
+                                                key={f.id}
+                                                onClick={() => setHorarioProgramado(`${f.horaInicio}-${f.horaFin}`)}
+                                                className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 cursor-pointer transition-colors ${horarioProgramado === `${f.horaInicio}-${f.horaFin}` ? 'border-primary bg-primary/5 text-primary' : 'border-border hover:bg-secondary/50'}`}
+                                            >
+                                                <span className="font-semibold text-sm">{f.nombre}</span>
+                                                <span className="text-xs text-muted-foreground">{f.horaInicio} – {f.horaFin}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <input
+                                        id="horario-programado"
+                                        type="time"
+                                        className="w-full h-12 rounded-xl border border-input bg-background px-4 text-lg font-semibold text-foreground"
+                                        value={horarioProgramado}
+                                        onChange={e => setHorarioProgramado(e.target.value)}
+                                    />
+                                )}
+                                <p className="text-xs text-muted-foreground">El local coordinará tu pedido para ese horario</p>
+                            </div>
+                        )}
                     </div>
 
                     {codigoDescuentoEnabled && (

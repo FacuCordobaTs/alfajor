@@ -680,6 +680,7 @@ const Menu = () => {
                   </Button>
                   <CheckoutDeliveryGrupal
                     restauranteId={restaurante?.id ?? 0}
+                    restauranteUsername={restaurante?.username ?? null}
                     itemsTotal={totalPedido}
                     totalItems={todosLosItems.length}
                     onConfirmarClick={iniciarConfirmacionPedido}
@@ -689,7 +690,6 @@ const Menu = () => {
                     checkoutData={checkoutDeliveryData}
                     editSemaphore={checkoutEditSemaphore}
                     restauranteDireccion={restaurante?.direccion ?? undefined}
-                    confirmarDisabled={!estadoAbierto.abierto}
                   />
                 </div>
               ) : todosLosItems.length === 0 ? (

@@ -26,6 +26,19 @@ interface Agregado {
   precio: string
 }
 
+function formatTimeLeft(fechaFin: string | Date | null): string | null {
+  if (!fechaFin) return null
+  const now = Date.now()
+  const end = new Date(fechaFin).getTime()
+  const diff = end - now
+  if (diff <= 0) return null
+  const hours = Math.floor(diff / 3600000)
+  if (hours < 1) return 'menos de 1h'
+  if (hours < 24) return `${hours}h`
+  const days = Math.floor(hours / 24)
+  return `${days}d`
+}
+
 interface Product {
   id: number
   nombre: string
@@ -36,6 +49,7 @@ interface Product {
   ingredientes?: Ingrediente[]
   agregados?: Agregado[]
   descuento?: number | null
+  descuentoFechaFin?: string | null
 }
 
 interface ProductDetailDrawerProps {
@@ -178,6 +192,12 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
                         {product.descuento}% OFF
                       </span>
                     ) : null}
+                    {product.descuento && product.descuento > 0 && product.descuentoFechaFin && formatTimeLeft(product.descuentoFechaFin) && (
+                      <div className="flex items-center gap-1 text-[11px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 px-2 py-0.5 rounded-full border border-amber-200 dark:border-amber-800">
+                        <span>⏱</span>
+                        <span>Vence en {formatTimeLeft(product.descuentoFechaFin)}</span>
+                      </div>
+                    )}
                   </div>
                   <p className="text-sm text-muted-foreground">{product.categoria || 'Sin categoría'}</p>
                 </div>

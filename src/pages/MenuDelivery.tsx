@@ -16,6 +16,19 @@ import { Input } from '@/components/ui/input'
 
 type HorarioTurno = { diaSemana: number; horaApertura: string; horaCierre: string }
 
+function formatTimeLeft(fechaFin: string | Date | null): string | null {
+    if (!fechaFin) return null
+    const now = Date.now()
+    const end = new Date(fechaFin).getTime()
+    const diff = end - now
+    if (diff <= 0) return null
+    const hours = Math.floor(diff / 3600000)
+    if (hours < 1) return 'menos de 1h'
+    if (hours < 24) return `${hours}h`
+    const days = Math.floor(hours / 24)
+    return `${days}d`
+}
+
 function checkIsOpen(horarios: HorarioTurno[]): { abierto: boolean; proximaApertura: string | null } {
     if (!horarios || horarios.length === 0) return { abierto: true, proximaApertura: null }
     const now = new Date()
@@ -1092,6 +1105,12 @@ const ProductoCard = ({ producto, onClick, fullWidth, disenoAlternativo }: { pro
                             </span>
                         )}
                     </div>
+                    {tieneDescuento && producto.descuentoFechaFin && formatTimeLeft(producto.descuentoFechaFin) && (
+                        <div className="mt-1 flex items-center gap-1 text-[10px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 px-2 py-0.5 rounded-full border border-amber-500/20 w-fit">
+                            <span>⏱</span>
+                            <span>Vence en {formatTimeLeft(producto.descuentoFechaFin)}</span>
+                        </div>
+                    )}
                 </div>
             </div>
         )
