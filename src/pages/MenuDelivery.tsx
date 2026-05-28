@@ -546,7 +546,7 @@ const MenuDelivery = () => {
 
     const confirmarPedido = () => {
         if (cartItems.length === 0) return
-        if (!estadoAbierto.abierto) {
+        if (!estadoAbierto.abierto && !restaurante?.permitirPedidosProgramados) {
             toast.error('El restaurante está cerrado en este momento')
             return
         }
@@ -960,13 +960,13 @@ const MenuDelivery = () => {
                                     <span className="text-2xl font-black tracking-tight">${totalPedido}</span>
                                 </div>
                                 <Button
-                                    className={`w-full h-14 text-base font-bold rounded-2xl shadow-lg ${!estadoAbierto.abierto ? 'bg-muted text-muted-foreground cursor-not-allowed' : 'shadow-primary/20 bg-primary hover:bg-primary/90 text-primary-foreground'}`}
+                                    className={`w-full h-14 text-base font-bold rounded-2xl shadow-lg ${!estadoAbierto.abierto && !restaurante?.permitirPedidosProgramados ? 'bg-muted text-muted-foreground cursor-not-allowed' : 'shadow-primary/20 bg-primary hover:bg-primary/90 text-primary-foreground'}`}
                                     size="lg"
                                     onClick={confirmarPedido}
-                                    disabled={!estadoAbierto.abierto}
+                                    disabled={!estadoAbierto.abierto && !restaurante?.permitirPedidosProgramados}
                                 >
-                                    {!estadoAbierto.abierto ? 'Restaurante cerrado' : 'Continuar'}
-                                    {estadoAbierto.abierto && <ArrowLeft className="w-5 h-5 ml-2 rotate-180" />}
+                                    {!estadoAbierto.abierto && !restaurante?.permitirPedidosProgramados ? 'Restaurante cerrado' : 'Continuar'}
+                                    {(estadoAbierto.abierto || restaurante?.permitirPedidosProgramados) && <ArrowLeft className="w-5 h-5 ml-2 rotate-180" />}
                                 </Button>
                             </div>
                         )}
