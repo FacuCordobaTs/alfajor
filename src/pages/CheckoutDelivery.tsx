@@ -658,7 +658,7 @@ const CheckoutDelivery = () => {
                         <Textarea id="notas" placeholder="Ej: El timbre no anda, llamar al llegar..." className="min-h-[100px] rounded-xl resize-none" value={notas} onChange={(e: any) => setNotas(e.target.value)} />
                     </div>
 
-                    <div className="space-y-3 pt-4 border-t border-border/50">
+                    {restauranteData?.permitirPedidosProgramados && <div className="space-y-3 pt-4 border-t border-border/50">
                         <div
                             className={`flex items-center justify-between p-4 rounded-xl border-2 transition-colors ${!restauranteAbierto && restauranteData?.permitirPedidosProgramados ? 'border-primary bg-primary/5 cursor-default' : 'cursor-pointer border-border hover:bg-secondary/50'} ${programarPedido && (restauranteAbierto || !restauranteData?.permitirPedidosProgramados) ? 'border-primary bg-primary/5' : ''}`}
                             onClick={() => {
@@ -712,7 +712,7 @@ const CheckoutDelivery = () => {
                                 <p className="text-xs text-muted-foreground">El local coordinará tu pedido para ese horario</p>
                             </div>
                         )}
-                    </div>
+                    </div>}
 
                     {codigoDescuentoEnabled && (
                         <div className="space-y-2 pt-4 border-t border-border/50">
