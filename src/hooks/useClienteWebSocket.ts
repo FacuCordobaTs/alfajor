@@ -440,7 +440,7 @@ export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
                   deliveryFee: payload.deliveryFee,
                   zonaNombre: payload.zonaNombre,
                   direccion: payload.direccion,
-                  metodoPago: 'transferencia',
+                  metodoPago: payload.metodoPago || 'transferencia',
                 }))
                 window.location.href = `/sala/${payload.token}/success`
                 break

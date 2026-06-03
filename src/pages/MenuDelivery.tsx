@@ -1,18 +1,18 @@
-import { useState, useEffect, useLayoutEffect, useCallback, useRef, type Dispatch, type SetStateAction } from 'react'
-import { flushSync } from 'react-dom'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router'
 import { Button } from '@/components/ui/button'
-import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
+import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { toast } from 'sonner'
 import {
-    Trash2, ArrowLeft,
-    Package, Receipt, UtensilsCrossed, Utensils, Clock, Sparkles, Check, X
+    Trash2, Maximize2, Minimize2, Loader2,
+    Package, Receipt, UtensilsCrossed, Utensils, Clock, Users, ChevronRight
 } from 'lucide-react'
 import { ProductDetailDrawer } from '@/components/ProductDetailDrawer'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { MisPedidosDrawer } from '@/components/MisPedidosDrawer'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { CheckoutDeliveryGrupal } from '@/components/CheckoutDeliveryGrupal'
 
 type HorarioTurno = { diaSemana: number; horaApertura: string; horaCierre: string }
 
@@ -75,202 +75,6 @@ function checkIsOpen(horarios: HorarioTurno[]): { abierto: boolean; proximaApert
     return { abierto: false, proximaApertura: mejor?.texto || null }
 }
 
-const DELIVERY_ADD_CLONE_TOAST_ID = 'piru-delivery-add-clone'
-
-/** Sonner remonta el toast; el flash del botón se guarda por línea plantilla. */
-const agregadoFlashUntilByLineId = new Map<string, number>()
-const AGREGADO_FLASH_MS = 600
-
-const CLONE_TOAST_SWIPE_DISMISS_PX = 72
-
-function DeliveryAddCloneToast({
-    template,
-    puntosCliente,
-    setCartItems,
-    bumpCart,
-}: {
-    template: any
-    puntosCliente: number | null
-    setCartItems: Dispatch<SetStateAction<any[]>>
-    bumpCart: () => void
-}) {
-    const lineId = String(template.id)
-    const [flashEndTs, setFlashEndTs] = useState<number | null>(null)
-    const [dragX, setDragX] = useState(0)
-    const [isDragging, setIsDragging] = useState(false)
-    const swipeRef = useRef<{ startX: number; pointerId: number | null; active: boolean }>({
-        startX: 0,
-        pointerId: null,
-        active: false,
-    })
-
-    const dismissCloneToast = useCallback(() => {
-        toast.dismiss(DELIVERY_ADD_CLONE_TOAST_ID)
-    }, [])
-
-    const showAgregado = flashEndTs != null && Date.now() < flashEndTs
-
-    useLayoutEffect(() => {
-        const until = agregadoFlashUntilByLineId.get(lineId)
-        if (until != null && Date.now() < until) {
-            setFlashEndTs(until)
-        }
-    }, [lineId])
-
-    useEffect(() => {
-        if (flashEndTs == null || Date.now() >= flashEndTs) return
-        const ms = Math.max(0, flashEndTs - Date.now())
-        const id = window.setTimeout(() => {
-            agregadoFlashUntilByLineId.delete(lineId)
-            setFlashEndTs(null)
-        }, ms)
-        return () => window.clearTimeout(id)
-    }, [flashEndTs, lineId])
-
-    const startAgregadoFlash = () => {
-        const end = Date.now() + AGREGADO_FLASH_MS
-        agregadoFlashUntilByLineId.set(lineId, end)
-        setFlashEndTs(end)
-    }
-
-    const addIdenticalLine = () => {
-        if (showAgregado) return
-        let added = false
-        flushSync(() => {
-            setCartItems((prev) => {
-                if (template.esCanjePuntos) {
-                    const puntosOcupados = prev.reduce(
-                        (sum, item) =>
-                            sum + (item.esCanjePuntos ? item.puntosNecesarios * item.cantidad : 0),
-                        0
-                    )
-                    const costo = (template.puntosNecesarios || 0) * (template.cantidad || 1)
-                    if ((puntosCliente || 0) - puntosOcupados - costo < 0) {
-                        toast.error('No tienes suficientes puntos para agregar este producto.')
-                        return prev
-                    }
-                }
-                added = true
-                const clone = {
-                    ...template,
-                    id: Math.random().toString(36).substring(2, 11),
-                }
-                return [...prev, clone]
-            })
-        })
-        if (added) {
-            startAgregadoFlash()
-            bumpCart()
-        }
-    }
-
-    const onSwipePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-        if ((e.target as HTMLElement).closest('[data-clone-toast-no-swipe]')) return
-        if (e.button !== 0) return
-        swipeRef.current = { startX: e.clientX, pointerId: e.pointerId, active: true }
-        setIsDragging(true)
-        e.currentTarget.setPointerCapture(e.pointerId)
-    }
-
-    const onSwipePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-        if (!swipeRef.current.active || swipeRef.current.pointerId !== e.pointerId) return
-        setDragX(e.clientX - swipeRef.current.startX)
-    }
-
-    const endSwipe = (e: React.PointerEvent<HTMLDivElement>) => {
-        if (!swipeRef.current.active) return
-        const { startX, pointerId: wasId } = swipeRef.current
-        const dx = e.clientX - startX
-        swipeRef.current = { startX: 0, pointerId: null, active: false }
-        setIsDragging(false)
-        if (wasId != null) {
-            try {
-                e.currentTarget.releasePointerCapture(wasId)
-            } catch {
-                /* already released */
-            }
-        }
-        if (Math.abs(dx) >= CLONE_TOAST_SWIPE_DISMISS_PX) {
-            dismissCloneToast()
-            setDragX(0)
-            return
-        }
-        setDragX(0)
-    }
-
-    const dragOpacity = 1 - Math.min(Math.abs(dragX) / 180, 0.38)
-
-    return (
-        <div
-            role="presentation"
-            onPointerDown={onSwipePointerDown}
-            onPointerMove={onSwipePointerMove}
-            onPointerUp={endSwipe}
-            onPointerCancel={endSwipe}
-            style={{
-                transform: `translateX(${dragX}px)`,
-                opacity: dragOpacity,
-                transition: isDragging ? 'none' : 'transform 0.22s ease-out, opacity 0.22s ease-out',
-                touchAction: 'none',
-            }}
-            className={`
-                w-[min(100vw-1.25rem,22rem)] sm:w-[min(100vw-2rem,24rem)] cursor-grab active:cursor-grabbing
-                rounded-2xl border border-primary/20 bg-card/95 text-card-foreground shadow-[0_20px_50px_-12px_rgba(0,0,0,0.35),0_0_0_1px_rgba(255,255,255,0.06)_inset]
-                dark:shadow-[0_24px_60px_-12px_rgba(0,0,0,0.65),0_0_0_1px_rgba(255,255,255,0.08)_inset]
-                backdrop-blur-xl overflow-hidden select-none
-            `}
-        >
-            <div className="p-3.5 sm:p-4 space-y-3 relative">
-                <button
-                    type="button"
-                    data-clone-toast-no-swipe
-                    onClick={dismissCloneToast}
-                    className="absolute top-2 right-2 z-10 rounded-full p-1 text-muted-foreground/55 hover:text-muted-foreground hover:bg-muted/50 opacity-80 hover:opacity-100 transition-[opacity,background-color,color] duration-150"
-                    aria-label="Cerrar aviso"
-                >
-                    <X className="w-3.5 h-3.5" strokeWidth={2.25} />
-                </button>
-                <div className="flex gap-3 items-start">
-                    <div className="shrink-0 w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center text-primary ring-1 ring-primary/25">
-                        <Sparkles className="w-5 h-5" strokeWidth={2.2} />
-                    </div>
-                    <div className="min-w-0 flex-1 space-y-1">
-                        <p className="text-[13px] sm:text-sm font-extrabold leading-tight tracking-tight text-foreground">
-                            ¡Gran elección! 🔥
-                        </p>
-                        <p className="text-xs sm:text-[13px] font-semibold text-primary line-clamp-2 leading-snug">
-                            {template.nombre}
-                        </p>
-                        <p className="text-[11px] text-muted-foreground font-medium">
-                            ¿Otro igual sin volver al menú? Un toque y listo.
-                        </p>
-                    </div>
-                </div>
-                <Button
-                    type="button"
-                    data-clone-toast-no-swipe
-                    size="sm"
-                    onClick={addIdenticalLine}
-                    disabled={showAgregado}
-                    className={`w-full h-11 sm:h-10 rounded-xl font-bold text-sm shadow-md transition-all duration-300 ${
-                        showAgregado
-                            ? 'bg-emerald-500 text-white shadow-emerald-500/25 scale-[1.02] disabled:opacity-100 disabled:pointer-events-none'
-                            : 'shadow-primary/15 bg-primary hover:bg-primary/90 text-primary-foreground active:scale-[0.98]'
-                    }`}
-                >
-                    {showAgregado ? (
-                        <span className="flex items-center justify-center gap-2 animate-in zoom-in-50 duration-200">
-                            <Check className="w-5 h-5" /> ¡Agregado!
-                        </span>
-                    ) : (
-                        '¡Quiero otro igual!'
-                    )}
-                </Button>
-            </div>
-        </div>
-    )
-}
-
 const MenuDelivery = () => {
     const navigate = useNavigate()
     const username = 'alfajor'
@@ -290,6 +94,15 @@ const MenuDelivery = () => {
     const [modalSalaOpen, setModalSalaOpen] = useState(false)
     const [nombreSala, setNombreSala] = useState('')
     const [creandoSala, setCreandoSala] = useState(false)
+
+    const [mostrarCheckoutEnCarrito, setMostrarCheckoutEnCarrito] = useState(false)
+    const [expandido, setExpandido] = useState(false)
+    const [checkoutDeliveryData, setCheckoutDeliveryData] = useState<any>(null)
+    const [editSemaphoreLocal, setEditSemaphoreLocal] = useState<{ clienteId: string; clienteNombre: string } | null>(null)
+    const [tituloCheckout, setTituloCheckout] = useState('¿Cómo lo querés?')
+    const [submittingOrder, setSubmittingOrder] = useState(false)
+    const checkoutDataRef = useRef<any>(null)
+    const isSubmittingRef = useRef(false)
 
     const [cartItems, setCartItems] = useState<any[]>(() => {
         const saved = localStorage.getItem(`deliveryCart_${username}`)
@@ -315,7 +128,6 @@ const MenuDelivery = () => {
     const [modalPuntosOpen, setModalPuntosOpen] = useState(false)
     const [misPedidosOpen, setMisPedidosOpen] = useState(false)
 
-    // Function to fetch points
     const fetchPuntos = useCallback(async (telefono: string, restauranteId: number) => {
         if (!telefono || !restauranteId) return
         setLoadingPuntos(true)
@@ -327,7 +139,7 @@ const MenuDelivery = () => {
                 if (data.success) {
                     setPuntosCliente(data.data.puntos)
                 } else {
-                    setPuntosCliente(0) // No client yet
+                    setPuntosCliente(0)
                 }
             } else {
                 setPuntosCliente(0)
@@ -355,6 +167,7 @@ const MenuDelivery = () => {
                     if (data.data.horarios) {
                         setHorarios(data.data.horarios)
                         setEstadoAbierto(checkIsOpen(data.data.horarios))
+                        // setEstadoAbierto({ abierto: true, proximaApertura: null })
                     }
                     if (data.data.restaurante.colorPrimario && data.data.restaurante.colorSecundario) {
                         sessionStorage.setItem(`theme_${username}`, JSON.stringify({
@@ -387,13 +200,111 @@ const MenuDelivery = () => {
         return () => clearInterval(interval)
     }, [horarios])
 
+    const submitOrder = useCallback(async (data: any) => {
+        if (!data || !restaurante) return
+        setSubmittingOrder(true)
+        try {
+            const url = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+            const tipoPedido = data.tipoPedido as 'delivery' | 'takeaway'
+            const endpoint = tipoPedido === 'delivery' ? '/public/delivery/create' : '/public/takeaway/create'
+            const payload: any = {
+                restauranteId: restaurante.id,
+                nombreCliente: data.nombre,
+                telefono: data.telefono,
+                notas: data.notas || '',
+                items: cartItems.map((i: any) => ({
+                    productoId: i.productoId,
+                    varianteId: i.varianteId,
+                    cantidad: i.cantidad,
+                    ingredientesExcluidos: i.ingredientesExcluidos,
+                    agregados: i.agregados || [],
+                    esCanjePuntos: i.esCanjePuntos || false
+                })),
+                metodoPago: data.metodoPago,
+            }
+            if (data.codigoDescuentoId) payload.codigoDescuentoId = data.codigoDescuentoId
+            if (tipoPedido === 'delivery') {
+                payload.direccion = data.direccion
+                payload.lat = data.lat
+                payload.lng = data.lng
+                if (data.sucursalId) payload.sucursalId = data.sucursalId
+            }
+            if (tipoPedido === 'takeaway' && data.sucursalId) payload.sucursalId = data.sucursalId
+            if (data.horarioProgramado) payload.horarioProgramado = data.horarioProgramado
+            const res = await fetch(`${url}${endpoint}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            const result = await res.json()
+            if (result.success) {
+                localStorage.setItem('cliente_nombre', data.nombre)
+                localStorage.setItem('cliente_telefono', data.telefono)
+                if (tipoPedido === 'delivery') {
+                    localStorage.setItem('cliente_direccion', data.direccion || '')
+                    if (data.lat != null) localStorage.setItem('cliente_lat', String(data.lat))
+                    if (data.lng != null) localStorage.setItem('cliente_lng', String(data.lng))
+                }
+                localStorage.removeItem(`deliveryCart_${username}`)
+                sessionStorage.setItem('deliveryOrderInfo', JSON.stringify({
+                    pedidoId: result.data.id,
+                    tipoPedido,
+                    total: result.data.total ? parseFloat(result.data.total) : parseFloat(data.total || '0'),
+                    items: cartItems,
+                    metodoPago: data.metodoPago,
+                    nombreCliente: data.nombre,
+                    aliasDinamico: result.data.aliasDinamico,
+                    cvuDinamico: result.data.cvuDinamico,
+                    deliveryFee: result.data.deliveryFee,
+                    zonaNombre: result.data.zonaNombre,
+                    direccion: tipoPedido === 'delivery' ? data.direccion : null,
+                    montoDescuento: data.montoDescuento > 0 ? data.montoDescuento : undefined,
+                    horarioProgramado: data.horarioProgramado || undefined,
+                }))
+                navigate(`/success`)
+            } else {
+                if (result.code === 'FUERA_DE_ZONA') {
+                    toast.error('Fuera de zona', { description: 'Tu dirección está fuera del área de delivery. Probá con otra dirección o elegí Take Away.', duration: 6000 })
+                } else {
+                    toast.error(result.message || 'Error al crear el pedido')
+                }
+            }
+        } catch {
+            toast.error('Ocurrió un error al enviar el pedido')
+        } finally {
+            setSubmittingOrder(false)
+            isSubmittingRef.current = false
+        }
+    }, [restaurante, username, cartItems, navigate])
+
+    const handleCheckoutMessage = useCallback((msg: any) => {
+        if (msg.type === 'INICIAR_EDICION_CHECKOUT') {
+            setEditSemaphoreLocal({ clienteId: 'solo', clienteNombre: msg.payload.clienteNombre })
+        } else if (msg.type === 'CANCELAR_EDICION_CHECKOUT') {
+            setEditSemaphoreLocal(null)
+        } else if (msg.type === 'MODIFICAR_CHECKOUT') {
+            checkoutDataRef.current = msg.payload.updates
+            setCheckoutDeliveryData(msg.payload.updates)
+        } else if (msg.type === 'ACEPTAR_EDICION_CHECKOUT') {
+            if (isSubmittingRef.current) return
+            isSubmittingRef.current = true
+            submitOrder(checkoutDataRef.current)
+        }
+    }, [submitOrder])
+
     const abrirCarrito = useCallback(() => {
         window.history.pushState({ drawer: 'carrito' }, '')
         setCarritoAbierto(true)
-    }, [])
+        if (!mostrarCheckoutEnCarrito) setExpandido(true)
+    }, [mostrarCheckoutEnCarrito])
 
     const cerrarCarrito = useCallback(() => {
         setCarritoAbierto(false)
+        setMostrarCheckoutEnCarrito(false)
+        setExpandido(false)
+        setEditSemaphoreLocal(null)
+        setCheckoutDeliveryData(null)
+        checkoutDataRef.current = null
         if (window.history.state?.drawer === 'carrito') {
             window.history.back()
         }
@@ -416,6 +327,11 @@ const MenuDelivery = () => {
         const handlePopState = (event: PopStateEvent) => {
             if (carritoAbierto) {
                 setCarritoAbierto(false)
+                setMostrarCheckoutEnCarrito(false)
+                setExpandido(false)
+                setEditSemaphoreLocal(null)
+                setCheckoutDeliveryData(null)
+                checkoutDataRef.current = null
                 event.preventDefault()
                 return
             }
@@ -487,7 +403,6 @@ const MenuDelivery = () => {
             }
         }
 
-        // Calculate discounted price
         let precioFinal = producto.precio
         if (!esCanje && producto.descuento && producto.descuento > 0) {
             precioFinal = (parseFloat(producto.precio) * (1 - producto.descuento / 100)).toFixed(2)
@@ -515,48 +430,25 @@ const MenuDelivery = () => {
 
         setCartItems(prev => [...prev, newItem])
 
-        const bumpCart = () => {
-            setTimeout(() => {
-                setCartAnimation(true)
-                setTimeout(() => setCartAnimation(false), 300)
-            }, 850)
-        }
-
-        bumpCart()
-
-        toast.custom(
-            () => (
-                <DeliveryAddCloneToast
-                    template={newItem}
-                    puntosCliente={puntosCliente}
-                    setCartItems={setCartItems}
-                    bumpCart={bumpCart}
-                />
-            ),
-            {
-                id: DELIVERY_ADD_CLONE_TOAST_ID,
-                duration: 14_000,
-            }
-        )
+        setTimeout(() => {
+            setCartAnimation(true)
+            setTimeout(() => setCartAnimation(false), 300)
+        }, 850)
     }
 
     const handleEliminarItem = (itemId: string) => {
         setCartItems(prev => prev.filter(item => item.id !== itemId))
     }
 
-    const confirmarPedido = () => {
-        if (cartItems.length === 0) return
-        if (!estadoAbierto.abierto && !restaurante?.permitirPedidosProgramados) {
-            toast.error('El restaurante está cerrado en este momento')
-            return
-        }
-        localStorage.setItem(`deliveryCart_${username}`, JSON.stringify({ items: cartItems, restauranteId: restaurante.id, deliveryFee: restaurante.deliveryFee }))
-        navigate(`/checkout`)
-    }
-
     const totalPedido = cartItems.reduce((sum, item) => sum + (parseFloat(item.precio) * item.cantidad), 0).toFixed(2)
     const puntosEnCarrito = () => cartItems.reduce((sum, item) => sum + (item.esCanjePuntos ? item.puntosNecesarios * item.cantidad : 0), 0)
     const puntosGanadosCarrito = () => cartItems.reduce((sum, item) => sum + (!item.esCanjePuntos && item.puntosGanados ? item.puntosGanados * item.cantidad : 0), 0)
+
+    const alturaCarrito = (() => {
+        const n = cartItems.length
+        if (n >= 4) return '85vh'
+        return ['28vh', '42vh', '57vh', '71vh'][n]
+    })()
 
     const crearSala = async (nombreParaSala: string) => {
         if (!nombreParaSala.trim() || !restaurante?.id) return
@@ -708,28 +600,26 @@ const MenuDelivery = () => {
                                 className="w-48 h-48 rounded-md object-cover block dark:hidden"
                             />
                         )}
-                        {/* <div>
-                            <p className="text-sm text-muted-foreground font-medium mb-0.5">Bienvenido a</p>
-                            <h1 className="text-3xl font-extrabold tracking-tight text-primary">
-                                {restaurante.nombre}
-                            </h1>
-                        </div> */}
                     </div>
                 </section>
 
-                {/* BOTON ARMAR PEDIDO ENTRE AMIGOS (solo si orderGroupEnabled) */}
                 {restaurante?.orderGroupEnabled !== false && (
-                <section className="bg-primary/5 hover:bg-primary/10 transition-colors border border-primary/20 p-4 rounded-2xl flex items-center justify-between shadow-sm cursor-pointer" onClick={onArmarPedidoClick}>
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-                            <UtensilsCrossed className="w-5 h-5 text-primary" />
+                    <section
+                        className="flex items-center gap-4 px-4 py-3.5 rounded-2xl bg-card border border-border/60 shadow-sm cursor-pointer hover:shadow-md hover:border-border transition-all duration-200 active:scale-[0.98]"
+                        onClick={onArmarPedidoClick}
+                    >
+                        <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center shrink-0">
+                            <Users className="w-5 h-5 text-foreground/60" />
                         </div>
-                        <div className="flex flex-col">
-                            <span className="font-semibold text-foreground text-sm">Armar pedido entre amigos</span>
-                            <span className="text-xs text-muted-foreground">Comparte un link y pidan juntos</span>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold text-foreground leading-tight">Pedido entre amigos</p>
+                            <p className="text-[11.5px] text-muted-foreground mt-0.5 leading-snug">Compartí un link · cada uno elige lo suyo</p>
                         </div>
-                    </div>
-                </section>
+                        <div className="flex items-center gap-0.5 shrink-0 text-[11px] font-semibold text-muted-foreground border border-border/60 rounded-lg px-2.5 py-1.5 bg-muted/50">
+                            Crear
+                            <ChevronRight className="w-3.5 h-3.5" />
+                        </div>
+                    </section>
                 )}
 
                 {restaurante?.sistemaPuntos && (
@@ -856,10 +746,10 @@ const MenuDelivery = () => {
                 <button
                     onClick={abrirCarrito}
                     className={`
-            group relative flex items-center gap-4 pl-5 pr-6 py-3.5 rounded-full 
+            group relative flex items-center gap-4 pl-5 pr-6 py-3.5 rounded-full
             shadow-2xl hover:scale-[1.02] active:scale-95 transition-all duration-300
             bg-zinc-900 text-white shadow-zinc-900/20
-            dark:bg-white/10 dark:text-white dark:backdrop-blur-xl 
+            dark:bg-white/10 dark:text-white dark:backdrop-blur-xl
             dark:border dark:border-white/10 dark:shadow-[0_0_20px_rgba(255,255,255,0.05)]
             ${cartAnimation ? 'scale-105' : 'scale-100'}
           `}
@@ -878,34 +768,92 @@ const MenuDelivery = () => {
                 </button>
             </div>
 
-            {/* CARRITO SHEET */}
-            <Sheet open={carritoAbierto} onOpenChange={(open) => !open && cerrarCarrito()}>
-                <SheetContent side="right" className="w-full sm:max-w-md p-0 border-l-0 sm:border-l bg-background">
-                    <div className="flex flex-col h-full">
-                        <div className="px-5 py-4 flex items-center gap-4 border-b border-border/50 bg-background/80 backdrop-blur-md sticky top-0 z-10">
-                            <Button variant="ghost" size="icon" className="rounded-full -ml-2 hover:bg-secondary" onClick={cerrarCarrito}>
-                                <ArrowLeft className="w-6 h-6" />
-                            </Button>
-                            <div>
-                                <SheetTitle className="text-xl">Tu Pedido</SheetTitle>
-                                <p className="text-xs text-muted-foreground mt-0.5">{cartItems.length} items</p>
+            {/* CARRITO OVERLAY */}
+            {carritoAbierto && (
+                <div
+                    className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px] animate-in fade-in duration-200"
+                    onClick={cerrarCarrito}
+                />
+            )}
+
+            {/* CARRITO DRAWER (bottom sheet) */}
+            <div
+                className={`fixed inset-x-0 bottom-0 z-50 transition-transform duration-300 ease-out ${carritoAbierto ? 'translate-y-0' : 'translate-y-full pointer-events-none'}`}
+            >
+                <div
+                    className={`mx-auto max-w-2xl bg-background rounded-t-3xl shadow-[0_-12px_40px_rgba(0,0,0,0.28)] border-t border-border flex flex-col transition-[height] duration-300 ease-out relative ${(!mostrarCheckoutEnCarrito || expandido) ? 'overflow-hidden' : 'overflow-y-auto'}`}
+                    style={!mostrarCheckoutEnCarrito ? { height: alturaCarrito } : expandido ? { height: '85vh' } : { maxHeight: '88vh' }}
+                >
+                    {submittingOrder && (
+                        <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-20 flex items-center justify-center rounded-t-3xl">
+                            <div className="flex flex-col items-center gap-3">
+                                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                                <p className="text-sm font-medium">Enviando pedido...</p>
                             </div>
                         </div>
+                    )}
 
-                        <div className="flex-1 overflow-y-auto px-5 py-6 space-y-4">
-                            {cartItems.length === 0 ? (
-                                <div className="h-full flex flex-col items-center justify-center text-center space-y-4 opacity-60">
-                                    <div className="bg-secondary p-6 rounded-full">
-                                        <UtensilsCrossed className="w-10 h-10" />
-                                    </div>
-                                    <p className="font-medium">El pedido está vacío.</p>
-                                    <Button variant="link" onClick={cerrarCarrito}>Ir al menú</Button>
-                                </div>
+                    <div className="shrink-0 sticky top-0 z-10 bg-background pt-2">
+                        <div className="w-full flex justify-center pt-3 pb-1">
+                            <span className="w-12 h-1.5 rounded-full bg-muted-foreground/30" />
+                        </div>
+                        <div className="flex items-center justify-between px-4 pb-3 pt-2">
+                            <div className="w-8 h-8" />
+                            <span className="text-xl font-extrabold">
+                                {mostrarCheckoutEnCarrito ? tituloCheckout : 'Tu Pedido'}
+                            </span>
+                            {mostrarCheckoutEnCarrito ? (
+                                <button
+                                    onClick={() => setExpandido(e => !e)}
+                                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-secondary transition-colors"
+                                    aria-label={expandido ? 'Minimizar' : 'Maximizar'}
+                                >
+                                    {expandido ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                                </button>
                             ) : (
-                                cartItems.map((item) => {
-                                    const imagen = item.imagenUrl;
-                                    const precio = parseFloat(item.precio || 0);
+                                <div className="w-8 h-8" />
+                            )}
+                        </div>
+                    </div>
 
+                    {mostrarCheckoutEnCarrito ? (
+                        <CheckoutDeliveryGrupal
+                            modo={expandido ? 'completo' : 'pasos'}
+                            onVolverCarrito={() => {
+                                setMostrarCheckoutEnCarrito(false)
+                                setExpandido(true)
+                                setCheckoutDeliveryData(null)
+                                checkoutDataRef.current = null
+                                setEditSemaphoreLocal(null)
+                            }}
+                            restauranteId={restaurante?.id ?? 0}
+                            restauranteUsername={username}
+                            itemsTotal={totalPedido}
+                            totalItems={cartItems.length}
+                            onConfirmarClick={() => {}}
+                            sendMessage={handleCheckoutMessage}
+                            clienteId="solo"
+                            clienteNombre={localStorage.getItem('cliente_nombre') || ''}
+                            checkoutData={checkoutDeliveryData}
+                            editSemaphore={editSemaphoreLocal}
+                            restauranteDireccion={restaurante?.direccion ?? undefined}
+                            onTituloChange={setTituloCheckout}
+                            labelGuardar="Confirmar y pedir"
+                        />
+                    ) : cartItems.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center text-center gap-4 opacity-60 px-5 py-12">
+                            <div className="bg-secondary p-6 rounded-full">
+                                <UtensilsCrossed className="w-10 h-10" />
+                            </div>
+                            <p className="font-medium">El pedido está vacío.</p>
+                            <Button variant="link" onClick={cerrarCarrito}>Ir al menú</Button>
+                        </div>
+                    ) : (
+                        <>
+                            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3 min-h-0">
+                                {cartItems.map((item) => {
+                                    const imagen = item.imagenUrl
+                                    const precio = parseFloat(item.precio || 0)
                                     return (
                                         <div key={item.id} className="relative flex gap-4 p-3 rounded-2xl border transition-all bg-card border-primary/20 shadow-sm">
                                             <div className="w-20 h-20 shrink-0 rounded-xl overflow-hidden bg-secondary">
@@ -917,7 +865,6 @@ const MenuDelivery = () => {
                                                     </div>
                                                 )}
                                             </div>
-
                                             <div className="flex-1 flex flex-col justify-between py-0.5 min-w-0">
                                                 <div className="flex justify-between items-start gap-2">
                                                     <div className="min-w-0">
@@ -930,9 +877,7 @@ const MenuDelivery = () => {
                                                         {item.agregados?.length > 0 && (
                                                             <div className="mt-1">
                                                                 {item.agregados.map((ag: any) => (
-                                                                    <p key={ag.id} className="text-xs text-muted-foreground font-medium flex items-center gap-1">
-                                                                        <span>+ {ag.nombre}</span>
-                                                                    </p>
+                                                                    <p key={ag.id} className="text-xs text-muted-foreground font-medium">+ {ag.nombre}</p>
                                                                 ))}
                                                             </div>
                                                         )}
@@ -952,30 +897,29 @@ const MenuDelivery = () => {
                                             </div>
                                         </div>
                                     )
-                                })
-                            )}
-                        </div>
-
-                        {cartItems.length > 0 && (
-                            <div className="p-5 bg-background border-t border-border shadow-[0_-5px_20px_rgba(0,0,0,0.05)] z-20">
-                                <div className="flex justify-between items-center mb-4">
+                                })}
+                            </div>
+                            <div className="shrink-0 p-4 border-t border-border bg-background">
+                                <div className="flex justify-between items-center mb-3">
                                     <span className="text-muted-foreground text-sm">Total a pagar</span>
                                     <span className="text-2xl font-black tracking-tight">${totalPedido}</span>
                                 </div>
                                 <Button
-                                    className={`w-full h-14 text-base font-bold rounded-2xl shadow-lg ${!estadoAbierto.abierto && !restaurante?.permitirPedidosProgramados ? 'bg-muted text-muted-foreground cursor-not-allowed' : 'shadow-primary/20 bg-primary hover:bg-primary/90 text-primary-foreground'}`}
-                                    size="lg"
-                                    onClick={confirmarPedido}
+                                    className="w-full h-12 rounded-xl font-bold text-base shadow-md"
                                     disabled={!estadoAbierto.abierto && !restaurante?.permitirPedidosProgramados}
+                                    onClick={() => {
+                                        if (!estadoAbierto.abierto && !restaurante?.permitirPedidosProgramados) return
+                                        setMostrarCheckoutEnCarrito(true)
+                                        setExpandido(false)
+                                    }}
                                 >
-                                    {!estadoAbierto.abierto && !restaurante?.permitirPedidosProgramados ? 'Restaurante cerrado' : 'Continuar'}
-                                    {(estadoAbierto.abierto || restaurante?.permitirPedidosProgramados) && <ArrowLeft className="w-5 h-5 ml-2 rotate-180" />}
+                                    {!estadoAbierto.abierto && !restaurante?.permitirPedidosProgramados ? 'Cerrado' : 'Continuar'}
                                 </Button>
                             </div>
-                        )}
-                    </div>
-                </SheetContent>
-            </Sheet>
+                        </>
+                    )}
+                </div>
+            </div>
 
             <Sheet open={modalPuntosOpen} onOpenChange={setModalPuntosOpen}>
                 <SheetContent side="bottom" className="rounded-t-3xl border-none">

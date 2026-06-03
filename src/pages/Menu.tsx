@@ -2,15 +2,14 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { useMesaStore } from '@/store/mesaStore'
 import { useClienteWebSocket } from '@/hooks/useClienteWebSocket'
 import { mesaApi } from '@/lib/api'
 import { toast } from 'sonner'
 import {
-  Trash2, ArrowLeft,
+  Trash2, Maximize2, Minimize2,
   Wifi, WifiOff, Package, ChefHat, UtensilsCrossed, Receipt, Utensils,
-  Check, X, Users, Loader2, Link as LinkIcon, Clock
+  Check, X, Users, Loader2, Share2, Clock
 } from 'lucide-react'
 import { ProductDetailDrawer } from '@/components/ProductDetailDrawer'
 import { ThemeToggle } from '@/components/ThemeToggle'
@@ -61,24 +60,34 @@ const Menu = () => {
   const [estadoAbierto, setEstadoAbierto] = useState<{ abierto: boolean; proximaApertura: string | null }>({ abierto: true, proximaApertura: null })
 
   const [carritoAbierto, setCarritoAbierto] = useState(false)
+  const [expandido, setExpandido] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<typeof productos[0] | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState<string>('All')
-
-  // ESTADO PARA MIS PEDIDOS (como MenuDelivery)
   const [misPedidosOpen, setMisPedidosOpen] = useState(false)
-
-  // ESTADO PARA EL MODAL DE CONFIRMACIÓN GRUPAL
   const [confirmacionGrupalOpen, setConfirmacionGrupalOpen] = useState(false)
+  const [bienvenidaOpen, setBienvenidaOpen] = useState(false)
 
-  // Para sala: mostrar checkout en lugar de ir directo a confirmación
   const esSala = typeof window !== 'undefined' && window.location.pathname.includes('/sala/')
   const [mostrarCheckoutEnCarrito, setMostrarCheckoutEnCarrito] = useState(false)
+  const [tituloCheckout, setTituloCheckout] = useState('¿Cómo lo querés?')
+
+  const compartirLink = useCallback(() => {
+    const mensaje = `Armemos un pedido juntos en ${restaurante?.nombre || 'el restaurante'} 🍽️`
+    const url = window.location.href
+    if (navigator.share) {
+      navigator.share({ title: mensaje, text: mensaje, url }).catch(() => {})
+    } else {
+      navigator.clipboard.writeText(`${mensaje}\n${url}`)
+      toast.success('¡Link copiado al portapapeles!')
+    }
+  }, [restaurante?.nombre])
 
   const abrirCarrito = useCallback(() => {
     window.history.pushState({ drawer: 'carrito' }, '')
     setCarritoAbierto(true)
-  }, [])
+    if (!mostrarCheckoutEnCarrito) setExpandido(true)
+  }, [mostrarCheckoutEnCarrito])
 
   const cerrarCarrito = useCallback(() => {
     setCarritoAbierto(false)
@@ -101,22 +110,23 @@ const Menu = () => {
     }
   }, [])
 
-  // Fetch horarios cuando tenemos restaurante (para check de horario como MenuDelivery)
+  // Fetch horarios para check de apertura/cierre
   useEffect(() => {
-    const username = restaurante?.username || 'alfajor'
-    if (!username) return
-    const fetchHorarios = async () => {
-      try {
-        const url = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
-        const res = await fetch(`${url}/public/restaurante/${username}`)
-        const data = await res.json()
-        if (data.success && data.data?.horarios) {
-          setHorarios(data.data.horarios)
-          setEstadoAbierto(checkIsOpen(data.data.horarios))
-        }
-      } catch { /* ignore */ }
-    }
-    fetchHorarios()
+    // const username = restaurante?.username || 'alfajor'
+    // if (!username) return
+    // const fetchHorarios = async () => {
+    //   try {
+    //     const url = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+    //     const res = await fetch(`${url}/public/restaurante/${username}`)
+    //     const data = await res.json()
+    //     if (data.success && data.data?.horarios) {
+    //       setHorarios(data.data.horarios)
+    //       setEstadoAbierto(checkIsOpen(data.data.horarios))
+    //     }
+    //   } catch { /* ignore */ }
+    // }
+    // fetchHorarios()
+    setEstadoAbierto({ abierto: true, proximaApertura: null })
   }, [restaurante?.username])
 
   useEffect(() => {
@@ -129,6 +139,7 @@ const Menu = () => {
     const handlePopState = (event: PopStateEvent) => {
       if (carritoAbierto) {
         setCarritoAbierto(false)
+        setExpandido(false)
         event.preventDefault()
         return
       }
@@ -143,7 +154,7 @@ const Menu = () => {
     return () => window.removeEventListener('popstate', handlePopState)
   }, [carritoAbierto, drawerOpen])
 
-  // Sincronizar sala cuando la URL tiene un token distinto al del store (ej: usuario entró por otro link)
+  // Sincronizar sala cuando la URL tiene un token distinto al del store
   useEffect(() => {
     if (!isHydrated || !esSala || !urlQrToken) return
     if (urlQrToken === qrToken) return
@@ -182,7 +193,6 @@ const Menu = () => {
 
     if (wsState?.estado) {
       if (wsState.estado === 'preparing') {
-        // Carritos: ir a pagar primero
         if (restaurante?.esCarrito) {
           navigate('/pedido-cerrado')
         } else {
@@ -194,14 +204,22 @@ const Menu = () => {
     }
   }, [clienteNombre, qrToken, urlQrToken, wsState?.estado, navigate, isHydrated, sessionEnded, restaurante?.esCarrito])
 
-  // Lógica de productos y categorías (se mantiene igual)
+  // Mostrar modal de bienvenida la primera vez
+  useEffect(() => {
+    const t = urlQrToken || qrToken
+    if (!isHydrated || !t) return
+    const key = `bienvenida_shown_${t}`
+    if (!sessionStorage.getItem(key)) {
+      setBienvenidaOpen(true)
+      sessionStorage.setItem(key, '1')
+    }
+  }, [isHydrated, urlQrToken, qrToken])
+
   const categorias = ['All', ...Array.from(new Set(productos.map(p => p.categoria).filter(Boolean)))]
 
   const productosPorCategoria = productos.reduce((acc, producto) => {
     const categoria = producto.categoria || 'Sin categoría'
-    if (!acc[categoria]) {
-      acc[categoria] = []
-    }
+    if (!acc[categoria]) acc[categoria] = []
     acc[categoria].push(producto)
     return acc
   }, {} as Record<string, typeof productos>)
@@ -241,32 +259,11 @@ const Menu = () => {
         agregados: agregados || []
       },
     })
-    // Abrir el carrito automáticamente tras agregar un producto
     setTimeout(() => abrirCarrito(), 350)
   }
 
   const handleEliminarItem = (itemPedidoId: number) => {
-    sendMessage({ type: 'ELIMINAR_ITEM', payload: { itemId: itemPedidoId }, })
-  }
-
-  // --- LÓGICA DE CONFIRMACIÓN GRUPAL ---
-
-  // Botón principal del carrito: "Continuar" (sala) o "Confirmar Pedido" (mesa)
-  const handleBotonPrincipalCarrito = () => {
-    if (!clienteNombre || !clienteId) return
-    if (!estadoAbierto.abierto) {
-      toast.error('El restaurante está cerrado en este momento')
-      return
-    }
-
-    if (esSala) {
-      // Sala: mostrar checkout de delivery/takeaway
-      setMostrarCheckoutEnCarrito(true)
-      return
-    }
-
-    // Mesa: flujo original de confirmación grupal
-    iniciarConfirmacionPedido()
+    sendMessage({ type: 'ELIMINAR_ITEM', payload: { itemId: itemPedidoId } })
   }
 
   // Iniciar el proceso de confirmación grupal
@@ -277,7 +274,6 @@ const Menu = () => {
       return
     }
 
-    // Si solo hay un cliente, confirmar directamente (compatibilidad)
     if (clientes.length <= 1) {
       sendMessage({ type: 'CONFIRMAR_PEDIDO', payload: {} })
       toast.success('¡Pedido enviado a cocina!', { icon: <ChefHat className="w-5 h-5" /> })
@@ -285,7 +281,6 @@ const Menu = () => {
       return
     }
 
-    // Iniciar confirmación grupal
     sendMessage({
       type: 'INICIAR_CONFIRMACION',
       payload: { clienteId, clienteNombre }
@@ -293,29 +288,20 @@ const Menu = () => {
     cerrarCarrito()
   }
 
-  // Confirmar mi parte en la confirmación grupal
   const confirmarMiParte = () => {
     if (!clienteId) return
     if (!estadoAbierto.abierto) {
       toast.error('El restaurante está cerrado en este momento')
       return
     }
-    sendMessage({
-      type: 'USUARIO_CONFIRMO',
-      payload: { clienteId }
-    })
+    sendMessage({ type: 'USUARIO_CONFIRMO', payload: { clienteId } })
   }
 
-  // Cancelar la confirmación grupal
   const cancelarConfirmacion = () => {
     if (!clienteId || !clienteNombre) return
-    sendMessage({
-      type: 'USUARIO_CANCELO',
-      payload: { clienteId, clienteNombre }
-    })
+    sendMessage({ type: 'USUARIO_CANCELO', payload: { clienteId, clienteNombre } })
   }
 
-  // Efecto para abrir/cerrar el modal de confirmación grupal
   useEffect(() => {
     if (confirmacionGrupal?.activa) {
       setConfirmacionGrupalOpen(true)
@@ -326,20 +312,17 @@ const Menu = () => {
 
   useEffect(() => {
     if (confirmacionCancelada) {
-      toast.error(`${confirmacionCancelada.canceladoPor} canceló la confirmación`, {
-        duration: 3000,
-      })
+      toast.error(`${confirmacionCancelada.canceladoPor} canceló la confirmación`, { duration: 3000 })
       clearConfirmacionCancelada()
     }
   }, [confirmacionCancelada, clearConfirmacionCancelada])
 
-  // Verificar si el usuario actual ya confirmó
   const yaConfirme = confirmacionGrupal?.confirmaciones.find(c => c.clienteId === clienteId)?.confirmado ?? false
   const totalConfirmados = confirmacionGrupal?.confirmaciones.filter(c => c.confirmado).length ?? 0
   const totalClientes = confirmacionGrupal?.confirmaciones.length ?? 0
   const todosConfirmaron = esSala && totalClientes > 0 && totalConfirmados === totalClientes
 
-  // Fallback: cuando todos confirmaron en sala, poll por el pedido creado (por si el WS no llega)
+  // Fallback poll cuando todos confirmaron en sala
   useEffect(() => {
     if (!todosConfirmaron || !urlQrToken) return
     const token = urlQrToken
@@ -360,22 +343,34 @@ const Menu = () => {
             deliveryFee: data.order.deliveryFee,
             zonaNombre: data.order.zonaNombre,
             direccion: data.order.direccion,
-            metodoPago: 'transferencia',
+            metodoPago: data.order.metodoPago || checkoutDeliveryData?.metodoPago || 'transferencia',
+            montoDescuento: data.order.montoDescuento ? parseFloat(data.order.montoDescuento) : undefined,
           }))
           window.location.href = `/sala/${data.order.token}/success`
         }
       } catch { /* ignore */ }
     }
-    const t = setTimeout(poll, 500)
-    const interval = setInterval(poll, 1500)
-    return () => {
-      clearTimeout(t)
-      clearInterval(interval)
-    }
+    poll()
+    const interval = setInterval(poll, 500)
+    return () => clearInterval(interval)
   }, [todosConfirmaron, urlQrToken])
 
   const todosLosItems = wsState?.items || []
-  const totalPedido = wsState?.total || '0.00'
+
+  useEffect(() => {
+    if (todosLosItems.length === 0) setMostrarCheckoutEnCarrito(false)
+  }, [todosLosItems.length])
+
+  const alturaCarrito = (() => {
+    const n = todosLosItems.length
+    if (n >= 4) return '85vh'
+    return ['28vh', '42vh', '57vh', '71vh'][n]
+  })()
+
+  const totalPedido = todosLosItems.reduce((sum, item) => {
+    const precio = parseFloat((item as any).precioUnitario || String((item as any).precio || 0))
+    return sum + precio * item.cantidad
+  }, 0).toFixed(2)
 
   // Colores hardcodeados para single tenant
   const primario = '#0a331d'
@@ -419,6 +414,70 @@ const Menu = () => {
     `}} />
   )
 
+  const renderItem = (item: any) => {
+    const esMio = item.clienteNombre === clienteNombre
+    const prodOriginal = productos.find(p => p.id === (item.productoId || item.id))
+    const imagen = item.imagenUrl || prodOriginal?.imagenUrl
+    const precio = parseFloat(item.precioUnitario || String(item.precio || 0))
+
+    return (
+      <div key={item.id} className={`relative flex gap-4 p-3 rounded-2xl border transition-all ${esMio ? 'bg-card border-primary/20 shadow-sm' : 'bg-secondary/30 border-transparent opacity-90 grayscale-[0.3]'}`}>
+        <div className="w-20 h-20 shrink-0 rounded-xl overflow-hidden bg-secondary">
+          {imagen ? (
+            <img src={imagen} alt="img" className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-muted-foreground">
+              <Utensils className="w-6 h-6 text-primary" />
+            </div>
+          )}
+        </div>
+
+        <div className="flex-1 flex flex-col justify-between py-0.5 min-w-0">
+          <div className="flex justify-between items-start gap-2">
+            <div className="min-w-0">
+              <p className="font-bold text-sm truncate">{item.nombreProducto || item.nombre}</p>
+              <div className="flex items-center gap-1.5 mt-1">
+                <Badge variant="secondary" className={`h-5 text-[10px] px-1.5 font-normal rounded-md ${esMio ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300' : ''}`}>
+                  {esMio ? 'Tú' : item.clienteNombre}
+                </Badge>
+              </div>
+              {(item as any).ingredientesExcluidosNombres?.length > 0 && (
+                <p className="text-xs text-primary font-medium mt-1">
+                  ⚠️ Sin: {(item as any).ingredientesExcluidosNombres.join(', ')}
+                </p>
+              )}
+              {(item as any).agregados?.length > 0 && (
+                <div className="mt-1">
+                  {(item as any).agregados.map((ag: any) => (
+                    <p key={ag.id} className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+                      <span>+ {ag.nombre || 'Extra'}</span>
+                      {ag.precio && parseFloat(ag.precio) > 0 && (
+                        <span className="text-primary/80">(+${parseFloat(ag.precio).toFixed(0)})</span>
+                      )}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </div>
+            <p className="font-bold text-base">${(precio * item.cantidad).toFixed(2)}</p>
+          </div>
+
+          {esMio ? (
+            <div className="flex items-center justify-end gap-3 mt-2">
+              <button onClick={() => handleEliminarItem(item.id)} className="w-8 h-8 flex items-center justify-center rounded-full bg-destructive/10 text-destructive hover:bg-destructive hover:text-white transition-colors">
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <div className="flex justify-end mt-2">
+              <span className="text-xs text-muted-foreground">x{item.cantidad} unidades</span>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen pb-32 bg-background font-sans selection:bg-primary/20">
       {themeStyles}
@@ -427,7 +486,6 @@ const Menu = () => {
       <div className="sticky top-0 z-20 bg-background/80 backdrop-blur-md border-b border-border/50 supports-backdrop-filter:bg-background/60">
         <div className="max-w-2xl mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
-
             <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-secondary/50">
               {isConnected ? <Wifi className="w-3.5 h-3.5 text-green-500" /> : <WifiOff className="w-3.5 h-3.5 text-destructive" />}
               <span className="text-xs font-medium text-muted-foreground hidden sm:inline-block">{mesa?.nombre}</span>
@@ -503,21 +561,6 @@ const Menu = () => {
                 <span className="text-xs font-medium truncate max-w-[60px] text-center">Tú</span>
               </div>
 
-              {/* Botón compartir si es sala */}
-              {window.location.pathname.includes('/sala/') && (
-                <div className="flex flex-col items-center gap-1.5 min-w-[56px] snap-start" onClick={() => {
-                  navigator.clipboard.writeText(window.location.href);
-                  toast.success('¡Link copiado al portapapeles!');
-                }}>
-                  <div className="relative cursor-pointer hover:scale-105 transition-transform">
-                    <div className="w-12 h-12 rounded-xl border-2 shadow-sm border-primary/30 bg-primary/10 text-primary flex items-center justify-center">
-                      <LinkIcon className="w-5 h-5" />
-                    </div>
-                  </div>
-                  <span className="text-xs font-medium text-primary text-center cursor-pointer">Compartir</span>
-                </div>
-              )}
-
               {/* Otros usuarios */}
               {clientes.filter(c => c.nombre !== clienteNombre).map((cliente) => (
                 <div key={cliente.id} className="flex flex-col items-center gap-1.5 min-w-[56px] snap-start opacity-80 hover:opacity-100 transition-opacity">
@@ -539,9 +582,20 @@ const Menu = () => {
               <div className="min-w-5 shrink-0"></div>
             </div>
           </div>
+
+          {/* Botón compartir sala */}
+          {window.location.pathname.includes('/sala/') && (
+            <button
+              onClick={compartirLink}
+              className="w-full flex items-center justify-center gap-2.5 py-3 px-4 rounded-xl border-2 border-dashed border-primary/30 text-primary hover:bg-primary/5 active:bg-primary/10 transition-colors text-sm font-semibold"
+            >
+              <Share2 className="w-4 h-4" />
+              Invitá a tus amigos
+            </button>
+          )}
         </section>
 
-        {/* --- MENSAJE EXPLICANDO DE QUE DEBEN SELECCIONAR LOS PRODUCTOS Y CONFIRMAR EL PEDIDO  --- */}
+        {/* --- MENSAJE EXPLICATIVO --- */}
         <section className="space-y-3 py-4 px-4 bg-secondary/50 rounded-lg">
           <p className="text-sm font-medium">
             {restaurante?.soloCartaDigital
@@ -563,7 +617,7 @@ const Menu = () => {
                   className={`rounded-lg px-5 h-10 text-xs font-medium whitespace-nowrap snap-start transition-all ${selectedCategory === category
                     ? "shadow-md"
                     : "bg-secondary/50 hover:bg-secondary border border-transparent"
-                    }`}
+                  }`}
                 >
                   {category === 'All' ? 'Todas' : category}
                 </Button>
@@ -579,13 +633,12 @@ const Menu = () => {
               categoriasOrdenadas.map((categoriaNombre) => {
                 const productosDeCategoria = productosPorCategoria[categoriaNombre]
                 if (!productosDeCategoria || productosDeCategoria.length === 0) return null
-
                 return (
                   <div key={categoriaNombre} className="space-y-4">
                     <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider px-1">
                       {categoriaNombre}
                     </h3>
-                    <div className="flex gap-4 overflow-x-auto pb-3  ml-2 scrollbar-hide snap-x snap-mandatory">
+                    <div className="flex gap-4 overflow-x-auto pb-3 ml-2 scrollbar-hide snap-x snap-mandatory">
                       {productosDeCategoria.map((producto) => (
                         <ProductoCard
                           key={producto.id}
@@ -594,7 +647,6 @@ const Menu = () => {
                           disenoAlternativo={restaurante?.disenoAlternativo!}
                         />
                       ))}
-                      {/* Spacer for last item padding */}
                       <div className="min-w-1 shrink-0" />
                     </div>
                   </div>
@@ -633,10 +685,10 @@ const Menu = () => {
         <button
           onClick={abrirCarrito}
           className={`
-            group relative flex items-center gap-4 pl-5 pr-6 py-3.5 rounded-full 
+            group relative flex items-center gap-4 pl-5 pr-6 py-3.5 rounded-full
             shadow-2xl hover:scale-[1.02] active:scale-95 transition-all duration-300
             bg-zinc-900 text-white shadow-zinc-900/20
-            dark:bg-white/10 dark:text-white dark:backdrop-blur-xl 
+            dark:bg-white/10 dark:text-white dark:backdrop-blur-xl
             dark:border dark:border-white/10 dark:shadow-[0_0_20px_rgba(255,255,255,0.05)]
           `}
         >
@@ -657,148 +709,112 @@ const Menu = () => {
         </button>
       </div>
 
-      {/* --- DRAWER DEL PEDIDO --- */}
-      <Sheet open={carritoAbierto} onOpenChange={(open) => !open && cerrarCarrito()}>
-        <SheetContent side="right" className="w-full sm:max-w-md p-0 border-l-0 sm:border-l bg-background">
-          <div className="flex flex-col h-full">
-            <div className="px-5 py-4 flex items-center gap-4 border-b border-border/50 bg-background/80 backdrop-blur-md sticky top-0 z-10">
-              <Button variant="ghost" size="icon" className="rounded-full -ml-2 hover:bg-secondary" onClick={cerrarCarrito}>
-                <ArrowLeft className="w-6 h-6" />
-              </Button>
-              <div>
-                <SheetTitle className="text-xl">Tu Pedido</SheetTitle>
-                <p className="text-xs text-muted-foreground mt-0.5">Pedido {mesa?.nombre} • {todosLosItems.length} items</p>
-              </div>
+      {/* --- OVERLAY DEL PEDIDO --- */}
+      {carritoAbierto && (
+        <div
+          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px] animate-in fade-in duration-200"
+          onClick={cerrarCarrito}
+        />
+      )}
+
+      {/* --- DRAWER VERTICAL DEL PEDIDO --- */}
+      <div
+        className={`fixed inset-x-0 bottom-0 z-50 transition-transform duration-300 ease-out ${carritoAbierto ? 'translate-y-0' : 'translate-y-full pointer-events-none'}`}
+      >
+        <div
+          className={`mx-auto max-w-2xl bg-background rounded-t-3xl shadow-[0_-12px_40px_rgba(0,0,0,0.28)] border-t border-border flex flex-col transition-[height] duration-300 ease-out ${(!mostrarCheckoutEnCarrito || expandido) ? 'overflow-hidden' : 'overflow-y-auto'}`}
+          style={!mostrarCheckoutEnCarrito ? { height: alturaCarrito } : expandido ? { height: '85vh' } : { maxHeight: '88vh' }}
+        >
+          {/* Header */}
+          <div className="shrink-0 sticky top-0 z-10 bg-background pt-2">
+            <div className="w-full flex justify-center pt-3 pb-1">
+              <span className="w-12 h-1.5 rounded-full bg-muted-foreground/30" />
             </div>
-
-            <div className="flex-1 overflow-y-auto px-5 py-6 space-y-4">
-              {mostrarCheckoutEnCarrito && esSala ? (
-                <div className="space-y-4">
-                  <Button variant="ghost" size="sm" className="-ml-2 -mt-2" onClick={() => setMostrarCheckoutEnCarrito(false)}>
-                    <ArrowLeft className="w-4 h-4 mr-1" />
-                    Volver al pedido
-                  </Button>
-                  <CheckoutDeliveryGrupal
-                    restauranteId={restaurante?.id ?? 0}
-                    restauranteUsername={restaurante?.username ?? null}
-                    itemsTotal={totalPedido}
-                    totalItems={todosLosItems.length}
-                    onConfirmarClick={iniciarConfirmacionPedido}
-                    sendMessage={sendMessage}
-                    clienteId={clienteId ?? ''}
-                    clienteNombre={clienteNombre ?? ''}
-                    checkoutData={checkoutDeliveryData}
-                    editSemaphore={checkoutEditSemaphore}
-                    restauranteDireccion={restaurante?.direccion ?? undefined}
-                  />
-                </div>
-              ) : todosLosItems.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-center space-y-4 opacity-60">
-                  <div className="bg-secondary p-6 rounded-full">
-                    <UtensilsCrossed className="w-10 h-10" />
-                  </div>
-                  <p className="font-medium">El pedido está vacío.</p>
-                  <Button variant="link" onClick={cerrarCarrito}>Ir al menú</Button>
-                </div>
+            <div className="flex items-center justify-between px-4 pb-3 pt-2">
+              <div className="w-8 h-8 flex items-center justify-center" />
+              <span className="text-xl font-extrabold">
+                {mostrarCheckoutEnCarrito ? tituloCheckout : 'Tu pedido'}
+              </span>
+              {mostrarCheckoutEnCarrito ? (
+                <button
+                  onClick={() => setExpandido(e => !e)}
+                  className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-secondary transition-colors"
+                  aria-label={expandido ? 'Minimizar' : 'Maximizar'}
+                >
+                  {expandido ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                </button>
               ) : (
-                <>
-                {todosLosItems.map((item) => {
-                  const esMio = item.clienteNombre === clienteNombre;
-                  const prodOriginal = productos.find(p => p.id === (item.productoId || item.id));
-                  const imagen = item.imagenUrl || prodOriginal?.imagenUrl;
-                  const precio = parseFloat(item.precioUnitario || String(item.precio || 0));
-
-                  return (
-                    <div key={item.id} className={`relative flex gap-4 p-3 rounded-2xl border transition-all ${esMio ? 'bg-card border-primary/20 shadow-sm' : 'bg-secondary/30 border-transparent opacity-90 grayscale-[0.3]'
-                      }`}>
-                      <div className="w-20 h-20 shrink-0 rounded-xl overflow-hidden bg-secondary">
-                        {imagen ? (
-                          <img src={imagen} alt="img" className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                            <Utensils className="w-6 h-6 text-primary" />
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="flex-1 flex flex-col justify-between py-0.5 min-w-0">
-                        <div className="flex justify-between items-start gap-2">
-                          <div className="min-w-0">
-                            <p className="font-bold text-sm truncate">{item.nombreProducto || item.nombre}</p>
-                            <div className="flex items-center gap-1.5 mt-1">
-                              <Badge variant="secondary" className={`h-5 text-[10px] px-1.5 font-normal rounded-md ${esMio ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300' : ''}`}>
-                                {esMio ? 'Tú' : item.clienteNombre}
-                              </Badge>
-                            </div>
-                            {(item as any).ingredientesExcluidosNombres?.length > 0 && (
-                              <p className="text-xs text-primary font-medium mt-1">
-                                ⚠️ Sin: {(item as any).ingredientesExcluidosNombres.join(', ')}
-                              </p>
-                            )}
-                            {(item as any).agregados?.length > 0 && (
-                              <div className="mt-1">
-                                {(item as any).agregados.map((ag: any) => (
-                                  <p key={ag.id} className="text-xs text-muted-foreground font-medium flex items-center gap-1">
-                                    <span>+ {ag.nombre || 'Extra'}</span>
-                                    {ag.precio && parseFloat(ag.precio) > 0 && (
-                                      <span className="text-primary/80">(+${parseFloat(ag.precio).toFixed(0)})</span>
-                                    )}
-                                  </p>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                          <p className="font-bold text-base">${(precio * item.cantidad).toFixed(2)}</p>
-                        </div>
-
-                        {esMio ? (
-                          <div className="flex items-center justify-end gap-3 mt-2">
-
-                            <button onClick={() => handleEliminarItem(item.id)} className="w-8 h-8 flex items-center justify-center rounded-full bg-destructive/10 text-destructive hover:bg-destructive hover:text-white transition-colors">
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-
-                          </div>
-                        ) : (
-                          <div className="flex justify-end mt-2">
-                            <span className="text-xs text-muted-foreground">x{item.cantidad} unidades</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
-                </>
+                <div className="w-8 h-8" />
               )}
             </div>
+          </div>
 
-            {(todosLosItems.length > 0 && !mostrarCheckoutEnCarrito) && (
-              <div className="p-5 bg-background border-t border-border shadow-[0_-5px_20px_rgba(0,0,0,0.05)] z-20">
-                <div className="flex justify-between items-center mb-4">
+          {/* Cuerpo */}
+          {mostrarCheckoutEnCarrito && esSala ? (
+            <CheckoutDeliveryGrupal
+              modo={expandido ? 'completo' : 'pasos'}
+              onVolverCarrito={() => { setMostrarCheckoutEnCarrito(false); setExpandido(true) }}
+              restauranteId={restaurante?.id ?? 0}
+              restauranteUsername={restaurante?.username ?? null}
+              itemsTotal={totalPedido}
+              totalItems={todosLosItems.length}
+              onConfirmarClick={iniciarConfirmacionPedido}
+              sendMessage={sendMessage}
+              clienteId={clienteId ?? ''}
+              clienteNombre={clienteNombre ?? ''}
+              checkoutData={checkoutDeliveryData}
+              editSemaphore={checkoutEditSemaphore}
+              restauranteDireccion={restaurante?.direccion ?? undefined}
+              onTituloChange={setTituloCheckout}
+            />
+          ) : todosLosItems.length === 0 ? (
+            <div className={`flex flex-col items-center justify-center text-center gap-4 opacity-60 px-5 ${expandido ? 'flex-1' : 'py-12'}`}>
+              <div className="bg-secondary p-6 rounded-full">
+                <UtensilsCrossed className="w-10 h-10" />
+              </div>
+              <p className="font-medium">El pedido está vacío.</p>
+              <Button variant="link" onClick={cerrarCarrito}>Ir al menú</Button>
+            </div>
+          ) : (
+            <>
+              <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3 min-h-0">
+                {todosLosItems.map((item) => renderItem(item))}
+              </div>
+
+              <div className="shrink-0 p-4 border-t border-border bg-background">
+                <div className="flex justify-between items-center mb-3">
                   <span className="text-muted-foreground text-sm">Total a pagar</span>
                   <span className="text-2xl font-black tracking-tight">${totalPedido}</span>
                 </div>
-                {!restaurante?.soloCartaDigital && (
+                {!restaurante?.soloCartaDigital ? (
                   <Button
-                    className={`w-full h-14 text-base font-bold rounded-2xl shadow-lg ${!estadoAbierto.abierto ? 'bg-muted text-muted-foreground cursor-not-allowed' : 'shadow-primary/20'}`}
-                    size="lg"
-                    onClick={handleBotonPrincipalCarrito}
+                    className={`w-full h-12 rounded-xl font-bold text-base shadow-md ${!estadoAbierto.abierto ? 'bg-muted text-muted-foreground cursor-not-allowed' : ''}`}
+                    onClick={() => {
+                      if (!estadoAbierto.abierto) {
+                        toast.error('El restaurante está cerrado en este momento')
+                        return
+                      }
+                      if (esSala) {
+                        setMostrarCheckoutEnCarrito(true)
+                        setExpandido(false)
+                      } else {
+                        iniciarConfirmacionPedido()
+                      }
+                    }}
                     disabled={!estadoAbierto.abierto}
                   >
-                    {!estadoAbierto.abierto ? 'Restaurante cerrado' : (esSala ? 'Continuar' : 'Confirmar Pedido')}
-                    {estadoAbierto.abierto && <ArrowLeft className="w-5 h-5 ml-2 rotate-180" />}
+                    {!estadoAbierto.abierto ? 'Restaurante cerrado' : 'Continuar'}
                   </Button>
-                )}
-                {restaurante?.soloCartaDigital && (
+                ) : (
                   <div className="text-center text-sm font-medium text-primary py-3 bg-primary/10 rounded-xl">
                     Léele tu pedido al mozo o a la caja 😊
                   </div>
                 )}
               </div>
-            )}
-          </div>
-        </SheetContent>
-      </Sheet>
+            </>
+          )}
+        </div>
+      </div>
 
       <ProductDetailDrawer
         product={selectedProduct ? { ...selectedProduct, categoria: selectedProduct.categoria ?? undefined } : null}
@@ -816,114 +832,177 @@ const Menu = () => {
       {/* --- MODAL DE CONFIRMACIÓN GRUPAL --- */}
       <Dialog open={confirmacionGrupalOpen} onOpenChange={() => { }}>
         <DialogContent className="max-w-sm rounded-2xl p-4 sm:p-5 max-h-[85dvh] flex flex-col" onPointerDownOutside={(e) => e.preventDefault()}>
-          <DialogHeader className="text-center shrink-0">
-            <div className="mx-auto w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-primary/10 flex items-center justify-center mb-2 sm:mb-3">
-              <Users className="w-6 h-6 sm:w-7 sm:h-7 text-primary" />
+          {todosConfirmaron ? (
+            <div className="flex flex-col items-center justify-center py-8 gap-4">
+              <Loader2 className="w-12 h-12 text-primary animate-spin" />
+              <DialogTitle className="text-lg font-bold text-center">¡Todos confirmaron!</DialogTitle>
+              <DialogDescription className="text-center text-sm">
+                Estamos preparando tu pedido, te redirigimos en un momento...
+              </DialogDescription>
             </div>
-            <DialogTitle className="text-lg sm:text-xl">Confirmación del Pedido</DialogTitle>
-            <DialogDescription className="text-center pt-1 text-sm">
-              {confirmacionGrupal?.iniciadaPorNombre === clienteNombre
-                ? 'Esperando que todos confirmen...'
-                : `${confirmacionGrupal?.iniciadaPorNombre} quiere confirmar`
-              }
-            </DialogDescription>
-          </DialogHeader>
+          ) : (
+            <>
+              <DialogHeader className="text-center shrink-0">
+                <div className="mx-auto w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-primary/10 flex items-center justify-center mb-2 sm:mb-3">
+                  <Users className="w-6 h-6 sm:w-7 sm:h-7 text-primary" />
+                </div>
+                <DialogTitle className="text-lg sm:text-xl">Confirmación del Pedido</DialogTitle>
+                <DialogDescription className="text-center pt-1 text-sm">
+                  {confirmacionGrupal?.iniciadaPorNombre === clienteNombre
+                    ? 'Esperando que todos confirmen...'
+                    : `${confirmacionGrupal?.iniciadaPorNombre} quiere confirmar`
+                  }
+                </DialogDescription>
+              </DialogHeader>
 
-          {/* Resumen del pedido (sala: datos de envío) - compacto */}
-          {esSala && checkoutDeliveryData && (
-            <div className="mt-2 sm:mt-3 p-3 rounded-xl bg-secondary/50 border border-border/50 space-y-1 text-left shrink-0 overflow-hidden">
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Resumen</p>
-              <p className="text-xs truncate"><span className="text-muted-foreground">Nombre:</span> {checkoutDeliveryData.nombre}</p>
-              <p className="text-xs truncate"><span className="text-muted-foreground">Celular:</span> {checkoutDeliveryData.telefono}</p>
-              {checkoutDeliveryData.tipoPedido === 'delivery' && (
-                <p className="text-xs truncate"><span className="text-muted-foreground">Dirección:</span> {checkoutDeliveryData.direccion}</p>
+              {/* Resumen checkout (sala) */}
+              {esSala && checkoutDeliveryData && (
+                <div className="mt-2 sm:mt-3 p-3 rounded-xl bg-secondary/50 border border-border/50 space-y-1 text-left shrink-0 overflow-hidden">
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Resumen</p>
+                  <p className="text-xs truncate"><span className="text-muted-foreground">Nombre:</span> {checkoutDeliveryData.nombre}</p>
+                  <p className="text-xs truncate"><span className="text-muted-foreground">Celular:</span> {checkoutDeliveryData.telefono}</p>
+                  {checkoutDeliveryData.tipoPedido === 'delivery' && (
+                    <p className="text-xs truncate"><span className="text-muted-foreground">Dirección:</span> {checkoutDeliveryData.direccion}</p>
+                  )}
+                  {checkoutDeliveryData.tipoPedido === 'delivery' && checkoutDeliveryData.deliveryFee > 0 && (
+                    <p className="text-xs"><span className="text-muted-foreground">Envío:</span> ${checkoutDeliveryData.deliveryFee.toFixed(2)}</p>
+                  )}
+                  <p className="text-sm font-bold pt-1.5 border-t border-border/50">Total: ${checkoutDeliveryData.total}</p>
+                </div>
               )}
-              {checkoutDeliveryData.tipoPedido === 'delivery' && checkoutDeliveryData.deliveryFee > 0 && (
-                <p className="text-xs"><span className="text-muted-foreground">Envío:</span> ${checkoutDeliveryData.deliveryFee.toFixed(2)}</p>
-              )}
-              <p className="text-sm font-bold pt-1.5 border-t border-border/50">Total: ${checkoutDeliveryData.total}</p>
-            </div>
-          )}
 
-          {/* Lista de usuarios - scroll interno si hace falta */}
-          <div className="mt-2 sm:mt-3 min-h-0 flex-1 overflow-y-auto">
-            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide text-center mb-2">
-              {totalConfirmados}/{totalClientes} confirmados
-              {todosConfirmaron && <span className="block text-primary font-normal normal-case mt-1">Procesando pedido...</span>}
-            </p>
+              {/* Lista de usuarios */}
+              <div className="mt-2 sm:mt-3 min-h-0 flex-1 overflow-y-auto">
+                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide text-center mb-2">
+                  {totalConfirmados}/{totalClientes} confirmados
+                </p>
+                <div className="flex flex-wrap justify-center gap-2 sm:gap-3 py-2">
+                  {confirmacionGrupal?.confirmaciones.map((conf) => {
+                    const esYo = conf.clienteId === clienteId
+                    return (
+                      <div key={conf.clienteId} className="flex flex-col items-center gap-1">
+                        <div className={`relative w-11 h-11 sm:w-12 sm:h-12 rounded-lg border-2 shadow-sm flex items-center justify-center font-bold text-xs transition-all duration-300 ${conf.confirmado
+                          ? 'bg-primary border-primary text-primary-foreground ring-2 ring-primary/30'
+                          : 'bg-zinc-200 dark:bg-zinc-700 border-zinc-300 dark:border-zinc-600 text-zinc-500 dark:text-zinc-400'
+                        }`}>
+                          {conf.nombre.slice(0, 2).toUpperCase()}
+                          {conf.confirmado && (
+                            <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
+                              <Check className="w-2.5 h-2.5 text-white" />
+                            </div>
+                          )}
+                          {!conf.confirmado && (
+                            <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-zinc-400 dark:bg-zinc-500 rounded-full flex items-center justify-center">
+                              <Loader2 className="w-2.5 h-2.5 text-white animate-spin" />
+                            </div>
+                          )}
+                        </div>
+                        <span className={`text-[10px] font-medium truncate max-w-[48px] sm:max-w-[56px] text-center ${esYo ? 'text-foreground' : 'text-muted-foreground'}`}>
+                          {esYo ? 'Tú' : conf.nombre}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
 
-            <div className="flex flex-wrap justify-center gap-2 sm:gap-3 py-2">
-              {confirmacionGrupal?.confirmaciones.map((conf) => {
-                const esYo = conf.clienteId === clienteId
-                return (
-                  <div key={conf.clienteId} className="flex flex-col items-center gap-1">
-                    <div className={`relative w-11 h-11 sm:w-12 sm:h-12 rounded-lg border-2 shadow-sm flex items-center justify-center font-bold text-xs transition-all duration-300 ${conf.confirmado
-                      ? 'bg-primary border-primary text-primary-foreground ring-2 ring-primary/30'
-                      : 'bg-zinc-200 dark:bg-zinc-700 border-zinc-300 dark:border-zinc-600 text-zinc-500 dark:text-zinc-400'
-                      }`}>
-                      {conf.nombre.slice(0, 2).toUpperCase()}
-                      {conf.confirmado && (
-                        <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
-                          <Check className="w-2.5 h-2.5 text-white" />
-                        </div>
-                      )}
-                      {!conf.confirmado && (
-                        <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-zinc-400 dark:bg-zinc-500 rounded-full flex items-center justify-center">
-                          <Loader2 className="w-2.5 h-2.5 text-white animate-spin" />
-                        </div>
-                      )}
+              <DialogFooter className="flex-col gap-2 shrink-0 mt-3 pt-3 border-t border-border/50">
+                {!yaConfirme ? (
+                  <>
+                    <Button
+                      size="sm"
+                      onClick={confirmarMiParte}
+                      className={`w-full h-11 rounded-xl font-semibold ${!estadoAbierto.abierto ? 'bg-muted text-muted-foreground cursor-not-allowed' : 'bg-primary hover:bg-primary/90'}`}
+                      disabled={!estadoAbierto.abierto}
+                    >
+                      <Check className="w-4 h-4 mr-2" />
+                      {!estadoAbierto.abierto ? 'Restaurante cerrado' : 'Confirmar mi pedido'}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={cancelarConfirmacion}
+                      className="w-full h-10 rounded-xl text-destructive hover:bg-destructive/10"
+                    >
+                      <X className="w-4 h-4 mr-2" />
+                      Cancelar
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-full py-2 px-3 rounded-xl bg-primary/10 text-center">
+                      <p className="text-xs font-medium text-primary">
+                        ✓ Ya confirmaste. Esperando a los demás...
+                      </p>
                     </div>
-                    <span className={`text-[10px] font-medium truncate max-w-[48px] sm:max-w-[56px] text-center ${esYo ? 'text-foreground' : 'text-muted-foreground'
-                      }`}>
-                      {esYo ? 'Tú' : conf.nombre}
-                    </span>
-                  </div>
-                )
-              })}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={cancelarConfirmacion}
+                      className="w-full h-10 rounded-xl text-destructive hover:bg-destructive/10"
+                    >
+                      <X className="w-4 h-4 mr-2" />
+                      Cancelar para todos
+                    </Button>
+                  </>
+                )}
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* --- MODAL DE BIENVENIDA --- */}
+      <Dialog open={bienvenidaOpen} onOpenChange={setBienvenidaOpen}>
+        <DialogContent className="max-w-sm rounded-3xl p-0 overflow-hidden border-0 shadow-2xl gap-0">
+          <div className="bg-primary px-6 pt-8 pb-10 relative overflow-hidden">
+            <div className="absolute -right-10 -top-10 w-44 h-44 rounded-full bg-white/5" />
+            <div className="absolute -right-4 top-12 w-28 h-28 rounded-full bg-white/5" />
+            <div className="w-14 h-14 rounded-2xl bg-primary-foreground/15 flex items-center justify-center mb-4 backdrop-blur-sm shadow-inner">
+              <Users className="w-8 h-8 text-primary-foreground" />
             </div>
+            <DialogTitle className="text-2xl font-extrabold text-primary-foreground leading-snug">
+              Armá el pedido<br />con tus amigos
+            </DialogTitle>
+            <DialogDescription className="text-sm text-primary-foreground/70 mt-2 leading-relaxed">
+              Cada uno elige sus platos y al final confirman juntos con un solo tap.
+            </DialogDescription>
           </div>
 
-          <DialogFooter className="flex-col gap-2 shrink-0 mt-3 pt-3 border-t border-border/50">
-            {!yaConfirme ? (
-              <>
-                <Button
-                  size="sm"
-                  onClick={confirmarMiParte}
-                  className={`w-full h-11 rounded-xl font-semibold ${!estadoAbierto.abierto ? 'bg-muted text-muted-foreground cursor-not-allowed' : 'bg-primary hover:bg-primary/90'}`}
-                  disabled={!estadoAbierto.abierto}
-                >
-                  <Check className="w-4 h-4 mr-2" />
-                  {!estadoAbierto.abierto ? 'Restaurante cerrado' : 'Confirmar mi pedido'}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={cancelarConfirmacion}
-                  className="w-full h-10 rounded-xl text-destructive hover:bg-destructive/10"
-                >
-                  <X className="w-4 h-4 mr-2" />
-                  Cancelar
-                </Button>
-              </>
-            ) : (
-              <>
-                <div className="w-full py-2 px-3 rounded-xl bg-primary/10 text-center">
-                  <p className="text-xs font-medium text-primary">
-                    ✓ Ya confirmaste. Esperando a los demás...
-                  </p>
+          <div className="px-6 py-5 space-y-5 bg-background">
+            <div className="space-y-3.5">
+              {[
+                { n: '1', title: 'Elegí tus platos', desc: 'Explorá el menú y sumá lo que quieras al pedido.' },
+                { n: '2', title: 'Invitá a tus amigos', desc: 'Compartí el link para que cada uno arme su parte.' },
+                { n: '3', title: 'Confirmen juntos', desc: 'Todos confirman y el pedido se envía automáticamente.' },
+              ].map(({ n, title, desc }) => (
+                <div key={n} className="flex items-start gap-3">
+                  <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                    <span className="text-xs font-extrabold text-primary">{n}</span>
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">{title}</p>
+                    <p className="text-xs text-muted-foreground leading-snug">{desc}</p>
+                  </div>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={cancelarConfirmacion}
-                  className="w-full h-10 rounded-xl text-destructive hover:bg-destructive/10"
-                >
-                  <X className="w-4 h-4 mr-2" />
-                  Cancelar para todos
-                </Button>
-              </>
-            )}
-          </DialogFooter>
+              ))}
+            </div>
+
+            <button
+              onClick={compartirLink}
+              className="w-full flex items-center justify-center gap-2.5 py-3 px-4 rounded-xl border-2 border-dashed border-primary/30 text-primary hover:bg-primary/5 active:bg-primary/10 transition-colors text-sm font-semibold"
+            >
+              <Share2 className="w-4 h-4" />
+              Compartir link con amigos
+            </button>
+
+            <Button
+              className="w-full h-12 rounded-xl font-bold text-base shadow-md"
+              onClick={() => setBienvenidaOpen(false)}
+            >
+              ¡Empezar a pedir!
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -931,7 +1010,7 @@ const Menu = () => {
   )
 }
 
-// Componentes auxiliares para limpiar el render
+// Componentes auxiliares
 const EmptyState = () => (
   <div className="flex flex-col items-center justify-center py-20 text-muted-foreground opacity-50">
     <Package className="w-10 h-10 mb-2" />
@@ -979,53 +1058,36 @@ const ProductoCard = ({ producto, onClick, fullWidth, disenoAlternativo }: { pro
   }
 
   return (
-  <div
-    className={`group relative ${fullWidth ? 'w-full' : 'w-44 shrink-0'} h-52 rounded-3xl overflow-hidden cursor-pointer ${!fullWidth ? 'snap-start' : ''} shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]`}
-    onClick={onClick}
-  >
-    {/* Background Image */}
-    <div className="absolute inset-0 bg-zinc-900">
-      {producto.imagenUrl ? (
-        <img
-          src={producto.imagenUrl}
-          alt={producto.nombre}
-          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out"
-        />
-      ) : (
-        <div className="w-full h-full flex items-center justify-center bg-linear-to-br from-zinc-800 to-zinc-900">
-          <Utensils className="w-12 h-12 text-primary" />
-        </div>
-      )}
-    </div>
-
-    {/* Gradient overlay for better text readability */}
-    <div className="absolute inset-0 bg-linear-to-t from-black/90 via-transparent to-transparent" />
-
-    {/* Glassmorphism overlay for name and price */}
-    <div className="absolute bottom-0 left-0 right-0 p-3.5">
-      <div
-        className="
-          rounded-2xl p-3 
-          bg-white/70 dark:bg-white/10
-          backdrop-blur-md backdrop-saturate-150
-          border border-white/30 dark:border-white/10
-          shadow-[0_4px_30px_rgba(0,0,0,0.1)]
-        "
-      >
-        <h3 className="font-semibold text-sm text-zinc-900 dark:text-white truncate leading-tight">
-          {producto.nombre}
-        </h3>
-        <div className="flex items-baseline gap-2 mt-0.5">
-          <span className={`font-bold text-lg ${tieneDescuento ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-800 dark:text-white/90'}`}>
-            ${precioFinal.toFixed(0)}
-          </span>
-          {tieneDescuento && (
-            <span className="text-xs text-zinc-500 dark:text-white/40 line-through">${precioOriginal.toFixed(0)}</span>
-          )}
+    <div
+      className={`group relative ${fullWidth ? 'w-full' : 'w-44 shrink-0'} h-52 rounded-3xl overflow-hidden cursor-pointer ${!fullWidth ? 'snap-start' : ''} shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]`}
+      onClick={onClick}
+    >
+      <div className="absolute inset-0 bg-zinc-900">
+        {producto.imagenUrl ? (
+          <img src={producto.imagenUrl} alt={producto.nombre} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center bg-linear-to-br from-zinc-800 to-zinc-900">
+            <Utensils className="w-12 h-12 text-primary" />
+          </div>
+        )}
+      </div>
+      <div className="absolute inset-0 bg-linear-to-t from-black/90 via-transparent to-transparent" />
+      <div className="absolute bottom-0 left-0 right-0 p-3.5">
+        <div className="rounded-2xl p-3 bg-white/70 dark:bg-white/10 backdrop-blur-md backdrop-saturate-150 border border-white/30 dark:border-white/10 shadow-[0_4px_30px_rgba(0,0,0,0.1)]">
+          <h3 className="font-semibold text-sm text-zinc-900 dark:text-white truncate leading-tight">
+            {producto.nombre}
+          </h3>
+          <div className="flex items-baseline gap-2 mt-0.5">
+            <span className={`font-bold text-lg ${tieneDescuento ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-800 dark:text-white/90'}`}>
+              ${precioFinal.toFixed(0)}
+            </span>
+            {tieneDescuento && (
+              <span className="text-xs text-zinc-500 dark:text-white/40 line-through">${precioOriginal.toFixed(0)}</span>
+            )}
+          </div>
         </div>
       </div>
     </div>
-  </div>
   )
 }
 

@@ -5,30 +5,30 @@ import { Input } from '@/components/ui/input'
 import { useMesaStore } from '@/store/mesaStore'
 import { mesaApi, ApiError } from '@/lib/api'
 import { toast } from 'sonner'
-import { Loader2, Utensils, ChevronRight, Menu, ShoppingBag, Bell, Users, ShoppingCart } from 'lucide-react'
+import { Loader2, Utensils, ChevronRight, UtensilsCrossed, Truck, CreditCard, Package, ShoppingCart } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 // Features para el carrusel
 const features = [
   {
-    icon: Menu,
-    title: 'Explora el menú',
-    description: 'Mira todos los productos disponibles con fotos y precios',
+    icon: UtensilsCrossed,
+    title: 'Explorá el menú',
+    description: 'Mirá todos los productos disponibles con fotos y precios',
   },
   {
-    icon: ShoppingBag,
-    title: 'Pedí desde tu mesa',
-    description: 'Agregá productos al pedido sin esperar al mozo',
+    icon: Truck,
+    title: 'Delivery o takeaway',
+    description: 'Pedí a domicilio o retirá en el local, como prefieras',
   },
   {
-    icon: Bell,
-    title: 'Recibilo en tu mesa',
-    description: 'Tu pedido llega directo a donde estás sentado',
+    icon: CreditCard,
+    title: 'Pagá online',
+    description: 'Pagá de forma segura con tarjeta, transferencia o efectivo',
   },
   {
-    icon: Users,
-    title: 'Dividí la cuenta',
-    description: 'Cada uno paga lo suyo, sin complicaciones',
+    icon: Package,
+    title: 'Seguí tu pedido',
+    description: 'Te avisamos en tiempo real cuando tu pedido está listo',
   },
 ]
 

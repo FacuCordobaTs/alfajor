@@ -1,11 +1,11 @@
 import { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router'
-import { Button } from '@/components/ui/button'
-import { CheckCircle2, Copy, Loader2, Store, Truck, Utensils, MapPin, Clock, Package, MessageCircle } from 'lucide-react'
+import { CheckCircle2, Copy, Loader2, Store, Truck, MapPin, Clock, Package } from 'lucide-react'
 import { toast } from 'sonner'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { MisPedidosDrawer } from '@/components/MisPedidosDrawer'
 import { OrderSummaryItemDetails } from '@/components/OrderSummaryItemDetails'
+import { AddressMapPreview } from '@/components/AddressMapPreview'
 import { inferDeliveryFeeCobrado, orderItemLineSubtotalsFromApi } from '@/lib/orderSummaryItem'
 import { initMercadoPago, CardPayment } from '@mercadopago/sdk-react'
 
@@ -28,11 +28,6 @@ function waMeDigits(phone: string | null | undefined): string | null {
     return d.length >= 8 ? d : null
 }
 
-/**
- * PedidoStatus — pantalla independiente que carga info del pedido por ID vía API.
- * Ruta: /pedido/:id
- * Versión Alfajor (username hardcoded a 'alfajor').
- */
 const PedidoStatus = () => {
     const { id } = useParams()
     const navigate = useNavigate()
@@ -59,27 +54,7 @@ const PedidoStatus = () => {
     const [pedidoEstado, setPedidoEstado] = useState<string | null>(null)
     const [rapiboyTrackingUrl, setRapiboyTrackingUrl] = useState<string | null>(null)
     const metaPurchaseTracked = useRef(false)
-    const [showInstagramHelp, setShowInstagramHelp] = useState(false)
-    const copyAliasTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-    const AliasNotice = ({ children }: { children?: React.ReactNode }) => (
-        <div
-            role="status"
-            className="flex items-start gap-3 p-2 rounded-lg border border-primary/20 bg-primary/5 max-w-sm mx-auto w-full"
-        >
-            <div className="mt-0.5">
-                <Copy className="w-4 h-4 text-primary" />
-            </div>
-            <div className="min-w-0">
-                <p className="text-sm font-semibold text-primary/90 leading-tight">Importante</p>
-                <p className="text-xs text-muted-foreground mt-0.5 leading-snug">
-                    {children ?? 'Cada pedido genera un alias único. Copialo antes de realizar la transferencia.'}
-                </p>
-            </div>
-        </div>
-    )
-
-    // Fetch order info from API on mount
     useEffect(() => {
         if (!id) return
         const fetchOrderInfo = async () => {
@@ -114,6 +89,8 @@ const PedidoStatus = () => {
                         items,
                         deliveryFee: deliveryFeeResolved,
                         montoDescuento: pedido.montoDescuento,
+                        lat: pedido.latitud ? parseFloat(pedido.latitud) : null,
+                        lng: pedido.longitud ? parseFloat(pedido.longitud) : null,
                     }
                     setOrderInfo(orderData)
                     setRestauranteData(restaurante)
@@ -140,14 +117,12 @@ const PedidoStatus = () => {
         fetchOrderInfo()
     }, [id, navigate, mpCheckoutReturnParams])
 
-    // Init MercadoPago Bricks SDK
     useLayoutEffect(() => {
         const m = getEffectiveMetodo(orderInfo)
         if (!orderInfo || (m !== 'mercadopago_bricks' && m !== 'mercadopago') || !restauranteData?.mpPublicKey) return
         initMercadoPago(restauranteData.mpPublicKey, { locale: 'es-AR' })
     }, [orderInfo, restauranteData?.mpPublicKey])
 
-    // Poll payment status when verifying
     useEffect(() => {
         if (status !== 'verifying' || !orderInfo) return
         let isChecking = false
@@ -188,7 +163,6 @@ const PedidoStatus = () => {
         }
     }, [status, orderInfo])
 
-    // WebSocket Connection
     useEffect(() => {
         if (!orderInfo) return
         let ws: WebSocket
@@ -239,7 +213,6 @@ const PedidoStatus = () => {
         return () => { if (ws) ws.close() }
     }, [orderInfo])
 
-    // Meta Pixel
     useEffect(() => {
         if (status !== 'confirmed' || !orderInfo || metaPurchaseTracked.current) return
         const total = parseFloat(orderInfo.total)
@@ -247,16 +220,14 @@ const PedidoStatus = () => {
         metaPurchaseTracked.current = true
         try {
             const fbq = (window as any).fbq
-            if (typeof fbq === 'function') {
-                fbq('track', 'Purchase', { currency: 'ARS', value: total })
-            }
-        } catch { }
+            if (typeof fbq === 'function') fbq('track', 'Purchase', { currency: 'ARS', value: total })
+        } catch { /* silent */ }
     }, [status, orderInfo])
 
     if (isLoading) {
         return (
             <div className="min-h-screen bg-background flex items-center justify-center">
-                <Loader2 className="w-10 h-10 text-primary animate-spin" />
+                <Loader2 className="w-8 h-8 text-muted-foreground animate-spin" />
             </div>
         )
     }
@@ -267,10 +238,6 @@ const PedidoStatus = () => {
         try {
             await navigator.clipboard.writeText(aliasToCopy)
             toast.success('Alias copiado', { description: aliasToCopy })
-            // Instagram helper
-            setShowInstagramHelp(true)
-            if (copyAliasTimerRef.current) clearTimeout(copyAliasTimerRef.current)
-            copyAliasTimerRef.current = setTimeout(() => setShowInstagramHelp(false), 15000)
         } catch {
             toast.error('No se pudo copiar el alias')
         }
@@ -354,15 +321,14 @@ const PedidoStatus = () => {
         }
     }
 
-    const { items, tipoPedido, total, pedidoId, deliveryFee, direccion, nombreCliente } = orderInfo
+    const { items, tipoPedido, total, pedidoId, deliveryFee, direccion, nombreCliente, lat, lng } = orderInfo
     const transferenciaAlias = restauranteData?.transferenciaAlias || null
 
     const effectiveMetodo = getEffectiveMetodo(orderInfo)
     const isManualTransferMetodo = effectiveMetodo === 'manual_transfer'
-    const isAutoTransferMetodo =
-        effectiveMetodo === 'transferencia_automatica_cucuru' || effectiveMetodo === 'transferencia_automatica_talo'
     const isMpBricksMetodo = effectiveMetodo === 'mercadopago_bricks' || effectiveMetodo === 'mercadopago'
     const isMpCheckoutMetodo = effectiveMetodo === 'mercadopago_checkout'
+    const isDispatched = pedidoEstado === 'dispatched' || pedidoEstado === 'archived'
 
     const clienteNombreWhatsapp = (nombreCliente && String(nombreCliente).trim()) || 'Cliente'
     const comprobantesRaw =
@@ -370,10 +336,49 @@ const PedidoStatus = () => {
         (restauranteData?.telefono && String(restauranteData.telefono).trim()) || ''
     const whatsappDigits = waMeDigits(comprobantesRaw)
     const whatsappHref = whatsappDigits
-        ? `https://wa.me/${whatsappDigits}?text=${encodeURIComponent(
-            `Hola, te paso el comprobante de mi pedido #${pedidoId} a nombre de ${clienteNombreWhatsapp}.`,
-        )}`
+        ? `https://wa.me/${whatsappDigits}?text=${encodeURIComponent(`Hola, te paso el comprobante de mi pedido #${pedidoId} a nombre de ${clienteNombreWhatsapp}.`)}`
         : null
+
+    const primario = restauranteData?.colorPrimario
+    const secundario = restauranteData?.colorSecundario
+
+    const themeStyles = (primario && secundario) ? (
+        <style dangerouslySetInnerHTML={{
+            __html: `
+            :root {
+                --background: ${secundario};
+                --foreground: ${primario};
+                --card: ${secundario};
+                --card-foreground: ${primario};
+                --popover: ${secundario};
+                --popover-foreground: ${primario};
+                --primary: ${primario};
+                --primary-foreground: ${secundario};
+                --secondary: ${primario}18;
+                --secondary-foreground: ${primario};
+                --muted: ${primario}15;
+                --muted-foreground: ${primario}99;
+                --border: ${primario}30;
+                --input: ${primario}30;
+            }
+            .dark {
+                --background: ${primario};
+                --foreground: ${secundario};
+                --card: ${primario};
+                --card-foreground: ${secundario};
+                --popover: ${primario};
+                --popover-foreground: ${secundario};
+                --primary: ${secundario};
+                --primary-foreground: ${primario};
+                --secondary: ${secundario}18;
+                --secondary-foreground: ${secundario};
+                --muted: ${secundario}15;
+                --muted-foreground: ${secundario}b3;
+                --border: ${secundario}30;
+                --input: ${secundario}30;
+            }
+        `}} />
+    ) : null
 
     const lineSubtotals = orderItemLineSubtotalsFromApi(items || [], {
         orderTotal: typeof total === 'number' ? total : parseFloat(String(total)),
@@ -382,54 +387,68 @@ const PedidoStatus = () => {
         montoDescuento: orderInfo?.montoDescuento,
     })
 
-    const OrderSummary = ({ compact = false }: { compact?: boolean }) => (
-        <div className={`bg-card border border-border rounded-2xl ${compact ? 'p-4' : 'p-5'} shadow-sm space-y-3`}>
-            <h4 className="font-semibold text-xs uppercase tracking-wider text-muted-foreground">Tu pedido</h4>
-            <div className="flex flex-col gap-2.5">
-                {items?.map((item: any, i: number) => (
-                    <div key={item.id ?? i} className="flex justify-between items-start gap-2">
-                        <div className="flex gap-2 min-w-0">
-                            <span className="font-semibold text-primary/90 min-w-4 shrink-0">{item.cantidad}x</span>
-                            <OrderSummaryItemDetails item={item} />
-                        </div>
-                        <span className="text-sm font-medium shrink-0">
-                            ${(lineSubtotals[i] ?? 0).toFixed(2)}
-                        </span>
+    const OrderItems = () => (
+        <div className="relative">
+            <div
+                className="bg-white rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.08),0_8px_24px_rgba(0,0,0,0.14)] overflow-visible"
+                style={{ '--foreground': '#111827', '--muted-foreground': '#6b7280' } as React.CSSProperties}
+            >
+                <div className="px-5 pt-5 pb-1">
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-4">Tu pedido</p>
+                    <div className="divide-y divide-gray-100">
+                        {items?.map((item: any, i: number) => (
+                            <div key={item.id ?? i} className="flex justify-between items-start py-4">
+                                <div className="flex gap-2.5 min-w-0">
+                                    <span className="font-medium text-gray-400 min-w-5 shrink-0 tabular-nums">{item.cantidad}×</span>
+                                    <OrderSummaryItemDetails item={item} />
+                                </div>
+                                <span className="text-sm font-medium shrink-0 ml-4 tabular-nums text-gray-800">
+                                    ${(lineSubtotals[i] ?? 0).toFixed(2)}
+                                </span>
+                            </div>
+                        ))}
                     </div>
-                ))}
-            </div>
-            {tipoPedido === 'delivery' && (
-                <div className="flex justify-between items-center pt-2 border-t border-border/50">
-                    <span className="text-sm text-muted-foreground">Envío</span>
-                    <span className="text-sm font-medium">
-                        {parseFloat(String(deliveryFee ?? 0)) === 0
-                            ? 'GRATIS'
-                            : `$${parseFloat(String(deliveryFee)).toFixed(2)}`}
-                    </span>
+                    {tipoPedido === 'delivery' && (
+                        <div className="flex justify-between items-center py-4 border-t border-gray-100">
+                            <span className="text-sm text-gray-400">Envío</span>
+                            <span className="text-sm font-medium tabular-nums text-gray-800">
+                                {parseFloat(String(deliveryFee ?? 0)) === 0 ? 'Gratis' : `$${parseFloat(String(deliveryFee)).toFixed(2)}`}
+                            </span>
+                        </div>
+                    )}
+                    {orderInfo?.montoDescuento != null && parseFloat(String(orderInfo.montoDescuento)) > 0 && (
+                        <div className="flex justify-between items-center py-4 border-t border-gray-100">
+                            <span className="text-sm text-emerald-500">Descuento</span>
+                            <span className="text-sm text-emerald-500 tabular-nums">-${parseFloat(String(orderInfo.montoDescuento)).toFixed(2)}</span>
+                        </div>
+                    )}
                 </div>
-            )}
-            {orderInfo?.montoDescuento != null && parseFloat(String(orderInfo.montoDescuento)) > 0 && (
-                <div className="flex justify-between items-center pt-2 border-t border-border/50">
-                    <span className="text-sm text-emerald-600 dark:text-emerald-400 font-medium">Código de descuento</span>
-                    <span className="text-sm text-emerald-600 dark:text-emerald-400 font-medium">-${parseFloat(String(orderInfo.montoDescuento)).toFixed(2)}</span>
+                <div className="relative flex items-center my-4">
+                    <div className="absolute -left-3 w-6 h-6 rounded-full bg-background z-10" />
+                    <div className="w-full border-t-2 border-dashed border-gray-200 mx-3" />
+                    <div className="absolute -right-3 w-6 h-6 rounded-full bg-background z-10" />
                 </div>
-            )}
-            <div className="flex justify-between items-center pt-2 border-t-2 border-foreground/15">
-                <span className="font-bold">Total</span>
-                <span className="text-lg font-black">${total?.toFixed(2)}</span>
+                <div className="px-5 pb-5 pt-1">
+                    <div className="flex justify-between items-center">
+                        <span className="font-semibold text-gray-900">Total</span>
+                        <span className="text-xl font-bold tabular-nums text-gray-900">${total?.toFixed(2)}</span>
+                    </div>
+                </div>
             </div>
         </div>
     )
 
     return (
-        <div className="min-h-screen bg-background font-sans selection:bg-primary/20 pb-10 flex flex-col items-center">
-            <div className="w-full fixed top-0 z-20 bg-background/80 backdrop-blur-md border-b border-border/50">
-                <div className="max-w-xl mx-auto px-4 py-3 flex items-center justify-between">
-                    <span className="font-semibold text-lg bg-linear-to-r from-primary to-primary bg-clip-text text-transparent opacity-80">Alfajor con Papas</span>
-                    <div className="flex items-center gap-2">
+        <div className="min-h-screen bg-background font-sans selection:bg-primary/20 pb-24 flex flex-col items-center">
+            {themeStyles}
+
+            <div className="w-full fixed top-0 z-20 bg-background/80 backdrop-blur-xl border-b border-foreground/5">
+                <div className="max-w-xl mx-auto px-5 py-4 flex items-center justify-between">
+                    <span className="font-semibold text-foreground">Alfajor con Papas</span>
+                    <div className="flex items-center gap-4">
                         <button
                             onClick={() => setMisPedidosOpen(true)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-primary hover:bg-primary/10 transition-colors border border-primary/20"
+                            className="flex items-center gap-1.5 text-sm font-medium text-primary"
                         >
                             <Package className="w-3.5 h-3.5" />
                             Mis Pedidos
@@ -439,267 +458,283 @@ const PedidoStatus = () => {
                 </div>
             </div>
 
-            <div className="max-w-xl w-full mx-auto px-5 pt-20 space-y-6 flex-1 flex flex-col">
+            <div className="max-w-xl w-full mx-auto px-5 pt-24 flex-1 flex flex-col">
 
+                {/* ── PENDING PAYMENT ── */}
                 {status === 'pending_payment' && (
-                    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                        <div className="text-center space-y-3">
-                            <div className="mx-auto w-20 h-20 rounded-full bg-secondary flex items-center justify-center border-4 border-background shadow-lg">
-                                <Utensils className="w-10 h-10 text-primary" />
-                            </div>
-                            <div className="space-y-1">
-                                <h1 className="text-2xl font-black tracking-tight">¡Casi listo!</h1>
-                                <p className="text-muted-foreground">Tu pedido #{pedidoId} fue creado.</p>
-                            </div>
+                    <div className="space-y-12 animate-in fade-in duration-400">
+                        <div className="space-y-2 pt-4">
+                            <p className="text-sm text-muted-foreground">Pedido #{pedidoId}</p>
+                            <h1 className="text-4xl font-bold tracking-tight leading-tight">Completá tu pago</h1>
                         </div>
 
-                        <div className="bg-primary/5 border border-primary/20 rounded-2xl p-6 shadow-sm mx-auto max-w-sm w-full space-y-4">
-                            <p className="font-medium text-primary/80 text-center">
+                        <div>
+                            <p className="text-sm text-muted-foreground mb-1.5">
                                 {isMpBricksMetodo || isMpCheckoutMetodo ? 'Total a pagar' : 'Total a transferir'}
                             </p>
-                            <p className="text-4xl font-black text-center">${total?.toFixed(2)}</p>
+                            <p className="text-6xl font-bold tracking-tight tabular-nums">${total?.toFixed(2)}</p>
+                        </div>
 
-                            <div className="pt-2">
-                                {isMpBricksMetodo ? (
-                                    restauranteData?.mpPublicKey ? (
-                                        <div className="w-full relative mt-1 space-y-2">
-                                            {isCreatingMP && (
-                                                <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 backdrop-blur-sm rounded-xl min-h-[120px]">
-                                                    <Loader2 className="w-8 h-8 text-primary animate-spin" />
-                                                </div>
-                                            )}
-                                            <p className="text-xs text-center text-muted-foreground">
-                                                Completá los datos de tu tarjeta. El cobro lo procesa Mercado Pago de forma segura.
-                                            </p>
-                                            <CardPayment
-                                                locale="es-AR"
-                                                initialization={{ amount: Number(total) }}
-                                                customization={{ paymentMethods: { maxInstallments: 12 } }}
-                                                onSubmit={handleCardPaymentSubmit}
-                                                onError={() => {
-                                                    toast.error('No se pudo cargar el formulario de pago', {
-                                                        description: 'Actualizá la página o probá más tarde.'
-                                                    })
-                                                }}
-                                            />
-                                        </div>
-                                    ) : (
-                                        <p className="text-sm text-center text-muted-foreground">
-                                            Este local no tiene habilitado el pago con tarjeta.
-                                        </p>
-                                    )
-                                ) : isMpCheckoutMetodo ? (
-                                    <div className="space-y-3">
-                                        <p className="text-xs text-center text-muted-foreground leading-snug">
-                                            Te redirigimos a Mercado Pago para abonar con dinero en cuenta, tarjeta u otros medios.
-                                        </p>
-                                        <Button
-                                            className="w-full h-14 text-lg font-bold rounded-xl bg-[#009EE3] hover:bg-[#008ed4] text-white"
-                                            onClick={handleMercadoPagoCheckoutRedirect}
-                                            disabled={isCreatingMP}
-                                        >
-                                            {isCreatingMP ? <Loader2 className="w-6 h-6 animate-spin" /> : 'Ir a Mercado Pago'}
-                                        </Button>
-                                    </div>
-                                ) : isManualTransferMetodo ? (
-                                    <>
-                                        <AliasNotice>Transferí el monto exacto al alias del local.</AliasNotice>
-                                        {transferenciaAlias && (
-                                            <Button
-                                                variant="outline"
-                                                className="w-full h-14 text-base font-bold rounded-xl border-2 border-primary/30 mt-3 gap-2"
-                                                onClick={() => handleCopyAlias(transferenciaAlias)}
-                                            >
-                                                <Copy className="w-5 h-5 shrink-0" />
-                                                <span className="truncate">Copiar alias: {transferenciaAlias}</span>
-                                            </Button>
+                        <div>
+                            {isMpBricksMetodo ? (
+                                restauranteData?.mpPublicKey ? (
+                                    <div className="relative space-y-4">
+                                        {isCreatingMP && (
+                                            <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 backdrop-blur-sm rounded-2xl">
+                                                <Loader2 className="w-7 h-7 text-foreground/50 animate-spin" />
+                                            </div>
                                         )}
-                                        {whatsappHref && (
-                                            <Button asChild className="w-full h-14 text-lg font-bold rounded-xl shadow-md mt-4 bg-[#25D366] hover:bg-[#20BD5A] text-white border-0">
-                                                <a href={whatsappHref} target="_blank" rel="noopener noreferrer">Enviar comprobante por WhatsApp</a>
-                                            </Button>
-                                        )}
-                                    </>
-                                ) : null}
-                            </div>
-                        </div>
-
-                        {/* Instagram in-app browser helper */}
-                        {showInstagramHelp && (isAutoTransferMetodo || isManualTransferMetodo) && (
-                            <div className="bg-linear-to-r from-purple-500/10 to-pink-500/10 border border-purple-300/30 rounded-2xl p-4 max-w-sm mx-auto w-full animate-in slide-in-from-bottom-2 duration-300">
-                                <p className="text-xs font-bold text-purple-700 dark:text-purple-300 mb-1 flex items-center gap-1.5">
-                                    <MessageCircle className="w-3.5 h-3.5" />
-                                    ¿Estás en Instagram?
-                                </p>
-                                <p className="text-xs text-muted-foreground leading-snug">
-                                    Instagram bloquea las apps bancarias. Abrí esta página en Chrome/Safari (tocá los
-                                    <strong> ⋮ </strong> o <strong> ⋯ </strong> de arriba a la derecha → "Abrir en navegador") y pegá el alias ahí.
-                                </p>
-                            </div>
-                        )}
-
-                        <OrderSummary />
-                    </div>
-                )}
-
-                {status === 'verifying' && (
-                    <div className="space-y-6 animate-in fade-in zoom-in-95 duration-300">
-                        <div className="text-center space-y-3">
-                            <div className="relative w-20 h-20 flex items-center justify-center mx-auto">
-                                <Loader2 className="w-14 h-14 text-primary animate-spin absolute" />
-                            </div>
-                            <div className="space-y-1">
-                                <h2 className="text-xl font-bold">
-                                    {isMpCheckoutMetodo
-                                        ? 'Confirmando pago en Mercado Pago...'
-                                        : isMpBricksMetodo
-                                            ? 'Confirmando pago con tarjeta...'
-                                            : 'Aguardando transferencia...'}
-                                </h2>
-                                <p className="text-muted-foreground text-sm animate-pulse">
-                                    {isMpCheckoutMetodo
-                                        ? 'Si ya pagaste en Mercado Pago, la acreditación puede tardar unos segundos. No cierres esta pantalla.'
-                                        : isMpBricksMetodo
-                                            ? 'Mercado Pago puede tardar unos segundos. No cierres esta pantalla.'
-                                            : 'Realizá el pago y no cierres esta pantalla'}
-                                </p>
-                            </div>
-                        </div>
-
-                        {(isMpBricksMetodo || isMpCheckoutMetodo) && (
-                            <div className="bg-primary/5 border border-primary/20 rounded-2xl p-5 max-w-sm mx-auto w-full text-center">
-                                <p className="text-xs font-semibold text-primary/80">Monto del pedido</p>
-                                <p className="text-3xl font-black mt-1">${total?.toFixed(2)}</p>
-                            </div>
-                        )}
-
-                        <OrderSummary />
-                    </div>
-                )}
-
-                {status === 'confirmed' && (
-                    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 w-full">
-                        {(pedidoEstado === 'dispatched' || pedidoEstado === 'archived') ? (
-                            <div className="text-center space-y-3">
-                                <div className="mx-auto w-24 h-24 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center mb-2 ring-8 ring-blue-50 dark:ring-blue-900/10">
-                                    <Truck className="w-12 h-12 text-blue-600 dark:text-blue-400" />
-                                </div>
-                                <h1 className="text-3xl font-black tracking-tight text-blue-600 dark:text-blue-500">¡En camino!</h1>
-                                <p className="text-base font-medium text-muted-foreground">Tu pedido #{pedidoId} ya fue despachado</p>
-                            </div>
-                        ) : (
-                            <div className="text-center space-y-3">
-                                <div className="mx-auto w-24 h-24 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mb-2 ring-8 ring-green-50 dark:ring-green-900/10">
-                                    <CheckCircle2 className="w-12 h-12 text-green-600 dark:text-green-400" />
-                                </div>
-                                <h1 className="text-3xl font-black tracking-tight text-green-600 dark:text-green-500">¡Pedido Confirmado!</h1>
-                                <p className="text-base font-medium text-muted-foreground">Ya estamos recibiendo tu pedido en cocina</p>
-                            </div>
-                        )}
-
-                        {/* Tracker visual */}
-                        <div className="bg-card border-2 border-primary/30 rounded-2xl p-5 shadow-md">
-                            <div className="flex items-center w-full gap-0 py-2">
-                                {(['pending', 'dispatched'] as const).map((step, i) => {
-                                    const effectiveEstado = pedidoEstado || 'pending'
-                                    const normalizedEstado = (['preparing', 'ready'].includes(effectiveEstado)) ? 'pending' : (effectiveEstado === 'archived' ? 'dispatched' : effectiveEstado)
-                                    const stepOrder = ['pending', 'dispatched']
-                                    const currentIdx = stepOrder.indexOf(normalizedEstado)
-                                    const allDone = effectiveEstado === 'delivered' || effectiveEstado === 'dispatched' || effectiveEstado === 'archived'
-                                    const isCompleted = allDone || (currentIdx >= 0 && i < currentIdx)
-                                    const isCurrent = !allDone && step === normalizedEstado
-                                    const label = step === 'pending' ? 'Recibido' : 'En camino'
-
-                                    return (
-                                        <div key={step} className="flex items-center flex-1 min-w-0">
-                                            <div className="flex flex-col items-center gap-1.5 flex-1 min-w-0">
-                                                <div className={`
-                                                    w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0 transition-all duration-500
-                                                    ${isCompleted
-                                                        ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/30'
-                                                        : isCurrent
-                                                            ? 'bg-primary text-primary-foreground shadow-md shadow-primary/30 ring-4 ring-primary/20 animate-pulse'
-                                                            : 'bg-muted text-muted-foreground'}
-                                                `}>
-                                                    {isCompleted ? <CheckCircle2 className="w-5 h-5" /> : (i + 1)}
-                                                </div>
-                                                <span className={`text-xs font-semibold text-center leading-tight
-                                                    ${isCurrent ? 'text-primary font-bold' : isCompleted ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}
-                                                `}>
-                                                    {label}
-                                                </span>
-                                            </div>
-                                            {i < 1 && (
-                                                <div className={`h-0.5 flex-1 mx-2 rounded-full -mt-5 transition-all duration-500
-                                                    ${isCompleted ? 'bg-emerald-500' : 'bg-border'}
-                                                `} />
-                                            )}
-                                        </div>
-                                    )
-                                })}
-                            </div>
-                        </div>
-
-                        {/* Info card */}
-                        <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
-                            <div className="p-4">
-                                <div className="flex items-start gap-4 p-4 rounded-2xl bg-secondary/50">
-                                    <div className="p-3 bg-background rounded-full shadow-sm text-primary shrink-0">
-                                        {tipoPedido === 'delivery' ? <Truck className="w-6 h-6" /> : <Store className="w-6 h-6" />}
+                                        <p className="text-sm text-muted-foreground leading-relaxed">
+                                            Completá los datos de tu tarjeta. El cobro lo procesa Mercado Pago de forma segura.
+                                        </p>
+                                        <CardPayment
+                                            locale="es-AR"
+                                            initialization={{ amount: Number(total) }}
+                                            customization={{ paymentMethods: { maxInstallments: 12 } }}
+                                            onSubmit={handleCardPaymentSubmit}
+                                            onError={() => {
+                                                toast.error('No se pudo cargar el formulario de pago', {
+                                                    description: 'Actualizá la página o probá más tarde.'
+                                                })
+                                            }}
+                                        />
                                     </div>
-                                    <div className="space-y-1.5 min-w-0">
-                                        <h3 className="font-bold text-base leading-none">
-                                            {(pedidoEstado === 'dispatched' || pedidoEstado === 'archived')
-                                                ? '¡Tu pedido va en camino!'
-                                                : tipoPedido === 'delivery' ? 'Delivery' : 'Retiro en local'}
-                                        </h3>
-                                        {tipoPedido === 'delivery' && direccion ? (
-                                            <div className="space-y-1">
-                                                <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                                                    <MapPin className="w-3.5 h-3.5 shrink-0" />
-                                                    <span className="truncate">{direccion}</span>
-                                                </div>
-                                            </div>
-                                        ) : tipoPedido === 'takeaway' ? (
-                                            <div className="space-y-1">
-                                                {restauranteData?.direccion && (
-                                                    <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                                                        <MapPin className="w-3.5 h-3.5 shrink-0" />
-                                                        <span className="truncate">{restauranteData.direccion}</span>
-                                                    </div>
-                                                )}
-                                                <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                                                    <Clock className="w-3.5 h-3.5 shrink-0" />
-                                                    <span>Estará listo en ~10 minutos</span>
-                                                </div>
-                                            </div>
-                                        ) : null}
-                                    </div>
-                                </div>
-                            </div>
-
-                            {rapiboyTrackingUrl && (
-                                <div className="p-4 bg-orange-50 dark:bg-orange-950/20 border-t border-orange-100 dark:border-orange-900/30">
-                                    <Button
-                                        className="w-full h-12 rounded-xl font-bold bg-orange-500 hover:bg-orange-600 text-white shadow-md shadow-orange-500/20"
-                                        onClick={() => window.open(rapiboyTrackingUrl, '_blank')}
+                                ) : (
+                                    <p className="text-sm text-muted-foreground">
+                                        Este local no tiene habilitado el pago con tarjeta.
+                                    </p>
+                                )
+                            ) : isMpCheckoutMetodo ? (
+                                <div className="space-y-5">
+                                    <p className="text-sm text-muted-foreground leading-relaxed">
+                                        Te redirigimos a Mercado Pago para abonar con dinero en cuenta, tarjeta u otros medios.
+                                    </p>
+                                    <button
+                                        className="w-full px-5 py-4 bg-[#009EE3] text-white rounded-2xl font-semibold text-base flex items-center justify-center disabled:opacity-50 transition-opacity"
+                                        onClick={handleMercadoPagoCheckoutRedirect}
+                                        disabled={isCreatingMP}
                                     >
-                                        <Truck className="w-5 h-5 mr-2" />
-                                        Rastrear pedido en vivo
-                                    </Button>
+                                        {isCreatingMP ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Ir a Mercado Pago'}
+                                    </button>
                                 </div>
+                            ) : isManualTransferMetodo ? (
+                                <div className="space-y-5">
+                                    <p className="text-sm text-muted-foreground leading-relaxed">
+                                        Transferí el monto exacto al alias del local y envianos el comprobante.
+                                    </p>
+                                    {transferenciaAlias ? (
+                                        <>
+                                            <button
+                                                onClick={() => handleCopyAlias(transferenciaAlias)}
+                                                className="w-full flex items-center justify-between px-5 py-4 bg-foreground/5 rounded-2xl hover:bg-foreground/[0.08] transition-colors text-left"
+                                            >
+                                                <div>
+                                                    <p className="text-xs text-muted-foreground mb-0.5">Alias</p>
+                                                    <p className="font-semibold">{transferenciaAlias}</p>
+                                                </div>
+                                                <Copy className="w-4 h-4 text-muted-foreground shrink-0 ml-3" />
+                                            </button>
+                                            {whatsappHref && (
+                                                <a
+                                                    href={whatsappHref}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="block w-full text-center px-5 py-4 bg-[#25D366] text-white rounded-2xl font-semibold text-base"
+                                                >
+                                                    Enviar comprobante por WhatsApp
+                                                </a>
+                                            )}
+                                        </>
+                                    ) : (
+                                        <p className="text-sm text-muted-foreground">
+                                            Este local no indicó un alias. Contactalos para coordinar el pago.
+                                        </p>
+                                    )}
+                                </div>
+                            ) : null}
+                        </div>
+
+                        <OrderItems />
+                    </div>
+                )}
+
+                {/* ── VERIFYING ── */}
+                {status === 'verifying' && (
+                    <div className="space-y-12 animate-in fade-in duration-300">
+                        <div className="space-y-3 pt-4">
+                            <div className="flex items-center gap-2 mb-3">
+                                <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                                <span className="text-xs text-muted-foreground font-medium uppercase tracking-widest">Verificando</span>
+                            </div>
+                            <p className="text-sm text-muted-foreground">Pedido #{pedidoId}</p>
+                            <h1 className="text-4xl font-bold tracking-tight leading-tight">
+                                {isMpCheckoutMetodo
+                                    ? 'Confirmando con Mercado Pago...'
+                                    : isMpBricksMetodo
+                                        ? 'Confirmando pago con tarjeta...'
+                                        : 'Aguardando transferencia...'}
+                            </h1>
+                            <p className="text-muted-foreground text-sm leading-relaxed pt-1">
+                                {isMpCheckoutMetodo || isMpBricksMetodo
+                                    ? 'La acreditación puede tardar unos segundos. No cierres esta pantalla.'
+                                    : 'Realizá el pago y no cierres esta pantalla.'}
+                            </p>
+                        </div>
+
+                        <OrderItems />
+                    </div>
+                )}
+
+                {/* ── CONFIRMED ── */}
+                {status === 'confirmed' && (
+                    <div className="space-y-12 animate-in fade-in duration-700 w-full">
+                        <div className="space-y-3 pt-4">
+                            {isDispatched ? (
+                                <>
+                                    <Truck className="w-10 h-10 text-blue-500 mb-3" />
+                                    <p className="text-sm text-muted-foreground">Pedido #{pedidoId}</p>
+                                    <h1 className="text-4xl font-bold tracking-tight text-blue-500">En camino</h1>
+                                    <p className="text-muted-foreground text-sm leading-relaxed">
+                                        Tu pedido ya fue despachado y está en camino.
+                                    </p>
+                                </>
+                            ) : (
+                                <>
+                                    <CheckCircle2 className="w-10 h-10 text-emerald-500 mb-3" />
+                                    <p className="text-sm text-muted-foreground">Pedido #{pedidoId}</p>
+                                    <h1 className="text-4xl font-bold tracking-tight">Pedido confirmado</h1>
+                                    <p className="text-muted-foreground text-sm leading-relaxed">
+                                        Ya estamos preparando tu pedido.
+                                    </p>
+                                </>
                             )}
                         </div>
 
-                        <OrderSummary />
+                        <div className="space-y-7">
+                            {/* Delivery / Takeaway */}
+                            {tipoPedido === 'delivery' && direccion ? (
+                                <div className="space-y-3">
+                                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
+                                        {isDispatched ? 'En camino' : 'Dirección de entrega'}
+                                    </p>
+                                    <AddressMapPreview lat={lat} lng={lng} />
+                                    <div className="space-y-1 px-0.5">
+                                        <p className="text-sm text-foreground font-medium flex items-center gap-1.5">
+                                            <MapPin className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                                            {direccion}
+                                        </p>
+                                        {isDispatched && (
+                                            <p className="text-xs text-muted-foreground pl-5">El repartidor se dirige a tu dirección.</p>
+                                        )}
+                                    </div>
+                                </div>
+                            ) : tipoPedido === 'takeaway' ? (
+                                <div className="flex items-start gap-4">
+                                    <div className="w-10 h-10 flex items-center justify-center shrink-0 mt-0.5">
+                                        <Store className="w-7 h-7 text-foreground/40" />
+                                    </div>
+                                    <div className="space-y-1 pt-1.5">
+                                        <p className="font-semibold text-sm">Retiro en local</p>
+                                        <div className="space-y-0.5">
+                                            {restauranteData?.direccion && (
+                                                <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+                                                    <MapPin className="w-3.5 h-3.5 shrink-0" />
+                                                    {restauranteData.direccion}
+                                                </p>
+                                            )}
+                                            <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+                                                <Clock className="w-3.5 h-3.5 shrink-0" />
+                                                Estará listo en ~10 minutos
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : null}
 
-                        <Button
-                            variant="outline"
-                            className="w-full h-12 rounded-xl font-semibold"
+                            {/* Payment detail — hidden once dispatched */}
+                            {!['dispatched', 'delivered', 'archived'].includes(pedidoEstado || '') && (
+                                <>
+                                    {isManualTransferMetodo && transferenciaAlias && (
+                                        <div className="flex items-start gap-4">
+                                            <div className="w-10 h-10 flex items-center justify-center shrink-0 mt-0.5">
+                                                <Copy className="w-7 h-7 text-foreground/40" />
+                                            </div>
+                                            <div className="space-y-2 flex-1 pt-1.5">
+                                                <p className="font-semibold text-sm">Alias del local</p>
+                                                <button
+                                                    className="w-full flex items-center justify-between px-4 py-3 bg-foreground/5 rounded-xl hover:bg-foreground/[0.08] transition-colors text-left"
+                                                    onClick={() => handleCopyAlias(transferenciaAlias)}
+                                                >
+                                                    <p className="text-sm font-medium">{transferenciaAlias}</p>
+                                                    <Copy className="w-3.5 h-3.5 text-muted-foreground ml-3 shrink-0" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {(effectiveMetodo === 'cash' || orderInfo.metodoPago === 'efectivo') && (
+                                        <div className="flex items-start gap-4">
+                                            <div className="w-10 h-10 flex items-center justify-center shrink-0 mt-0.5">
+                                                <span className="text-2xl font-semibold text-emerald-500">$</span>
+                                            </div>
+                                            <div className="pt-1.5">
+                                                <p className="font-semibold text-sm">Efectivo al recibir</p>
+                                                <p className="text-sm text-muted-foreground">Abona el importe exacto al recibir tu pedido.</p>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {isMpCheckoutMetodo && (
+                                        <div className="flex items-start gap-4">
+                                            <div className="w-10 h-10 flex items-center justify-center shrink-0 mt-0.5">
+                                                <span className="text-sm font-bold text-[#009EE3]">MP</span>
+                                            </div>
+                                            <div className="pt-1.5">
+                                                <p className="font-semibold text-sm">Mercado Pago</p>
+                                                <p className="text-sm text-muted-foreground">Pago acreditado vía Mercado Pago Checkout.</p>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {isMpBricksMetodo && (
+                                        <div className="flex items-start gap-4">
+                                            <div className="w-10 h-10 flex items-center justify-center shrink-0 mt-0.5">
+                                                <span className="text-sm font-bold text-[#009EE3]">MP</span>
+                                            </div>
+                                            <div className="pt-1.5">
+                                                <p className="font-semibold text-sm">Pago con tarjeta</p>
+                                                <p className="text-sm text-muted-foreground">El cobro fue procesado por Mercado Pago.</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+
+                            {/* Rapiboy live tracking */}
+                            {rapiboyTrackingUrl && (
+                                <button
+                                    className="w-full flex items-center gap-4 px-5 py-4 bg-orange-500/10 rounded-2xl hover:bg-orange-500/15 transition-colors text-left"
+                                    onClick={() => window.open(rapiboyTrackingUrl, '_blank')}
+                                >
+                                    <div className="w-10 h-10 flex items-center justify-center shrink-0">
+                                        <Truck className="w-7 h-7 text-orange-500" />
+                                    </div>
+                                    <div>
+                                        <p className="font-semibold text-sm">Rastrear en vivo</p>
+                                        <p className="text-xs text-muted-foreground">Seguí el recorrido de tu pedido de Rapiboy</p>
+                                    </div>
+                                </button>
+                            )}
+                        </div>
+
+                        <OrderItems />
+
+                        <button
+                            className="w-full px-5 py-4 border border-border rounded-2xl font-semibold text-sm hover:bg-foreground/5 transition-colors"
                             onClick={() => navigate('/')}
                         >
                             Volver al inicio
-                        </Button>
+                        </button>
                     </div>
                 )}
             </div>
