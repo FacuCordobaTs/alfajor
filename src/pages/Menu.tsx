@@ -121,9 +121,8 @@ const Menu = () => {
         const data = await res.json()
         if (data.success && data.data?.horarios) {
           setHorarios(data.data.horarios)
-          // setEstadoAbierto(checkIsOpen(data.data.horarios))
-
-          setEstadoAbierto({ abierto: true, proximaApertura: null })
+          setEstadoAbierto(checkIsOpen(data.data.horarios))
+          // setEstadoAbierto({ abierto: true, proximaApertura: null })
         }
       } catch { /* ignore */ }
     }
