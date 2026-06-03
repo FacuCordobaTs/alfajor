@@ -595,16 +595,7 @@ const Menu = () => {
             </button>
           )}
         </section>
-
-        {/* --- MENSAJE EXPLICATIVO --- */}
-        <section className="space-y-3 py-4 px-4 bg-secondary/50 rounded-lg">
-          <p className="text-sm font-medium">
-            {restaurante?.soloCartaDigital
-              ? 'Arma tu pedido aquí para leerle fácilmente al mozo lo que elegiste cuando se acerque a tu mesa.'
-              : 'Selecciona los productos y confirma el pedido para que el mozo pueda atender tu mesa.'}
-          </p>
-        </section>
-
+        
         {/* --- CATEGORÍAS --- */}
         {categorias.length > 1 && (
           <section className="space-y-3 pt-2">
