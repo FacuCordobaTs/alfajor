@@ -112,21 +112,22 @@ const Menu = () => {
 
   // Fetch horarios para check de apertura/cierre
   useEffect(() => {
-    // const username = restaurante?.username || 'alfajor'
-    // if (!username) return
-    // const fetchHorarios = async () => {
-    //   try {
-    //     const url = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
-    //     const res = await fetch(`${url}/public/restaurante/${username}`)
-    //     const data = await res.json()
-    //     if (data.success && data.data?.horarios) {
-    //       setHorarios(data.data.horarios)
-    //       setEstadoAbierto(checkIsOpen(data.data.horarios))
-    //     }
-    //   } catch { /* ignore */ }
-    // }
-    // fetchHorarios()
-    setEstadoAbierto({ abierto: true, proximaApertura: null })
+    const username = restaurante?.username || 'alfajor'
+    if (!username) return
+    const fetchHorarios = async () => {
+      try {
+        const url = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+        const res = await fetch(`${url}/public/restaurante/${username}`)
+        const data = await res.json()
+        if (data.success && data.data?.horarios) {
+          setHorarios(data.data.horarios)
+          // setEstadoAbierto(checkIsOpen(data.data.horarios))
+
+          setEstadoAbierto({ abierto: true, proximaApertura: null })
+        }
+      } catch { /* ignore */ }
+    }
+    fetchHorarios()
   }, [restaurante?.username])
 
   useEffect(() => {
