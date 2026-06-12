@@ -202,6 +202,19 @@ const MenuDelivery = () => {
 
     const submitOrder = useCallback(async (data: any) => {
         if (!data || !restaurante) return
+
+        const estadoActual = checkIsOpen(horarios)
+        if (!estadoActual.abierto && !restaurante?.permitirPedidosProgramados) {
+            toast.error('El restaurante está cerrado', {
+                description: estadoActual.proximaApertura
+                    ? `Abre ${estadoActual.proximaApertura}`
+                    : 'El restaurante no está disponible en este momento.',
+                duration: 5000
+            })
+            isSubmittingRef.current = false
+            return
+        }
+
         setSubmittingOrder(true)
         try {
             const url = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
@@ -275,7 +288,7 @@ const MenuDelivery = () => {
             setSubmittingOrder(false)
             isSubmittingRef.current = false
         }
-    }, [restaurante, username, cartItems, navigate])
+    }, [restaurante, username, cartItems, navigate, horarios])
 
     const handleCheckoutMessage = useCallback((msg: any) => {
         if (msg.type === 'INICIAR_EDICION_CHECKOUT') {
