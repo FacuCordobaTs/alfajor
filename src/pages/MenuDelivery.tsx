@@ -852,6 +852,7 @@ const MenuDelivery = () => {
                             restauranteDireccion={restaurante?.direccion ?? undefined}
                             onTituloChange={setTituloCheckout}
                             labelGuardar="Confirmar y pedir"
+                            localCerrado={!estadoAbierto.abierto}
                         />
                     ) : cartItems.length === 0 ? (
                         <div className="flex flex-col items-center justify-center text-center gap-4 opacity-60 px-5 py-12">
