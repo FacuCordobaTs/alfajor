@@ -279,8 +279,9 @@ export function CheckoutDeliveryGrupal({
       toast.error('Seleccioná un local de retiro')
       return
     }
-    if (programarPedido && !horarioProgramado.trim()) {
-      toast.error('Ingresa el horario para tu pedido')
+    const requiereHorarioProgramado = usarFranjas ? franjaObligatoria : programarPedido
+    if (requiereHorarioProgramado && !horarioProgramado.trim()) {
+      toast.error(usarFranjas ? 'Seleccioná un horario de entrega' : 'Ingresa el horario para tu pedido')
       return
     }
 
@@ -309,7 +310,7 @@ export function CheckoutDeliveryGrupal({
       codigoDescuentoId: codigoDescuentoId ?? null,
       montoDescuento,
       metodoPago: metodoPago ?? null,
-      horarioProgramado: programarPedido ? horarioProgramado : '',
+      horarioProgramado: usarFranjas ? horarioProgramado : (programarPedido ? horarioProgramado : ''),
       sucursalId,
     }
 
@@ -364,7 +365,8 @@ export function CheckoutDeliveryGrupal({
       }
     }
     if (k === 'extras') {
-      if (programarPedido && !horarioProgramado.trim()) { toast.error('Ingresa el horario para tu pedido'); return false }
+      const requiere = usarFranjas ? franjaObligatoria : programarPedido
+      if (requiere && !horarioProgramado.trim()) { toast.error(usarFranjas ? 'Seleccioná un horario de entrega' : 'Ingresa el horario para tu pedido'); return false }
     }
     return true
   }
@@ -408,6 +410,8 @@ export function CheckoutDeliveryGrupal({
 
   const delEn = restauranteData ? restauranteData.deliveryEnabled !== false : true
   const tkEn = restauranteData ? restauranteData.takeawayEnabled !== false : true
+  const usarFranjas = !!restauranteData?.usarFranjasHorario
+  const franjaObligatoria = usarFranjas && !!restauranteData?.soloPedidosProgramados
 
   const inputCls = "h-12 rounded-2xl bg-secondary/60 border-0 shadow-none ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 text-base px-4"
 
@@ -581,39 +585,57 @@ export function CheckoutDeliveryGrupal({
       </div>
 
       {restauranteData?.permitirPedidosProgramados && (
-        <div className="space-y-2">
-          <button
-            type="button"
-            className={`w-full flex items-center justify-between px-4 py-3.5 rounded-2xl transition-all duration-200 ${programarPedido ? 'bg-primary/10' : 'bg-secondary/50 hover:bg-secondary/80'}`}
-            onClick={() => { setProgramarPedido(!programarPedido); if (programarPedido) setHorarioProgramado('') }}
-          >
-            <div className="flex items-center gap-3 text-left">
-              <Clock className={`w-4 h-4 shrink-0 ${programarPedido ? 'text-primary' : 'text-muted-foreground'}`} />
-              <div>
-                <p className="text-sm font-semibold">Programar para después</p>
-                <p className="text-xs text-muted-foreground">Indicá a qué hora querés recibirlo</p>
-              </div>
-            </div>
-            {programarPedido && <Check className="w-4 h-4 text-primary shrink-0" />}
-          </button>
-          {programarPedido && (
-            <div className="animate-in fade-in slide-in-from-top-2 space-y-2">
-              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">¿A qué hora?</Label>
-              {restauranteData?.usarFranjasHorario && franjas.length > 0 ? (
-                <div className="grid grid-cols-2 gap-2">
-                  {franjas.map(f => (
+        usarFranjas ? (
+          <div className="space-y-2">
+            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">
+              Horario de entrega {franjaObligatoria && <span className="text-destructive">*</span>}
+            </Label>
+            <p className="text-xs text-muted-foreground px-1">
+              {franjaObligatoria ? 'Seleccioná un horario para continuar con tu pedido' : 'Elegí cuándo querés recibirlo (opcional)'}
+            </p>
+            {franjas.length > 0 ? (
+              <div className="grid grid-cols-2 gap-2">
+                {franjas.map(f => {
+                  const valor = `${f.horaInicio}-${f.horaFin}`
+                  const selected = horarioProgramado === valor
+                  return (
                     <button
                       key={f.id}
                       type="button"
-                      onClick={() => setHorarioProgramado(`${f.horaInicio}-${f.horaFin}`)}
-                      className={`flex flex-col items-center justify-center p-3 rounded-2xl transition-all duration-200 ${horarioProgramado === `${f.horaInicio}-${f.horaFin}` ? 'bg-primary/10' : 'bg-secondary/50 hover:bg-secondary/80'}`}
+                      onClick={() => setHorarioProgramado(selected && !franjaObligatoria ? '' : valor)}
+                      className={`flex flex-col items-center justify-center p-3 rounded-2xl transition-all duration-200 ${selected ? 'bg-primary/10' : 'bg-secondary/50 hover:bg-secondary/80'}`}
                     >
-                      <span className={`font-semibold text-sm ${horarioProgramado === `${f.horaInicio}-${f.horaFin}` ? 'text-primary' : 'text-foreground'}`}>{f.nombre}</span>
+                      <span className={`font-semibold text-sm ${selected ? 'text-primary' : 'text-foreground'}`}>{f.nombre}</span>
                       <span className="text-xs text-muted-foreground">{f.horaInicio} – {f.horaFin}</span>
                     </button>
-                  ))}
+                  )
+                })}
+              </div>
+            ) : (
+              <div className="px-4 py-3 bg-secondary/50 rounded-2xl text-sm text-muted-foreground">
+                No hay horarios disponibles por el momento.
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <button
+              type="button"
+              className={`w-full flex items-center justify-between px-4 py-3.5 rounded-2xl transition-all duration-200 ${programarPedido ? 'bg-primary/10' : 'bg-secondary/50 hover:bg-secondary/80'}`}
+              onClick={() => { setProgramarPedido(!programarPedido); if (programarPedido) setHorarioProgramado('') }}
+            >
+              <div className="flex items-center gap-3 text-left">
+                <Clock className={`w-4 h-4 shrink-0 ${programarPedido ? 'text-primary' : 'text-muted-foreground'}`} />
+                <div>
+                  <p className="text-sm font-semibold">Programar para después</p>
+                  <p className="text-xs text-muted-foreground">Indicá a qué hora querés recibirlo</p>
                 </div>
-              ) : (
+              </div>
+              {programarPedido && <Check className="w-4 h-4 text-primary shrink-0" />}
+            </button>
+            {programarPedido && (
+              <div className="animate-in fade-in slide-in-from-top-2 space-y-2">
+                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">¿A qué hora?</Label>
                 <input
                   id="horario-grupal"
                   type="time"
@@ -621,10 +643,10 @@ export function CheckoutDeliveryGrupal({
                   value={horarioProgramado}
                   onChange={e => setHorarioProgramado(e.target.value)}
                 />
-              )}
-            </div>
-          )}
-        </div>
+              </div>
+            )}
+          </div>
+        )
       )}
 
       {codigoDescuentoEnabled && (
