@@ -4,7 +4,7 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from 'sonner'
-import { MapPin, Store, Truck, AlertTriangle, Loader2, Pencil, X, Tag, Home, Building2, Clock, CreditCard, Wallet, Banknote, ChevronLeft, Check } from 'lucide-react'
+import { MapPin, Store, Truck, AlertTriangle, Loader2, Pencil, X, Tag, Home, Building2, Clock, CreditCard, Wallet, Banknote, ChevronLeft, Check, Zap } from 'lucide-react'
 import { AddressAutocomplete } from '@/components/AddressAutocomplete'
 import { AddressMapPreview } from '@/components/AddressMapPreview'
 import type { CheckoutDeliveryData, CheckoutEditSemaphore } from '@/store/mesaStore'
@@ -598,8 +598,20 @@ export function CheckoutDeliveryGrupal({
               Horario de entrega {franjaObligatoria && <span className="text-destructive">*</span>}
             </Label>
             <p className="text-xs text-muted-foreground px-1">
-              {franjaObligatoria ? 'Seleccioná un horario para continuar con tu pedido' : 'Elegí cuándo querés recibirlo (opcional)'}
+              {franjaObligatoria ? 'Seleccioná un horario para continuar con tu pedido' : 'Elegí cuándo querés recibirlo'}
             </p>
+            {/* "Lo antes posible" solo cuando el local está abierto y se puede pedir para ahora */}
+            {!programacionObligatoria && (
+              <button
+                type="button"
+                onClick={() => setHorarioProgramado('')}
+                className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all duration-200 ${horarioProgramado === '' ? 'bg-primary/10' : 'bg-secondary/50 hover:bg-secondary/80'}`}
+              >
+                <Zap className={`w-4 h-4 shrink-0 ${horarioProgramado === '' ? 'text-primary' : 'text-muted-foreground'}`} />
+                <span className={`text-sm font-semibold ${horarioProgramado === '' ? 'text-primary' : 'text-foreground'}`}>Lo antes posible</span>
+                {horarioProgramado === '' && <Check className="w-4 h-4 text-primary shrink-0 ml-auto" />}
+              </button>
+            )}
             {franjas.length > 0 ? (
               <div className="grid grid-cols-2 gap-2">
                 {franjas.map(f => {
@@ -644,20 +656,25 @@ export function CheckoutDeliveryGrupal({
           </div>
         ) : (
           <div className="space-y-2">
-            <button
-              type="button"
-              className={`w-full flex items-center justify-between px-4 py-3.5 rounded-2xl transition-all duration-200 ${programarPedido ? 'bg-primary/10' : 'bg-secondary/50 hover:bg-secondary/80'}`}
-              onClick={() => { setProgramarPedido(!programarPedido); if (programarPedido) setHorarioProgramado('') }}
-            >
-              <div className="flex items-center gap-3 text-left">
-                <Clock className={`w-4 h-4 shrink-0 ${programarPedido ? 'text-primary' : 'text-muted-foreground'}`} />
-                <div>
-                  <p className="text-sm font-semibold">Programar para después</p>
-                  <p className="text-xs text-muted-foreground">Indicá a qué hora querés recibirlo</p>
-                </div>
-              </div>
-              {programarPedido && <Check className="w-4 h-4 text-primary shrink-0" />}
-            </button>
+            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">¿Cuándo lo querés?</Label>
+            <div className="bg-secondary/60 rounded-2xl p-1 grid grid-cols-2 gap-1">
+              <button
+                type="button"
+                className={`flex items-center justify-center gap-2 py-4 rounded-xl transition-all duration-200 cursor-pointer ${!programarPedido ? 'bg-background shadow-sm' : ''}`}
+                onClick={() => { setProgramarPedido(false); setHorarioProgramado('') }}
+              >
+                <Zap className={`w-4 h-4 ${!programarPedido ? 'text-primary' : 'text-muted-foreground'}`} />
+                <span className={`text-sm font-semibold ${!programarPedido ? 'text-foreground' : 'text-muted-foreground'}`}>Lo antes posible</span>
+              </button>
+              <button
+                type="button"
+                className={`flex items-center justify-center gap-2 py-4 rounded-xl transition-all duration-200 cursor-pointer ${programarPedido ? 'bg-background shadow-sm' : ''}`}
+                onClick={() => setProgramarPedido(true)}
+              >
+                <Clock className={`w-4 h-4 ${programarPedido ? 'text-primary' : 'text-muted-foreground'}`} />
+                <span className={`text-sm font-semibold ${programarPedido ? 'text-foreground' : 'text-muted-foreground'}`}>Programar</span>
+              </button>
+            </div>
             {programarPedido && (
               <div className="animate-in fade-in slide-in-from-top-2 space-y-2">
                 <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">¿A qué hora?</Label>
