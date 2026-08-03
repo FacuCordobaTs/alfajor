@@ -8,7 +8,7 @@ import { mesaApi } from '@/lib/api'
 import { toast } from 'sonner'
 import {
   Trash2, Maximize2, Minimize2,
-  Wifi, WifiOff, Package, ChefHat, UtensilsCrossed, Receipt, Utensils,
+  Wifi, WifiOff, Package, UtensilsCrossed, Receipt, Utensils,
   Check, X, Users, Loader2, Share2, Clock
 } from 'lucide-react'
 import { ProductDetailDrawer } from '@/components/ProductDetailDrawer'
