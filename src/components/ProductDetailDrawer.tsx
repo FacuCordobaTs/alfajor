@@ -240,7 +240,9 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
   const drawerHeight = stage === 'select' ? stage1Height : stage2Height
 
   const rowBtn = 'flex items-center justify-between rounded-2xl px-4 py-3.5 text-left transition-colors'
-  const navBtn = 'flex h-9 w-9 items-center justify-center rounded-full bg-black/35 text-white backdrop-blur-md transition-all active:scale-90 active:bg-black/55'
+  // Flechas de navegación que flanquean el botón principal — mismo alto/redondeo que el
+  // botón, en tono secundario para no competir con la acción primaria.
+  const navFlankBtn = 'flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-secondary text-foreground transition-all active:scale-[0.98] disabled:opacity-35 disabled:active:scale-100'
 
   return (
     <Drawer open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
@@ -275,38 +277,6 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                       >
                         {currentIndex + 1} / {lista.length}
                       </motion.div>
-                    )}
-                    {!sinImagen && hasPrev && (
-                      <motion.button
-                        key="prev"
-                        type="button"
-                        onClick={() => irA(-1)}
-                        initial={{ opacity: 0, x: -8 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: -8 }}
-                        transition={{ duration: 0.2 }}
-                        aria-label="Producto anterior"
-                        className={cn(navBtn, 'absolute left-3 z-40')}
-                        style={{ top: IMG_H / 2 - 18 }}
-                      >
-                        <ChevronLeft className="h-5 w-5" />
-                      </motion.button>
-                    )}
-                    {!sinImagen && hasNext && (
-                      <motion.button
-                        key="next"
-                        type="button"
-                        onClick={() => irA(1)}
-                        initial={{ opacity: 0, x: 8 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: 8 }}
-                        transition={{ duration: 0.2 }}
-                        aria-label="Producto siguiente"
-                        className={cn(navBtn, 'absolute right-3 z-40')}
-                        style={{ top: IMG_H / 2 - 18 }}
-                      >
-                        <ChevronRight className="h-5 w-5" />
-                      </motion.button>
                     )}
                   </>
                 )}
@@ -653,13 +623,26 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                     </AnimatePresence>
                   </div>
 
-                  {/* Botón principal — muta entre Continuar y Agregar */}
+                  {/* Botón principal — muta entre Continuar y Agregar.
+                      Cuando se puede navegar entre productos, lo flanquean flechas anterior/siguiente. */}
                   <div className="shrink-0 space-y-2 px-6 pb-7 pt-2">
+                   <div className="flex items-stretch gap-2">
+                    {puedeNavegar && (
+                      <button
+                        type="button"
+                        onClick={() => irA(-1)}
+                        disabled={!hasPrev}
+                        aria-label="Producto anterior"
+                        className={navFlankBtn}
+                      >
+                        <ChevronLeft className="h-5 w-5" />
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={handlePrimary}
                       className={cn(
-                        'relative h-14 w-full overflow-hidden rounded-2xl text-[17px] font-semibold transition-all duration-300 active:scale-[0.98]',
+                        'relative h-14 min-w-0 flex-1 overflow-hidden rounded-2xl text-[17px] font-semibold transition-all duration-300 active:scale-[0.98]',
                         addCount > 0 ? 'bg-emerald-500 text-white' : 'bg-primary text-primary-foreground'
                       )}
                     >
@@ -711,6 +694,18 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                         )}
                       </AnimatePresence>
                     </button>
+                    {puedeNavegar && (
+                      <button
+                        type="button"
+                        onClick={() => irA(1)}
+                        disabled={!hasNext}
+                        aria-label="Producto siguiente"
+                        className={navFlankBtn}
+                      >
+                        <ChevronRight className="h-5 w-5" />
+                      </button>
+                    )}
+                   </div>
                     {addCount > 0 && (
                       <motion.button
                         type="button"
