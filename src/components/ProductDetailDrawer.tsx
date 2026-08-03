@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Drawer, DrawerContent } from '@/components/ui/drawer'
-import { motion, AnimatePresence } from 'motion/react'
-import { Check, ChevronLeft, Clock } from 'lucide-react'
+import { motion, AnimatePresence, type PanInfo } from 'motion/react'
+import { Check, ChevronLeft, ChevronRight, Clock } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface Ingrediente {
@@ -33,6 +33,11 @@ interface ProductDetailDrawerProps {
   open: boolean
   onClose: () => void
   onAddToOrder: (product: Product, quantity: number, ingredientesExcluidos?: number[], agregados?: Agregado[]) => void
+  /** Lista ordenada de productos "hermanos" navegables desde el detalle. Si tiene ≥2
+   *  items, se puede pasar al producto anterior/siguiente sin cerrar el drawer. */
+  siblings?: Product[]
+  /** Se llama con el producto destino al navegar (el padre actualiza el producto abierto). */
+  onNavigate?: (product: Product) => void
 }
 
 function formatTimeLeft(fechaFin: string | Date | null): string | null {
@@ -48,15 +53,38 @@ function formatTimeLeft(fechaFin: string | Date | null): string | null {
   return `${days}d`
 }
 
+/** Altura fija de la imagen (px). Ahora es idéntica en ambas etapas. */
 const IMG_H = 220
 const SPRING = { type: 'spring' as const, stiffness: 320, damping: 34 }
+/** Transición del crossfade deslizante entre el contenido de las dos etapas. */
+const SLIDE = { type: 'tween' as const, duration: 0.34, ease: [0.22, 1, 0.36, 1] as const }
+/** Transición del deslizamiento horizontal al pasar de un producto a otro. */
+const NAV_SLIDE = { type: 'tween' as const, duration: 0.42, ease: [0.32, 0.72, 0, 1] as const }
 const STAGE1_BASE_H = 390
 const CARNE_ROW_H = 58
 const CARNE_LABEL_H = 44
+// Base etapa 2: imagen + padding de la hoja + botón agregar
+const STAGE2_BASE_H = IMG_H + 168
+
+// ── Variante SIN IMAGEN: diseño plano (sin foto ni hoja superpuesta) ──
+// Espeja el card text-only del menú: nombre/precio en texto foreground, todo al ras.
+// Alto del header de texto (badges + nombre + precio) que reemplaza a la imagen.
+const FLAT_HEADER_H = 120
+// Bases equivalentes a las de arriba pero descontando la imagen y sumando el header de texto.
+const FLAT_STAGE1_BASE_H = STAGE1_BASE_H - IMG_H + FLAT_HEADER_H
+const FLAT_STAGE2_BASE_H = STAGE2_BASE_H - IMG_H + FLAT_HEADER_H
 
 type MedallonKey = 'simple' | 'doble' | 'triple'
 
-export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: ProductDetailDrawerProps) {
+// Al navegar entre productos, la tarjeta entrante llega desde el lado del gesto y la
+// saliente se va con un leve parallax. `dir` = +1 (siguiente) / -1 (anterior).
+const navVariants = {
+  enter: (dir: number) => ({ x: dir >= 0 ? '100%' : '-100%', opacity: 0.35 }),
+  center: { x: '0%', opacity: 1 },
+  exit: (dir: number) => ({ x: dir >= 0 ? '-42%' : '42%', opacity: 0 }),
+}
+
+export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, siblings, onNavigate }: ProductDetailDrawerProps) {
   const [stage, setStage] = useState<'select' | 'extras'>('select')
   const [quantity] = useState(1)
   const [ingredientesExcluidos, setIngredientesExcluidos] = useState<number[]>([])
@@ -65,6 +93,8 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
   const [veggieSeleccionado, setVeggieSeleccionado] = useState(false)
   const [addCount, setAddCount] = useState(0)
   const [showCounter, setShowCounter] = useState(false)
+  // Dirección del último salto entre productos (alimenta la animación de deslizamiento).
+  const [navDir, setNavDir] = useState(0)
 
   useEffect(() => {
     if (open && product) {
@@ -77,6 +107,42 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
       setShowCounter(false)
     }
   }, [open, product?.id])
+
+  // ── Navegación entre productos ──
+  const lista = siblings ?? []
+  const currentIndex = product ? lista.findIndex(p => p.id === product.id) : -1
+  const hasPrev = currentIndex > 0
+  const hasNext = currentIndex >= 0 && currentIndex < lista.length - 1
+  // Sólo se navega desde la etapa de selección y antes de agregar nada al pedido.
+  const puedeNavegar = stage === 'select' && addCount === 0 && currentIndex >= 0 && lista.length > 1
+
+  const irA = (dir: number) => {
+    if (!puedeNavegar) return
+    const target = lista[currentIndex + dir]
+    if (!target) return
+    setNavDir(dir)
+    onNavigate?.(target)
+  }
+
+  // Flechas del teclado en desktop.
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight' && hasNext) { e.preventDefault(); irA(1) }
+      else if (e.key === 'ArrowLeft' && hasPrev) { e.preventDefault(); irA(-1) }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, puedeNavegar, currentIndex, lista])
+
+  // Swipe horizontal sobre la foto (área del header) para saltar de producto.
+  const onHeaderDragEnd = (_e: unknown, info: PanInfo) => {
+    const off = info.offset.x
+    const vel = info.velocity.x
+    if ((off < -55 || vel < -450) && hasNext) irA(1)
+    else if ((off > 55 || vel > 450) && hasPrev) irA(-1)
+  }
 
   // Classify agregados into carne (shown in stage 1) and extras (shown in stage 2)
   const carneAgregados = product?.agregados?.filter(a =>
@@ -94,6 +160,8 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
   const hasCarneSection = tieneCarneSelector || !!opcionVeggie
   const tieneIngredientes = !!(product?.ingredientes && product.ingredientes.length > 0)
   const needsStage2 = tieneIngredientes || extrasAgregados.length > 0
+  // Producto sin foto → diseño plano (espeja el card text-only del menú).
+  const sinImagen = !product?.imagenUrl
 
   const toggleIngrediente = (id: number) =>
     setIngredientesExcluidos(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
@@ -149,17 +217,30 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
     }
   }
 
+  const handlePrimary = () => (stage === 'select' ? handleContinue() : handleAdd())
+
   const timeLeft = tieneDescuento ? formatTimeLeft(product?.descuentoFechaFin ?? null) : null
 
   // Height calculation
   const vh = typeof window !== 'undefined' ? window.innerHeight : 800
+  const stage1Base = sinImagen ? FLAT_STAGE1_BASE_H : STAGE1_BASE_H
+  const stage2Base = sinImagen ? FLAT_STAGE2_BASE_H : STAGE2_BASE_H
   const carneSectionRows = (tieneCarneSelector ? 3 : 0) + (opcionVeggie ? 1 : 0) // Simple + Doble + Triple + Veggie
   const stage1Height = Math.min(
-    STAGE1_BASE_H + (hasCarneSection ? CARNE_LABEL_H + carneSectionRows * CARNE_ROW_H : 0),
+    stage1Base + (hasCarneSection ? CARNE_LABEL_H + carneSectionRows * CARNE_ROW_H : 0),
     Math.round(vh * 0.85)
   )
-  const stage2Height = Math.round(vh * 0.92)
+  // Etapa 2: crece para mostrar ingredientes + extras, con techo en 90vh (scroll interno)
+  const extrasRows = (tieneIngredientes ? product!.ingredientes!.length : 0) + extrasAgregados.length
+  const extrasLabels = (tieneIngredientes ? 1 : 0) + (extrasAgregados.length > 0 ? 1 : 0)
+  const stage2Height = Math.min(
+    stage2Base + extrasLabels * CARNE_LABEL_H + extrasRows * CARNE_ROW_H,
+    Math.round(vh * 0.9)
+  )
   const drawerHeight = stage === 'select' ? stage1Height : stage2Height
+
+  const rowBtn = 'flex items-center justify-between rounded-2xl px-4 py-3.5 text-left transition-colors'
+  const navBtn = 'flex h-9 w-9 items-center justify-center rounded-full bg-black/35 text-white backdrop-blur-md transition-all active:scale-90 active:bg-black/55'
 
   return (
     <Drawer open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
@@ -171,437 +252,481 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
         >
           {product ? (
             <>
-              {/* ── IMAGE LAYER ── always present, grows to fill stage 2 */}
-              <motion.div
-                className="absolute inset-x-0 top-0 z-0 overflow-hidden bg-secondary"
-                animate={{ height: stage === 'select' ? IMG_H : stage2Height }}
-                transition={SPRING}
-              >
-                <motion.div
-                  className="h-full w-full"
-                  animate={{ scale: stage === 'extras' ? 1.06 : 1 }}
-                  transition={{ type: 'tween', duration: 0.6, ease: 'easeOut' }}
-                >
-                  {product.imagenUrl ? (
-                    <img
-                      src={product.imagenUrl}
-                      alt={product.nombre}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-primary/25 via-primary/10 to-background">
-                      <span className="text-[26vw] font-black leading-none text-primary/15 select-none">
-                        {product.nombre.charAt(0).toUpperCase()}
-                      </span>
-                    </div>
-                  )}
-                </motion.div>
-                <motion.div
-                  aria-hidden
-                  className="pointer-events-none absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/75 via-black/30 to-transparent"
-                  animate={{ opacity: stage === 'select' ? 1 : 0 }}
-                  transition={{ duration: 0.3 }}
-                />
-              </motion.div>
-
-              {/* Drag handle */}
-              <div className="pointer-events-none absolute inset-x-0 top-2.5 z-30 flex justify-center">
-                <div className="h-1.5 w-10 rounded-full bg-white/60" />
+              {/* Asa de arrastre — fija, no se desliza con el producto */}
+              <div className="pointer-events-none absolute inset-x-0 top-2.5 z-40 flex justify-center">
+                <div className={cn('h-1.5 w-10 rounded-full', sinImagen ? 'bg-foreground/20' : 'bg-white/60')} />
               </div>
 
-              {/* ── STAGE 1: SELECT ── */}
+              {/* Controles de navegación entre productos — fijos sobre la imagen */}
               <AnimatePresence>
-                {stage === 'select' && (
-                  <motion.div
-                    key="select"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.25 }}
-                    className="absolute inset-0 z-10 flex flex-col"
-                  >
-                    {/* Image spacer: name + price anchored to the gradient */}
-                    <div className="relative shrink-0" style={{ height: IMG_H }}>
-                      <div className="absolute inset-x-0 bottom-0 px-6 pb-8">
-                        <div className="mb-2 flex flex-wrap items-center gap-2">
-                          {tieneDescuento && (
-                            <span className="rounded-full bg-emerald-500 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
-                              {product.descuento}% OFF
-                            </span>
-                          )}
-                          {timeLeft && (
-                            <span className="flex items-center gap-1 rounded-full bg-white/15 px-2 py-0.5 text-[11px] font-semibold text-white backdrop-blur-md">
-                              <Clock className="h-3 w-3" /> Vence en {timeLeft}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-end justify-between gap-4">
-                          <h3 className="text-[28px] font-bold leading-tight tracking-tight text-white drop-shadow-sm">
-                            {product.nombre}
-                          </h3>
-                          <div className="shrink-0 text-right">
-                            {tieneDescuento && (
-                              <p className="text-sm font-medium text-white/60 line-through">
-                                ${totalTachado.toFixed(2)}
-                              </p>
-                            )}
-                            <p className="text-2xl font-bold text-white drop-shadow-sm">
-                              ${total.toFixed(2)}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Bottom sheet: description + carne selector */}
-                    <div className="relative -mt-5 flex min-h-0 flex-1 flex-col rounded-t-[28px] bg-background">
-                      <div className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain px-6 pb-4 pt-6">
-                        <p className="text-[15px] leading-relaxed text-foreground/70">
-                          {product.descripcion || 'Sin descripción.'}
-                        </p>
-
-                        {/* Carne selector: replaces variants for alfajor */}
-                        {hasCarneSection && (
-                          <div className="space-y-1">
-                            <p className="px-1 pb-1 text-[13px] font-medium text-muted-foreground">
-                              Elegí tu opción
-                            </p>
-                            <div
-                              className="flex flex-col gap-0.5"
-                            >
-                              {/* Medallón options (mutually exclusive radio-style) */}
-                              {tieneCarneSelector && (
-                                <>
-                                  {/* Simple — always the default */}
-                                  <button
-                                    type="button"
-                                    onClick={() => setMedallonSeleccionado('simple')}
-                                    className={cn(
-                                      'flex items-center justify-between rounded-2xl px-4 py-3.5 text-left transition-colors',
-                                      medallonSeleccionado === 'simple' ? 'bg-primary/10' : 'bg-secondary/50'
-                                    )}
-                                  >
-                                    <span className={cn('text-[15px]', medallonSeleccionado === 'simple' ? 'font-semibold text-primary' : 'text-foreground')}>
-                                      Simple
-                                    </span>
-                                    <span className="flex items-center gap-2">
-                                      <span className={cn('text-[15px]', medallonSeleccionado === 'simple' ? 'font-semibold text-primary' : 'text-muted-foreground')}>
-                                        Incluido
-                                      </span>
-                                      {medallonSeleccionado === 'simple' && <Check className="h-[18px] w-[18px] text-primary" />}
-                                    </span>
-                                  </button>
-
-                                  {opcionDoble && (
-                                    <button
-                                      type="button"
-                                      onClick={() => setMedallonSeleccionado('doble')}
-                                      className={cn(
-                                        'flex items-center justify-between rounded-2xl px-4 py-3.5 text-left transition-colors',
-                                        medallonSeleccionado === 'doble' ? 'bg-primary/10' : 'bg-secondary/50'
-                                      )}
-                                    >
-                                      <span className={cn('text-[15px]', medallonSeleccionado === 'doble' ? 'font-semibold text-primary' : 'text-foreground')}>
-                                        {opcionDoble.nombre}
-                                      </span>
-                                      <span className="flex items-center gap-2">
-                                        <span className={cn('text-[15px]', medallonSeleccionado === 'doble' ? 'font-semibold text-primary' : 'text-muted-foreground')}>
-                                          +${parseFloat(opcionDoble.precio).toFixed(2)}
-                                        </span>
-                                        {medallonSeleccionado === 'doble' && <Check className="h-[18px] w-[18px] text-primary" />}
-                                      </span>
-                                    </button>
-                                  )}
-
-                                  {opcionTriple && (
-                                    <button
-                                      type="button"
-                                      onClick={() => setMedallonSeleccionado('triple')}
-                                      className={cn(
-                                        'flex items-center justify-between rounded-2xl px-4 py-3.5 text-left transition-colors',
-                                        medallonSeleccionado === 'triple' ? 'bg-primary/10' : 'bg-secondary/50'
-                                      )}
-                                    >
-                                      <span className={cn('text-[15px]', medallonSeleccionado === 'triple' ? 'font-semibold text-primary' : 'text-foreground')}>
-                                        {opcionTriple.nombre}
-                                      </span>
-                                      <span className="flex items-center gap-2">
-                                        <span className={cn('text-[15px]', medallonSeleccionado === 'triple' ? 'font-semibold text-primary' : 'text-muted-foreground')}>
-                                          +${parseFloat(opcionTriple.precio).toFixed(2)}
-                                        </span>
-                                        {medallonSeleccionado === 'triple' && <Check className="h-[18px] w-[18px] text-primary" />}
-                                      </span>
-                                    </button>
-                                  )}
-                                </>
-                              )}
-
-                              {/* Divider between medallón and veggie */}
-                              {tieneCarneSelector && opcionVeggie && (
-                                <div className="h-px w-full bg-border my-1" />
-                              )}
-
-                              {/* Veggie — independent toggle, combinable with any medallón */}
-                              {opcionVeggie && (
-                                <button
-                                  type="button"
-                                  onClick={() => setVeggieSeleccionado(v => !v)}
-                                  className={cn(
-                                    'flex items-center justify-between rounded-2xl px-4 py-3.5 text-left transition-colors',
-                                    veggieSeleccionado ? 'bg-primary/10' : 'bg-secondary/50'
-                                  )}
-                                >
-                                  <span className={cn('text-[15px]', veggieSeleccionado ? 'font-semibold text-primary' : 'text-foreground')}>
-                                    {opcionVeggie.nombre}
-                                  </span>
-                                  <span className="flex items-center gap-2">
-                                    <span className={cn('text-[15px]', veggieSeleccionado ? 'font-semibold text-primary' : 'text-muted-foreground')}>
-                                      +${parseFloat(opcionVeggie.precio).toFixed(2)}
-                                    </span>
-                                    {veggieSeleccionado && <Check className="h-[18px] w-[18px] text-primary" />}
-                                  </span>
-                                </button>
-                              )}
-                            </div>
-                          </div>
+                {puedeNavegar && (
+                  <>
+                    {lista.length > 1 && (
+                      <motion.div
+                        key="counter"
+                        initial={{ opacity: 0, y: -6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -6 }}
+                        transition={{ duration: 0.2 }}
+                        className={cn(
+                          'absolute right-3 top-3.5 z-40 rounded-full px-2.5 py-1 text-[11px] font-semibold tabular-nums',
+                          sinImagen ? 'bg-foreground/10 text-foreground' : 'bg-black/35 text-white backdrop-blur-md'
                         )}
-                      </div>
-
-                      {/* Continue / Add button */}
-                      <div className="shrink-0 px-6 pb-7 pt-2 space-y-2">
-                        <button
-                          type="button"
-                          onClick={handleContinue}
-                          className={cn(
-                            'relative h-14 w-full overflow-hidden rounded-2xl text-[17px] font-semibold transition-all duration-300 active:scale-[0.98]',
-                            addCount > 0
-                              ? 'bg-emerald-500 text-white'
-                              : 'bg-primary text-primary-foreground'
-                          )}
-                        >
-                          <AnimatePresence mode="wait">
-                            {showCounter ? (
-                              <motion.span
-                                key={`x${addCount}`}
-                                initial={{ scale: 0.4, opacity: 0 }}
-                                animate={{ scale: 1.1, opacity: 1 }}
-                                exit={{ scale: 1.5, opacity: 0 }}
-                                transition={{ duration: 0.25 }}
-                                className="absolute inset-0 flex items-center justify-center font-black text-2xl"
-                              >
-                                x{addCount}
-                              </motion.span>
-                            ) : addCount > 0 ? (
-                              <motion.span
-                                key="repeat"
-                                initial={{ opacity: 0, y: 8 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: -8 }}
-                                transition={{ duration: 0.2 }}
-                                className="absolute inset-0 flex items-center justify-center gap-2"
-                              >
-                                <Check className="h-5 w-5" /> Agregar otro igual
-                              </motion.span>
-                            ) : needsStage2 ? (
-                              <motion.span key="continue" className="absolute inset-0 flex items-center justify-center">
-                                Continuar
-                              </motion.span>
-                            ) : (
-                              <motion.span key="add" className="absolute inset-0 flex items-center justify-center">
-                                Agregar · ${total.toFixed(2)}
-                              </motion.span>
-                            )}
-                          </AnimatePresence>
-                        </button>
-                        {addCount > 0 && (
-                          <motion.button
-                            type="button"
-                            onClick={onClose}
-                            initial={{ opacity: 0, y: 8 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.25 }}
-                            className="h-14 w-full rounded-2xl text-[17px] font-semibold bg-secondary text-foreground transition-all duration-300 active:scale-[0.98]"
-                          >
-                            Cerrar
-                          </motion.button>
-                        )}
-                      </div>
-                    </div>
-                  </motion.div>
+                      >
+                        {currentIndex + 1} / {lista.length}
+                      </motion.div>
+                    )}
+                    {!sinImagen && hasPrev && (
+                      <motion.button
+                        key="prev"
+                        type="button"
+                        onClick={() => irA(-1)}
+                        initial={{ opacity: 0, x: -8 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -8 }}
+                        transition={{ duration: 0.2 }}
+                        aria-label="Producto anterior"
+                        className={cn(navBtn, 'absolute left-3 z-40')}
+                        style={{ top: IMG_H / 2 - 18 }}
+                      >
+                        <ChevronLeft className="h-5 w-5" />
+                      </motion.button>
+                    )}
+                    {!sinImagen && hasNext && (
+                      <motion.button
+                        key="next"
+                        type="button"
+                        onClick={() => irA(1)}
+                        initial={{ opacity: 0, x: 8 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: 8 }}
+                        transition={{ duration: 0.2 }}
+                        aria-label="Producto siguiente"
+                        className={cn(navBtn, 'absolute right-3 z-40')}
+                        style={{ top: IMG_H / 2 - 18 }}
+                      >
+                        <ChevronRight className="h-5 w-5" />
+                      </motion.button>
+                    )}
+                  </>
                 )}
               </AnimatePresence>
 
-              {/* ── STAGE 2: EXTRAS ──
-                  Glassmorphism overlay on the full image.
-                  Shows ingredientes to remove + non-carne extras. */}
+              {/* ─────────── CAPA DESLIZANTE POR PRODUCTO ───────────
+                  Todo lo que cambia al pasar de un producto a otro (imagen, nombre,
+                  precio y contenido) vive acá y se desliza horizontalmente. El asa y
+                  los controles de navegación quedan fijos por encima. */}
+              <AnimatePresence initial={false} mode="popLayout" custom={navDir}>
+                <motion.div
+                  key={product.id}
+                  custom={navDir}
+                  variants={navVariants}
+                  initial="enter"
+                  animate="center"
+                  exit="exit"
+                  transition={NAV_SLIDE}
+                  className="absolute inset-0"
+                >
+              {/* ── CAPA DE IMAGEN ── altura fija en ambas etapas (sólo con foto): imagen,
+                  nombre y precio permanecen idénticos al pasar a extras. */}
+              {!sinImagen && (
+                <div className="absolute inset-x-0 top-0 z-0 overflow-hidden bg-secondary" style={{ height: IMG_H }}>
+                  <img
+                    src={product.imagenUrl!}
+                    alt={product.nombre}
+                    className="h-full w-full object-cover"
+                  />
+                  {/* Gradiente inferior — separa el nombre/precio de la imagen. */}
+                  <div
+                    aria-hidden
+                    className="pointer-events-none absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/75 via-black/30 to-transparent"
+                  />
+                </div>
+              )}
+
+              {/* Botón volver — sólo en extras, sobre la imagen (el diseño plano tiene el suyo propio) */}
               <AnimatePresence>
-                {stage === 'extras' && (
-                  <motion.div
-                    key="extras"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.3 }}
-                    className="absolute inset-0 z-20 flex flex-col text-white"
+                {!sinImagen && stage === 'extras' && (
+                  <motion.button
+                    key="back"
+                    type="button"
+                    onClick={() => setStage('select')}
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.8 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute left-3 top-4 z-30 flex h-9 w-9 items-center justify-center rounded-full bg-black/35 text-white backdrop-blur-md transition-colors active:bg-black/50"
                   >
-                    {/* Frosted glass layer */}
-                    <motion.div
-                      className="absolute inset-0 bg-black/60"
-                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                      initial={{ backdropFilter: 'blur(0px)', WebkitBackdropFilter: 'blur(0px)' } as any}
-                      animate={{ backdropFilter: 'blur(40px)', WebkitBackdropFilter: 'blur(40px)' } as any}
-                      exit={{ backdropFilter: 'blur(0px)', WebkitBackdropFilter: 'blur(0px)' } as any}
-                      transition={{ duration: 0.45 }}
-                    />
+                    <ChevronLeft className="h-5 w-5" />
+                  </motion.button>
+                )}
+              </AnimatePresence>
 
-                    <div className="relative z-10 flex h-full flex-col">
-                      {/* Header with back button */}
-                      <div className="flex shrink-0 items-center gap-3 px-4 pt-5">
-                        <button
-                          type="button"
-                          onClick={() => setStage('select')}
-                          className="flex h-9 w-9 items-center justify-center rounded-full bg-foreground/5 text-foreground transition-colors active:bg-foreground/10"
-                        >
-                          <ChevronLeft className="h-5 w-5" />
-                        </button>
-                      </div>
-
-                      <h3 className="truncate text-[19px] m-auto font-extrabold tracking-tight text-white pb-2">
-                        {product.nombre}
-                      </h3>
-                      <div className="flex items-center font-bold justify-center gap-2 pb-4">
-                        ${total.toFixed(2)}
-                      </div>
-
-                      {/* Scrollable options */}
-                      <div className="min-h-0 flex-1 space-y-7 overflow-y-auto overscroll-contain px-5 pb-4 pt-1">
-                        {tieneIngredientes && (
-                          <div className="space-y-1">
-                            <p className="px-1 pb-1 text-lg font-bold">
-                              Ingredientes
-                            </p>
-                            <div className="flex flex-col gap-0.5">
-                              {product.ingredientes!.map((ing) => {
-                                const incluido = !ingredientesExcluidos.includes(ing.id)
-                                return (
-                                  <button
-                                    key={ing.id}
-                                    type="button"
-                                    onClick={() => toggleIngrediente(ing.id)}
-                                    className={`flex items-center justify-between rounded-2xl px-4 py-3.5 text-left transition-colors ${incluido ? 'bg-black/10' : 'bg-black/5'}`}
-                                  >
-                                    <span
-                                      className={cn(
-                                        'text-[15px]',
-                                        incluido ? 'text-white' : 'text-neutral-400 line-through'
-                                      )}
-                                    >
-                                      {ing.nombre}
-                                    </span>
-                                    {incluido && (
-                                      <Check className="h-[18px] w-[18px] text-white" />
-                                    )}
-                                  </button>
-                                )
-                              })}
-                            </div>
-                          </div>
-                        )}
-
-                        {extrasAgregados.length > 0 && (
-                          <div className="space-y-1">
-                            <p className="px-1 pb-1 text-lg font-bold">
-                              Extras
-                            </p>
-                            <div className="flex flex-col gap-0.5">
-                              {extrasAgregados.map((ag) => {
-                                const sel = !!extrasSeleccionados.find(a => a.id === ag.id)
-                                return (
-                                  <button
-                                    key={ag.id}
-                                    type="button"
-                                    onClick={() => toggleExtra(ag)}
-                                    className={cn(
-                                      'flex items-center mb-1 justify-between rounded-2xl px-4 py-3.5 text-left transition-colors',
-                                      sel ? 'bg-black/20' : 'bg-black/5'
-                                    )}
-                                  >
-                                    <span className={cn('text-[15px]', sel ? 'font-semibold text-primary' : 'text-foreground')}>
-                                      {ag.nombre}
-                                    </span>
-                                    <span className="flex items-center gap-2">
-                                      <span className={cn('text-[15px]', sel ? 'font-semibold text-primary' : 'text-muted-foreground')}>
-                                        +${parseFloat(ag.precio).toFixed(2)}
-                                      </span>
-                                      {sel && <Check className="h-[18px] w-[18px] text-primary" />}
-                                    </span>
-                                  </button>
-                                )
-                              })}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Footer: add button */}
-                      <div className="flex shrink-0 flex-col gap-2 px-5 pb-7 pt-2">
-                        <button
-                          type="button"
-                          onClick={handleAdd}
-                          className={cn(
-                            'relative h-14 w-full overflow-hidden rounded-2xl text-[17px] font-semibold transition-all duration-300 active:scale-[0.98]',
-                            addCount > 0 ? 'bg-emerald-500 text-white' : 'bg-primary text-primary-foreground'
-                          )}
-                        >
-                          <AnimatePresence mode="wait">
-                            {showCounter ? (
-                              <motion.span
-                                key={`x${addCount}`}
-                                initial={{ scale: 0.4, opacity: 0 }}
-                                animate={{ scale: 1.1, opacity: 1 }}
-                                exit={{ scale: 1.5, opacity: 0 }}
-                                transition={{ duration: 0.25 }}
-                                className="absolute inset-0 flex items-center justify-center font-black text-2xl"
-                              >
-                                x{addCount}
-                              </motion.span>
-                            ) : addCount > 0 ? (
-                              <motion.span
-                                key="repeat"
-                                initial={{ opacity: 0, y: 8 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: -8 }}
-                                transition={{ duration: 0.2 }}
-                                className="absolute inset-0 flex items-center justify-center gap-2"
-                              >
-                                <Check className="h-5 w-5" /> Agregar otro igual
-                              </motion.span>
-                            ) : (
-                              <motion.span
-                                key="add"
-                                className="absolute inset-0 flex items-center justify-center"
-                              >
-                                Agregar
-                              </motion.span>
-                            )}
-                          </AnimatePresence>
-                        </button>
-                        {addCount > 0 && (
+              {/* ── COLUMNA DE CONTENIDO ── */}
+              <div className="absolute inset-0 z-10 flex flex-col">
+                {/* Header: sobre la imagen (con foto) o de texto al ras (sin foto). Es también el
+                    área de swipe (arrastrá de lado a lado para cambiar de producto). */}
+                <motion.div
+                  className={cn(
+                    'relative shrink-0 select-none',
+                    sinImagen && 'px-6 pt-9',
+                    puedeNavegar && 'cursor-grab touch-pan-y active:cursor-grabbing'
+                  )}
+                  style={sinImagen ? undefined : { height: IMG_H }}
+                  drag={puedeNavegar ? 'x' : false}
+                  dragDirectionLock
+                  dragConstraints={{ left: 0, right: 0 }}
+                  dragElastic={0.18}
+                  dragSnapToOrigin
+                  onDragEnd={onHeaderDragEnd}
+                >
+                  {sinImagen ? (
+                    <>
+                      {/* Botón volver del diseño plano — al ras, no sobre foto */}
+                      <AnimatePresence>
+                        {stage === 'extras' && (
                           <motion.button
+                            key="back-flat"
                             type="button"
-                            onClick={onClose}
-                            initial={{ opacity: 0, y: 8 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.25 }}
-                            className="h-14 w-full rounded-2xl text-[17px] font-semibold bg-secondary text-foreground transition-all duration-300 active:scale-[0.98]"
+                            onClick={() => setStage('select')}
+                            initial={{ opacity: 0, scale: 0.8 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.8 }}
+                            transition={{ duration: 0.2 }}
+                            className="mb-3 flex h-9 w-9 items-center justify-center rounded-full bg-secondary text-foreground transition-colors active:bg-secondary/70"
                           >
-                            Cerrar
+                            <ChevronLeft className="h-5 w-5" />
                           </motion.button>
                         )}
+                      </AnimatePresence>
+                      <div className="mb-2 flex flex-wrap items-center gap-2">
+                        {tieneDescuento && (
+                          <span className="rounded-full bg-emerald-500 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
+                            {product.descuento}% OFF
+                          </span>
+                        )}
+                        {timeLeft && (
+                          <span className="flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                            <Clock className="h-3 w-3" /> Vence en {timeLeft}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-end justify-between gap-4">
+                        <h3 className="text-[26px] font-bold leading-tight tracking-tight text-foreground">
+                          {product.nombre}
+                        </h3>
+                        <div className="shrink-0 text-right">
+                          {tieneDescuento && (
+                            <p className="text-sm font-medium text-muted-foreground line-through">
+                              ${totalTachado.toFixed(2)}
+                            </p>
+                          )}
+                          <p className="text-2xl font-bold text-primary">
+                            ${total.toFixed(2)}
+                          </p>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="absolute inset-x-0 bottom-0 px-6 pb-8">
+                      <div className="mb-2 flex flex-wrap items-center gap-2">
+                        {tieneDescuento && (
+                          <span className="rounded-full bg-emerald-500 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
+                            {product.descuento}% OFF
+                          </span>
+                        )}
+                        {timeLeft && (
+                          <span className="flex items-center gap-1 rounded-full bg-white/15 px-2 py-0.5 text-[11px] font-semibold text-white backdrop-blur-md">
+                            <Clock className="h-3 w-3" /> Vence en {timeLeft}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-end justify-between gap-4">
+                        <h3 className="text-[28px] font-bold leading-tight tracking-tight text-white drop-shadow-sm">
+                          {product.nombre}
+                        </h3>
+                        <div className="shrink-0 text-right">
+                          {tieneDescuento && (
+                            <p className="text-sm font-medium text-white/60 line-through">
+                              ${totalTachado.toFixed(2)}
+                            </p>
+                          )}
+                          <p className="text-2xl font-bold text-white drop-shadow-sm">
+                            ${total.toFixed(2)}
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  </motion.div>
-                )}
+                  )}
+                </motion.div>
+
+                {/* Hoja inferior: el contenido se cruza entre las dos etapas. Con foto se
+                    superpone a la imagen (borde redondeado); sin foto va al ras. */}
+                <div className={cn(
+                  'relative flex min-h-0 flex-1 flex-col bg-background',
+                  !sinImagen && '-mt-5 rounded-t-[28px]'
+                )}>
+                  {/* Área animada — misma posición y misma lógica de scroll en ambas etapas */}
+                  <div className="relative min-h-0 flex-1">
+                    <AnimatePresence initial={false}>
+                      {stage === 'select' ? (
+                        <motion.div
+                          key="content-select"
+                          initial={{ opacity: 0, x: -40 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: -40 }}
+                          transition={SLIDE}
+                          className="absolute inset-0 flex flex-col"
+                        >
+                          <div className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain px-6 pb-4 pt-6">
+                            <p className="text-[15px] leading-relaxed text-foreground/70">
+                              {product.descripcion || 'Sin descripción.'}
+                            </p>
+
+                            {/* Carne selector: reemplaza las variantes en alfajor */}
+                            {hasCarneSection && (
+                              <div className="space-y-1">
+                                <p className="px-1 pb-1 text-[13px] font-medium text-muted-foreground">
+                                  Elegí tu opción
+                                </p>
+                                <div className="flex flex-col gap-0.5">
+                                  {/* Medallón options (mutually exclusive radio-style) */}
+                                  {tieneCarneSelector && (
+                                    <>
+                                      {/* Simple — always the default */}
+                                      <button
+                                        type="button"
+                                        onClick={() => setMedallonSeleccionado('simple')}
+                                        className={cn(rowBtn, medallonSeleccionado === 'simple' ? 'bg-primary/10' : 'bg-secondary/50')}
+                                      >
+                                        <span className={cn('text-[15px]', medallonSeleccionado === 'simple' ? 'font-semibold text-primary' : 'text-foreground')}>
+                                          Simple
+                                        </span>
+                                        <span className="flex items-center gap-2">
+                                          <span className={cn('text-[15px]', medallonSeleccionado === 'simple' ? 'font-semibold text-primary' : 'text-muted-foreground')}>
+                                            Incluido
+                                          </span>
+                                          {medallonSeleccionado === 'simple' && <Check className="h-[18px] w-[18px] text-primary" />}
+                                        </span>
+                                      </button>
+
+                                      {opcionDoble && (
+                                        <button
+                                          type="button"
+                                          onClick={() => setMedallonSeleccionado('doble')}
+                                          className={cn(rowBtn, medallonSeleccionado === 'doble' ? 'bg-primary/10' : 'bg-secondary/50')}
+                                        >
+                                          <span className={cn('text-[15px]', medallonSeleccionado === 'doble' ? 'font-semibold text-primary' : 'text-foreground')}>
+                                            {opcionDoble.nombre}
+                                          </span>
+                                          <span className="flex items-center gap-2">
+                                            <span className={cn('text-[15px]', medallonSeleccionado === 'doble' ? 'font-semibold text-primary' : 'text-muted-foreground')}>
+                                              +${parseFloat(opcionDoble.precio).toFixed(2)}
+                                            </span>
+                                            {medallonSeleccionado === 'doble' && <Check className="h-[18px] w-[18px] text-primary" />}
+                                          </span>
+                                        </button>
+                                      )}
+
+                                      {opcionTriple && (
+                                        <button
+                                          type="button"
+                                          onClick={() => setMedallonSeleccionado('triple')}
+                                          className={cn(rowBtn, medallonSeleccionado === 'triple' ? 'bg-primary/10' : 'bg-secondary/50')}
+                                        >
+                                          <span className={cn('text-[15px]', medallonSeleccionado === 'triple' ? 'font-semibold text-primary' : 'text-foreground')}>
+                                            {opcionTriple.nombre}
+                                          </span>
+                                          <span className="flex items-center gap-2">
+                                            <span className={cn('text-[15px]', medallonSeleccionado === 'triple' ? 'font-semibold text-primary' : 'text-muted-foreground')}>
+                                              +${parseFloat(opcionTriple.precio).toFixed(2)}
+                                            </span>
+                                            {medallonSeleccionado === 'triple' && <Check className="h-[18px] w-[18px] text-primary" />}
+                                          </span>
+                                        </button>
+                                      )}
+                                    </>
+                                  )}
+
+                                  {/* Divider between medallón and veggie */}
+                                  {tieneCarneSelector && opcionVeggie && (
+                                    <div className="h-px w-full bg-border my-1" />
+                                  )}
+
+                                  {/* Veggie — independent toggle, combinable with any medallón */}
+                                  {opcionVeggie && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setVeggieSeleccionado(v => !v)}
+                                      className={cn(rowBtn, veggieSeleccionado ? 'bg-primary/10' : 'bg-secondary/50')}
+                                    >
+                                      <span className={cn('text-[15px]', veggieSeleccionado ? 'font-semibold text-primary' : 'text-foreground')}>
+                                        {opcionVeggie.nombre}
+                                      </span>
+                                      <span className="flex items-center gap-2">
+                                        <span className={cn('text-[15px]', veggieSeleccionado ? 'font-semibold text-primary' : 'text-muted-foreground')}>
+                                          +${parseFloat(opcionVeggie.precio).toFixed(2)}
+                                        </span>
+                                        {veggieSeleccionado && <Check className="h-[18px] w-[18px] text-primary" />}
+                                      </span>
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </motion.div>
+                      ) : (
+                        <motion.div
+                          key="content-extras"
+                          initial={{ opacity: 0, x: 40 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: 40 }}
+                          transition={SLIDE}
+                          className="absolute inset-0 flex flex-col"
+                        >
+                          <div className="min-h-0 flex-1 space-y-7 overflow-y-auto overscroll-contain px-6 pb-4 pt-6">
+                            {tieneIngredientes && (
+                              <div className="space-y-1">
+                                <p className="px-1 pb-1 text-lg font-bold text-foreground">
+                                  Ingredientes
+                                </p>
+                                <div className="flex flex-col gap-0.5">
+                                  {product.ingredientes!.map((ing) => {
+                                    const incluido = !ingredientesExcluidos.includes(ing.id)
+                                    return (
+                                      <button
+                                        key={ing.id}
+                                        type="button"
+                                        onClick={() => toggleIngrediente(ing.id)}
+                                        className={cn(rowBtn, incluido ? 'bg-secondary/60' : 'bg-secondary/30')}
+                                      >
+                                        <span
+                                          className={cn(
+                                            'text-[15px]',
+                                            incluido ? 'text-foreground' : 'text-muted-foreground line-through'
+                                          )}
+                                        >
+                                          {ing.nombre}
+                                        </span>
+                                        {incluido && <Check className="h-[18px] w-[18px] text-foreground/70" />}
+                                      </button>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            )}
+
+                            {extrasAgregados.length > 0 && (
+                              <div className="space-y-1">
+                                <p className="px-1 pb-1 text-lg font-bold text-foreground">
+                                  Extras
+                                </p>
+                                <div className="flex flex-col gap-0.5">
+                                  {extrasAgregados.map((ag) => {
+                                    const sel = !!extrasSeleccionados.find(a => a.id === ag.id)
+                                    return (
+                                      <button
+                                        key={ag.id}
+                                        type="button"
+                                        onClick={() => toggleExtra(ag)}
+                                        className={cn(rowBtn, sel ? 'bg-primary/10' : 'bg-secondary/50')}
+                                      >
+                                        <span className={cn('text-[15px]', sel ? 'font-semibold text-primary' : 'text-foreground')}>
+                                          {ag.nombre}
+                                        </span>
+                                        <span className="flex items-center gap-2">
+                                          <span className={cn('text-[15px]', sel ? 'font-semibold text-primary' : 'text-muted-foreground')}>
+                                            +${parseFloat(ag.precio).toFixed(2)}
+                                          </span>
+                                          {sel && <Check className="h-[18px] w-[18px] text-primary" />}
+                                        </span>
+                                      </button>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
+                  {/* Botón principal — muta entre Continuar y Agregar */}
+                  <div className="shrink-0 space-y-2 px-6 pb-7 pt-2">
+                    <button
+                      type="button"
+                      onClick={handlePrimary}
+                      className={cn(
+                        'relative h-14 w-full overflow-hidden rounded-2xl text-[17px] font-semibold transition-all duration-300 active:scale-[0.98]',
+                        addCount > 0 ? 'bg-emerald-500 text-white' : 'bg-primary text-primary-foreground'
+                      )}
+                    >
+                      <AnimatePresence mode="wait">
+                        {showCounter ? (
+                          <motion.span
+                            key={`x${addCount}`}
+                            initial={{ scale: 0.4, opacity: 0 }}
+                            animate={{ scale: 1.1, opacity: 1 }}
+                            exit={{ scale: 1.5, opacity: 0 }}
+                            transition={{ duration: 0.25 }}
+                            className="absolute inset-0 flex items-center justify-center text-2xl font-black"
+                          >
+                            x{addCount}
+                          </motion.span>
+                        ) : addCount > 0 ? (
+                          <motion.span
+                            key="repeat"
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -8 }}
+                            transition={{ duration: 0.2 }}
+                            className="absolute inset-0 flex items-center justify-center gap-2"
+                          >
+                            <Check className="h-5 w-5" /> Agregar otro igual
+                          </motion.span>
+                        ) : stage === 'select' && needsStage2 ? (
+                          <motion.span
+                            key="continue"
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -8 }}
+                            transition={{ duration: 0.2 }}
+                            className="absolute inset-0 flex items-center justify-center"
+                          >
+                            Continuar
+                          </motion.span>
+                        ) : (
+                          <motion.span
+                            key="add"
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -8 }}
+                            transition={{ duration: 0.2 }}
+                            className="absolute inset-0 flex items-center justify-center"
+                          >
+                            Agregar · ${total.toFixed(2)}
+                          </motion.span>
+                        )}
+                      </AnimatePresence>
+                    </button>
+                    {addCount > 0 && (
+                      <motion.button
+                        type="button"
+                        onClick={onClose}
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.25 }}
+                        className="h-14 w-full rounded-2xl bg-secondary text-[17px] font-semibold text-foreground transition-all duration-300 active:scale-[0.98]"
+                      >
+                        Cerrar
+                      </motion.button>
+                    )}
+                  </div>
+                </div>
+              </div>
+                </motion.div>
               </AnimatePresence>
             </>
           ) : (

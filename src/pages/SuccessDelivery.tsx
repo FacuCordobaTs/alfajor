@@ -6,6 +6,7 @@ import { ThemeToggle } from '@/components/ThemeToggle'
 import { MisPedidosDrawer } from '@/components/MisPedidosDrawer'
 import { OrderSummaryItemDetails } from '@/components/OrderSummaryItemDetails'
 import { orderItemLineSubtotalSession } from '@/lib/orderSummaryItem'
+import { buildWhatsappOrderMessage } from '@/lib/whatsappOrderMessage'
 import { initMercadoPago, CardPayment } from '@mercadopago/sdk-react'
 
 const MP_CHECKOUT_LAUNCHED_KEY = 'mpCheckoutLaunchedPedidoId'
@@ -368,6 +369,35 @@ const SuccessDelivery = () => {
         ? `https://wa.me/${whatsappDigits}?text=${encodeURIComponent(`Hola, te paso el comprobante de mi pedido #${pedidoId} a nombre de ${clienteNombreWhatsapp}.`)}`
         : null
 
+    // Botón "Enviar pedido al WhatsApp": el cliente le manda el detalle completo del pedido
+    // al restaurante desde su propio WhatsApp. Es el canal principal en el plan Básico (donde no
+    // hay avisos automáticos) y no consume el wallet de mensajes de Piru.
+    const whatsappOrderHref = whatsappDigits
+        ? `https://wa.me/${whatsappDigits}?text=${encodeURIComponent(
+            buildWhatsappOrderMessage(orderInfo, {
+                restaurantName: restauranteData?.nombre,
+                restaurantDireccion: restauranteData?.direccion,
+                effectiveMetodo,
+                transferenciaAlias,
+            })
+        )}`
+        : null
+
+    // Solo el plan Básico (sin avisos automáticos al cliente) muestra el botón manual.
+    // Si el backend aún no envía el flag, se oculta por defecto (no mostrar de más).
+    const mostrarEnvioWhatsapp = restauranteData?.avisosWhatsappClienteEnabled === false
+    const whatsappOrderButton = (whatsappOrderHref && mostrarEnvioWhatsapp) ? (
+        <a
+            href={whatsappOrderHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-2 w-full px-5 py-4 bg-[#25D366] text-white rounded-2xl font-semibold text-base active:scale-[0.98] transition-transform"
+        >
+            <MessageCircle className="w-5 h-5" />
+            Enviar pedido al WhatsApp
+        </a>
+    ) : null
+
     const cachedThemeStr = sessionStorage.getItem(`theme_${username}`)
     const cachedTheme = cachedThemeStr ? JSON.parse(cachedThemeStr) : null
     const primario = restauranteData?.colorPrimario || cachedTheme?.primario
@@ -615,6 +645,8 @@ const SuccessDelivery = () => {
                         </div>
 
                         <OrderItems />
+
+                        {whatsappOrderButton}
                     </div>
                 )}
 
@@ -686,6 +718,8 @@ const SuccessDelivery = () => {
                         )}
 
                         <OrderItems />
+
+                        {whatsappOrderButton}
                     </div>
                 )}
 
@@ -850,6 +884,8 @@ const SuccessDelivery = () => {
                         </div>
 
                         <OrderItems />
+
+                        {whatsappOrderButton}
 
                         <button
                             className="w-full px-5 py-4 border border-border rounded-2xl font-semibold text-sm hover:bg-foreground/5 transition-colors"

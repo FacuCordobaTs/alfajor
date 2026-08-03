@@ -58,6 +58,7 @@ const Menu = () => {
 
   const [horarios, setHorarios] = useState<HorarioTurno[]>([])
   const [estadoAbierto, setEstadoAbierto] = useState<{ abierto: boolean; proximaApertura: string | null }>({ abierto: true, proximaApertura: null })
+  const [permitirProgramados, setPermitirProgramados] = useState(false)
 
   const [carritoAbierto, setCarritoAbierto] = useState(false)
   const [expandido, setExpandido] = useState(false)
@@ -66,6 +67,10 @@ const Menu = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('All')
   const [misPedidosOpen, setMisPedidosOpen] = useState(false)
   const [confirmacionGrupalOpen, setConfirmacionGrupalOpen] = useState(false)
+  // Feedback de envío en solitario: cuando hay un solo cliente no hay votación grupal, pero igual
+  // existe un delay entre confirmar y que el WS/poll redirija a la pantalla de éxito. Sin esto el
+  // usuario se queda sin ningún feedback durante esos segundos.
+  const [enviandoSolo, setEnviandoSolo] = useState(false)
   const [bienvenidaOpen, setBienvenidaOpen] = useState(false)
 
   const esSala = typeof window !== 'undefined' && window.location.pathname.includes('/sala/')
@@ -119,10 +124,12 @@ const Menu = () => {
         const url = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
         const res = await fetch(`${url}/public/restaurante/${username}`)
         const data = await res.json()
-        if (data.success && data.data?.horarios) {
-          setHorarios(data.data.horarios)
-          setEstadoAbierto(checkIsOpen(data.data.horarios))
-          // setEstadoAbierto({ abierto: true, proximaApertura: null })
+        if (data.success && data.data) {
+          setPermitirProgramados(!!data.data.restaurante?.permitirPedidosProgramados)
+          if (Array.isArray(data.data.horarios)) {
+            setHorarios(data.data.horarios)
+            setEstadoAbierto(checkIsOpen(data.data.horarios))
+          }
         }
       } catch { /* ignore */ }
     }
@@ -269,15 +276,16 @@ const Menu = () => {
   // Iniciar el proceso de confirmación grupal
   const iniciarConfirmacionPedido = () => {
     if (!clienteNombre || !clienteId) return
-    if (!estadoAbierto.abierto) {
+    if (localCerrado && !puedeProgramar) {
       toast.error('El restaurante está cerrado en este momento')
       return
     }
 
     if (clientes.length <= 1) {
       sendMessage({ type: 'CONFIRMAR_PEDIDO', payload: {} })
-      toast.success('¡Pedido enviado a cocina!', { icon: <ChefHat className="w-5 h-5" /> })
       cerrarCarrito()
+      // Feedback visible mientras el WS/poll procesa el pedido y redirige a éxito.
+      setEnviandoSolo(true)
       return
     }
 
@@ -290,7 +298,7 @@ const Menu = () => {
 
   const confirmarMiParte = () => {
     if (!clienteId) return
-    if (!estadoAbierto.abierto) {
+    if (localCerrado && !puedeProgramar) {
       toast.error('El restaurante está cerrado en este momento')
       return
     }
@@ -322,9 +330,10 @@ const Menu = () => {
   const totalClientes = confirmacionGrupal?.confirmaciones.length ?? 0
   const todosConfirmaron = esSala && totalClientes > 0 && totalConfirmados === totalClientes
 
-  // Fallback poll cuando todos confirmaron en sala
+  // Fallback poll cuando todos confirmaron en sala (o cuando confirma un cliente solo),
+  // por si el WS (SALA_PEDIDO_CREADO) no llega.
   useEffect(() => {
-    if (!todosConfirmaron || !urlQrToken) return
+    if (!(todosConfirmaron || (enviandoSolo && esSala)) || !urlQrToken) return
     const token = urlQrToken
     const poll = async () => {
       try {
@@ -353,7 +362,7 @@ const Menu = () => {
     poll()
     const interval = setInterval(poll, 500)
     return () => clearInterval(interval)
-  }, [todosConfirmaron, urlQrToken])
+  }, [todosConfirmaron, enviandoSolo, esSala, urlQrToken])
 
   const todosLosItems = wsState?.items || []
 
@@ -371,6 +380,12 @@ const Menu = () => {
     const precio = parseFloat((item as any).precioUnitario || String((item as any).precio || 0))
     return sum + precio * item.cantidad
   }, 0).toFixed(2)
+
+  // Cuando el local está cerrado pero permite pedidos programados (solo aplica a sala: son pedidos
+  // delivery/takeaway), no se bloquea: el cliente puede pedir eligiendo un horario en el checkout.
+  const localCerrado = !estadoAbierto.abierto
+  const puedeProgramar = esSala && permitirProgramados
+  const bloqueadoPorCierre = localCerrado && !puedeProgramar
 
   // Colores hardcodeados para single tenant
   const primario = '#0a331d'
@@ -505,12 +520,15 @@ const Menu = () => {
         </div>
       </div>
 
-      {!estadoAbierto.abierto && (
-        <div className="bg-red-600 text-white">
+      {localCerrado && (
+        <div className={puedeProgramar ? "bg-amber-500 text-white" : "bg-red-600 text-white"}>
           <div className="max-w-2xl mx-auto px-5 py-3 flex items-center justify-center gap-2">
             <Clock className="w-4 h-4 shrink-0" />
             <p className="text-sm font-semibold text-center">
-              Estamos cerrados{estadoAbierto.proximaApertura ? `. Abrimos ${estadoAbierto.proximaApertura}` : ''}
+              {puedeProgramar
+                ? 'Estamos cerrados. Podés programar tu pedido para después'
+                : `Estamos cerrados${estadoAbierto.proximaApertura ? `. Abrimos ${estadoAbierto.proximaApertura}` : ''}`
+              }
             </p>
           </div>
         </div>
@@ -635,7 +653,6 @@ const Menu = () => {
                           key={producto.id}
                           producto={producto}
                           onClick={() => abrirDetalleProducto(producto)}
-                          disenoAlternativo={restaurante?.disenoAlternativo!}
                         />
                       ))}
                       <div className="min-w-1 shrink-0" />
@@ -658,7 +675,6 @@ const Menu = () => {
                       key={producto.id}
                       producto={producto}
                       onClick={() => abrirDetalleProducto(producto)}
-                      disenoAlternativo={restaurante?.disenoAlternativo!}
                       fullWidth
                     />
                   ))}
@@ -757,6 +773,7 @@ const Menu = () => {
               editSemaphore={checkoutEditSemaphore}
               restauranteDireccion={restaurante?.direccion ?? undefined}
               onTituloChange={setTituloCheckout}
+              localCerrado={localCerrado}
             />
           ) : todosLosItems.length === 0 ? (
             <div className={`flex flex-col items-center justify-center text-center gap-4 opacity-60 px-5 ${expandido ? 'flex-1' : 'py-12'}`}>
@@ -779,9 +796,9 @@ const Menu = () => {
                 </div>
                 {!restaurante?.soloCartaDigital ? (
                   <Button
-                    className={`w-full h-12 rounded-xl font-bold text-base shadow-md ${!estadoAbierto.abierto ? 'bg-muted text-muted-foreground cursor-not-allowed' : ''}`}
+                    className={`w-full h-12 rounded-xl font-bold text-base shadow-md ${bloqueadoPorCierre ? 'bg-muted text-muted-foreground cursor-not-allowed' : ''}`}
                     onClick={() => {
-                      if (!estadoAbierto.abierto) {
+                      if (bloqueadoPorCierre) {
                         toast.error('El restaurante está cerrado en este momento')
                         return
                       }
@@ -792,9 +809,9 @@ const Menu = () => {
                         iniciarConfirmacionPedido()
                       }
                     }}
-                    disabled={!estadoAbierto.abierto}
+                    disabled={bloqueadoPorCierre}
                   >
-                    {!estadoAbierto.abierto ? 'Restaurante cerrado' : 'Continuar'}
+                    {bloqueadoPorCierre ? 'Restaurante cerrado' : 'Continuar'}
                   </Button>
                 ) : (
                   <div className="text-center text-sm font-medium text-primary py-3 bg-primary/10 rounded-xl">
@@ -903,11 +920,11 @@ const Menu = () => {
                     <Button
                       size="sm"
                       onClick={confirmarMiParte}
-                      className={`w-full h-11 rounded-xl font-semibold ${!estadoAbierto.abierto ? 'bg-muted text-muted-foreground cursor-not-allowed' : 'bg-primary hover:bg-primary/90'}`}
-                      disabled={!estadoAbierto.abierto}
+                      className={`w-full h-11 rounded-xl font-semibold ${bloqueadoPorCierre ? 'bg-muted text-muted-foreground cursor-not-allowed' : 'bg-primary hover:bg-primary/90'}`}
+                      disabled={bloqueadoPorCierre}
                     >
                       <Check className="w-4 h-4 mr-2" />
-                      {!estadoAbierto.abierto ? 'Restaurante cerrado' : 'Confirmar mi pedido'}
+                      {bloqueadoPorCierre ? 'Restaurante cerrado' : 'Confirmar mi pedido'}
                     </Button>
                     <Button
                       variant="ghost"
@@ -940,6 +957,22 @@ const Menu = () => {
               </DialogFooter>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* --- OVERLAY DE ENVÍO EN SOLITARIO --- */}
+      {/* Un solo cliente no pasa por la votación grupal, pero igual hay un delay entre confirmar
+          y que el WS/poll redirija a la pantalla de éxito. Este overlay le da feedback de que su
+          pedido se está procesando (equivalente al estado "¡Todos confirmaron!" del flujo grupal). */}
+      <Dialog open={enviandoSolo} onOpenChange={() => { }}>
+        <DialogContent className="max-w-sm rounded-2xl p-4 sm:p-5" onPointerDownOutside={(e) => e.preventDefault()}>
+          <div className="flex flex-col items-center justify-center py-8 gap-4">
+            <Loader2 className="w-12 h-12 text-primary animate-spin" />
+            <DialogTitle className="text-lg font-bold text-center">¡Pedido confirmado!</DialogTitle>
+            <DialogDescription className="text-center text-sm">
+              Estamos preparando tu pedido, te redirigimos en un momento...
+            </DialogDescription>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -1009,73 +1042,39 @@ const EmptyState = () => (
   </div>
 )
 
-const ProductoCard = ({ producto, onClick, fullWidth, disenoAlternativo }: { producto: any, onClick: () => void, fullWidth?: boolean, disenoAlternativo?: boolean }) => {
+const ProductoCard = ({ producto, onClick, fullWidth }: { producto: any, onClick: () => void, fullWidth?: boolean }) => {
   const tieneDescuento = !!(producto.descuento && producto.descuento > 0)
   const precioOriginal = parseFloat(producto.precio)
   const precioFinal = tieneDescuento ? precioOriginal * (1 - producto.descuento / 100) : precioOriginal
 
-  if (disenoAlternativo) {
-    return (
-      <div
-        className={`group relative flex flex-col ${fullWidth ? 'w-full' : 'w-48 shrink-0'} h-[260px] rounded-[24px] bg-card border border-border/50 shadow-md hover:shadow-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] overflow-hidden ${!fullWidth ? 'snap-start' : ''}`}
-        onClick={onClick}
-      >
-        <div className="w-full h-[130px] shrink-0 bg-zinc-900 relative">
-          {producto.imagenUrl ? (
-            <img src={producto.imagenUrl} alt={producto.nombre} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out" />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center bg-linear-to-br from-zinc-800 to-zinc-900">
-              <Utensils className="w-10 h-10 text-primary" />
-            </div>
-          )}
-          {tieneDescuento && (
-            <div className="absolute top-2.5 left-2.5 z-10">
-              <span className="bg-emerald-500 text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full shadow-lg uppercase tracking-wide">{producto.descuento}% OFF</span>
-            </div>
-          )}
-        </div>
-        <div className="p-3.5 flex flex-col flex-1 bg-card">
-          <div className="flex-1">
-            <h3 className="font-bold text-[14px] line-clamp-2 text-foreground leading-tight">{producto.nombre}</h3>
-            {producto.descripcion && <p className="mt-1 text-xs text-muted-foreground line-clamp-2 leading-snug font-medium">{producto.descripcion}</p>}
-          </div>
-          <div className="flex items-baseline gap-1.5 mt-2">
-            <span className={`font-black text-[17px] ${tieneDescuento ? 'text-emerald-600 dark:text-emerald-400' : 'text-primary'}`}>${precioFinal.toFixed(0)}</span>
-            {tieneDescuento && <span className="text-[11px] font-semibold text-muted-foreground line-through opacity-70">${precioOriginal.toFixed(0)}</span>}
-          </div>
-        </div>
-      </div>
-    )
-  }
-
+  // Diseño sólido (único): el glassmorphism quedó discontinuado.
   return (
     <div
-      className={`group relative ${fullWidth ? 'w-full' : 'w-44 shrink-0'} h-52 rounded-3xl overflow-hidden cursor-pointer ${!fullWidth ? 'snap-start' : ''} shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]`}
+      className={`group relative flex flex-col ${fullWidth ? 'w-full' : 'w-48 shrink-0'} h-[260px] rounded-[24px] bg-card border border-border/50 shadow-md hover:shadow-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] overflow-hidden ${!fullWidth ? 'snap-start' : ''}`}
       onClick={onClick}
     >
-      <div className="absolute inset-0 bg-zinc-900">
+      <div className="w-full h-[130px] shrink-0 bg-zinc-900 relative">
         {producto.imagenUrl ? (
-          <img src={producto.imagenUrl} alt={producto.nombre} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out" />
+          <img src={producto.imagenUrl} alt={producto.nombre} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out" />
         ) : (
           <div className="w-full h-full flex items-center justify-center bg-linear-to-br from-zinc-800 to-zinc-900">
-            <Utensils className="w-12 h-12 text-primary" />
+            <Utensils className="w-10 h-10 text-primary" />
+          </div>
+        )}
+        {tieneDescuento && (
+          <div className="absolute top-2.5 left-2.5 z-10">
+            <span className="bg-emerald-500 text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full shadow-lg uppercase tracking-wide">{producto.descuento}% OFF</span>
           </div>
         )}
       </div>
-      <div className="absolute inset-0 bg-linear-to-t from-black/90 via-transparent to-transparent" />
-      <div className="absolute bottom-0 left-0 right-0 p-3.5">
-        <div className="rounded-2xl p-3 bg-white/70 dark:bg-white/10 backdrop-blur-md backdrop-saturate-150 border border-white/30 dark:border-white/10 shadow-[0_4px_30px_rgba(0,0,0,0.1)]">
-          <h3 className="font-semibold text-sm text-zinc-900 dark:text-white truncate leading-tight">
-            {producto.nombre}
-          </h3>
-          <div className="flex items-baseline gap-2 mt-0.5">
-            <span className={`font-bold text-lg ${tieneDescuento ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-800 dark:text-white/90'}`}>
-              ${precioFinal.toFixed(0)}
-            </span>
-            {tieneDescuento && (
-              <span className="text-xs text-zinc-500 dark:text-white/40 line-through">${precioOriginal.toFixed(0)}</span>
-            )}
-          </div>
+      <div className="p-3.5 flex flex-col flex-1 bg-card">
+        <div className="flex-1">
+          <h3 className="font-bold text-[14px] line-clamp-2 text-foreground leading-tight">{producto.nombre}</h3>
+          {producto.descripcion && <p className="mt-1 text-xs text-muted-foreground line-clamp-2 leading-snug font-medium">{producto.descripcion}</p>}
+        </div>
+        <div className="flex items-baseline gap-1.5 mt-2">
+          <span className={`font-black text-[17px] ${tieneDescuento ? 'text-emerald-600 dark:text-emerald-400' : 'text-primary'}`}>${precioFinal.toFixed(0)}</span>
+          {tieneDescuento && <span className="text-[11px] font-semibold text-muted-foreground line-through opacity-70">${precioOriginal.toFixed(0)}</span>}
         </div>
       </div>
     </div>

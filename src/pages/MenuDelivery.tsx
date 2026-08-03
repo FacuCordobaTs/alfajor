@@ -5,7 +5,7 @@ import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { toast } from 'sonner'
 import {
     Trash2, Maximize2, Minimize2, Loader2,
-    Package, Receipt, UtensilsCrossed, Utensils, Clock, Users, ChevronRight
+    Package, Receipt, UtensilsCrossed, Utensils, Clock, Share2, User, Plus
 } from 'lucide-react'
 import { ProductDetailDrawer } from '@/components/ProductDetailDrawer'
 import { ThemeToggle } from '@/components/ThemeToggle'
@@ -273,6 +273,7 @@ const MenuDelivery = () => {
                     direccion: tipoPedido === 'delivery' ? data.direccion : null,
                     montoDescuento: data.montoDescuento > 0 ? data.montoDescuento : undefined,
                     horarioProgramado: data.horarioProgramado || undefined,
+                    notas: data.notas || undefined,
                 }))
                 navigate(`/success`)
             } else {
@@ -399,6 +400,17 @@ const MenuDelivery = () => {
         abrirProductoDrawer()
     }
 
+    // Lista ordenada de productos "hermanos" para poder saltar de uno a otro dentro
+    // del drawer (mismo orden en que se ven en pantalla). El canje por puntos queda
+    // fuera: es un flujo aparte (`intentandoCanjear`) que no se navega.
+    const productosNavegables: any[] = selectedProduct?.intentandoCanjear
+        ? []
+        : selectedCategory === 'All'
+            ? categoriasOrdenadas.flatMap(c => productosPorCategoria[c] || [])
+            : selectedCategory === 'Canje Puntos'
+                ? []
+                : productosFiltrados
+
     const agregarAlPedido = (producto: any, cantidad: number = 1, ingredientesExcluidos?: number[], agregados?: any[]) => {
         let ingExNombres: string[] = []
         if (ingredientesExcluidos && ingredientesExcluidos.length > 0) {
@@ -494,6 +506,7 @@ const MenuDelivery = () => {
     }
 
     const onArmarPedidoClick = () => {
+        if (creandoSala) return
         const storedName = localStorage.getItem('cliente_nombre')
         if (storedName) {
             crearSala(storedName)
@@ -618,19 +631,23 @@ const MenuDelivery = () => {
 
                 {restaurante?.orderGroupEnabled !== false && (
                     <section
-                        className="flex items-center gap-4 px-4 py-3.5 rounded-2xl bg-card border border-border/60 shadow-sm cursor-pointer hover:shadow-md hover:border-border transition-all duration-200 active:scale-[0.98]"
+                        role="button"
+                        aria-label="Crear pedido entre amigos"
+                        className="flex items-center gap-4 px-4 py-4 rounded-2xl bg-primary/5 border border-primary/15 cursor-pointer hover:bg-primary/10 hover:border-primary/30 transition-all duration-200 active:scale-[0.98]"
                         onClick={onArmarPedidoClick}
                     >
-                        <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center shrink-0">
-                            <Users className="w-5 h-5 text-foreground/60" />
-                        </div>
+                        <AvatarStack />
                         <div className="flex-1 min-w-0">
-                            <p className="text-sm font-bold text-foreground leading-tight">Pedido entre amigos</p>
-                            <p className="text-[11.5px] text-muted-foreground mt-0.5 leading-snug">Compartí un link · cada uno elige lo suyo</p>
+                            <p className="text-sm font-bold text-foreground leading-tight">¿Piden entre varios?</p>
+                            <p className="text-[11.5px] text-muted-foreground mt-0.5 leading-snug">Compartí un link y cada uno agrega lo suyo</p>
                         </div>
-                        <div className="flex items-center gap-0.5 shrink-0 text-[11px] font-semibold text-muted-foreground border border-border/60 rounded-lg px-2.5 py-1.5 bg-muted/50">
-                            Crear
-                            <ChevronRight className="w-3.5 h-3.5" />
+                        <div className="flex items-center gap-1.5 shrink-0 text-[11px] font-bold text-primary-foreground bg-primary rounded-full px-3 py-2 shadow-sm">
+                            {creandoSala ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                                <Share2 className="w-3.5 h-3.5" />
+                            )}
+                            {creandoSala ? 'Creando…' : 'Crear link'}
                         </div>
                     </section>
                 )}
@@ -703,7 +720,6 @@ const MenuDelivery = () => {
                                                     key={producto.id}
                                                     producto={producto}
                                                     onClick={() => abrirDetalleProducto(producto)}
-                                                    disenoAlternativo={restaurante?.disenoAlternativo}
                                                 />
                                             ))}
                                             <div className="min-w-1 shrink-0" />
@@ -742,7 +758,6 @@ const MenuDelivery = () => {
                                             producto={producto}
                                             onClick={() => abrirDetalleProducto(producto)}
                                             fullWidth
-                                            disenoAlternativo={restaurante?.disenoAlternativo}
                                         />
                                     ))}
                                 </div>
@@ -960,6 +975,8 @@ const MenuDelivery = () => {
                 open={drawerOpen}
                 onClose={cerrarProductoDrawer}
                 onAddToOrder={agregarAlPedido}
+                siblings={productosNavegables}
+                onNavigate={(p) => setSelectedProduct(p)}
             />
 
             <MisPedidosDrawer
@@ -971,36 +988,81 @@ const MenuDelivery = () => {
             <Dialog open={modalSalaOpen} onOpenChange={setModalSalaOpen}>
                 <DialogContent className="max-w-sm rounded-3xl p-6">
                     <DialogHeader className="text-center sm:text-center">
-                        <div className="mx-auto w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-                            <UtensilsCrossed className="w-8 h-8 text-primary" />
+                        <div className="mx-auto mb-4">
+                            <AvatarStack grande />
                         </div>
-                        <DialogTitle className="text-xl">Pedido Grupal</DialogTitle>
-                        <DialogDescription className="text-center pt-2">
-                            Crearemos una sala virtual para que invites a tus amigos a agregar productos.
+                        <DialogTitle className="text-xl">Pedido entre amigos</DialogTitle>
+                        <DialogDescription className="text-center pt-1">
+                            Un solo pedido para todo el grupo, sin pasarse la lista.
                         </DialogDescription>
                     </DialogHeader>
-                    <form onSubmit={handleCrearSala} className="mt-4 space-y-4">
+                    <ol className="mt-4 space-y-3">
+                        {[
+                            'Compartís el link con tu grupo',
+                            'Cada uno agrega lo suyo desde su celu',
+                            'Todo sale junto, en un solo pedido',
+                        ].map((paso, i) => (
+                            <li key={i} className="flex items-center gap-3">
+                                <span className="w-6 h-6 shrink-0 rounded-full bg-primary/10 text-primary text-[11px] font-bold flex items-center justify-center">
+                                    {i + 1}
+                                </span>
+                                <span className="text-sm text-foreground/80 leading-snug">{paso}</span>
+                            </li>
+                        ))}
+                    </ol>
+                    <form onSubmit={handleCrearSala} className="mt-5 space-y-3">
                         <Input
                             placeholder="¿Cuál es tu nombre?"
                             value={nombreSala}
                             onChange={(e) => setNombreSala(e.target.value)}
                             required
                             autoComplete="off"
+                            autoFocus
                             className="h-12 text-center rounded-xl"
                         />
-                        <DialogFooter className="flex-col gap-2 sm:gap-2 pt-2">
+                        <DialogFooter className="flex-col gap-2 sm:gap-2">
                             <Button
                                 type="submit"
                                 size="lg"
                                 disabled={creandoSala || !nombreSala.trim()}
                                 className="w-full rounded-2xl font-semibold"
                             >
-                                {creandoSala ? 'Creando...' : 'Crear y continuar'}
+                                {creandoSala ? (
+                                    <>
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                        Creando tu link…
+                                    </>
+                                ) : (
+                                    <>
+                                        <Share2 className="w-4 h-4" />
+                                        Crear mi link
+                                    </>
+                                )}
                             </Button>
                         </DialogFooter>
                     </form>
                 </DialogContent>
             </Dialog>
+        </div>
+    )
+}
+
+// Pila de avatares con un lugar libre ("+"): el visual de "un grupo con lugar para vos".
+// Es lo que hace legible el pedido entre amigos sin leer ni una palabra.
+const AvatarStack = ({ grande }: { grande?: boolean }) => {
+    const circulo = grande ? 'w-11 h-11' : 'w-8 h-8'
+    const icono = grande ? 'w-5 h-5' : 'w-4 h-4'
+    return (
+        <div className={`flex shrink-0 ${grande ? '-space-x-3' : '-space-x-2.5'}`}>
+            <div className={`${circulo} rounded-full bg-primary text-primary-foreground flex items-center justify-center ring-2 ring-background z-[2]`}>
+                <User className={icono} />
+            </div>
+            <div className={`${circulo} rounded-full bg-primary/25 text-primary flex items-center justify-center ring-2 ring-background z-[1]`}>
+                <User className={icono} />
+            </div>
+            <div className={`${circulo} rounded-full border-2 border-dashed border-primary/40 text-primary/60 bg-background flex items-center justify-center`}>
+                <Plus className={icono} />
+            </div>
         </div>
     )
 }
@@ -1012,113 +1074,66 @@ const EmptyState = () => (
     </div>
 )
 
-const ProductoCard = ({ producto, onClick, fullWidth, disenoAlternativo }: { producto: any, onClick: () => void, fullWidth?: boolean, disenoAlternativo?: boolean }) => {
+const ProductoCard = ({ producto, onClick, fullWidth }: { producto: any, onClick: () => void, fullWidth?: boolean }) => {
     const tieneDescuento = !!(producto.descuento && producto.descuento > 0)
     const precioOriginal = parseFloat(producto.precio)
     const precioFinal = tieneDescuento ? precioOriginal * (1 - producto.descuento / 100) : precioOriginal
 
-    if (disenoAlternativo) {
-        return (
-            <div
-                className={`group relative flex flex-col ${fullWidth ? 'w-full' : 'w-48 shrink-0'} h-[260px] rounded-[24px] bg-card border border-border/50 shadow-md hover:shadow-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] overflow-hidden ${!fullWidth ? 'snap-start' : ''}`}
-                onClick={onClick}
-            >
-                <div className="w-full h-[130px] shrink-0 bg-zinc-900 relative">
-                    {producto.imagenUrl ? (
-                        <img
-                            src={producto.imagenUrl}
-                            alt={producto.nombre}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
-                        />
-                    ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-linear-to-br from-zinc-800 to-zinc-900">
-                            <Utensils className="w-10 h-10 text-primary" />
-                        </div>
-                    )}
-                    {tieneDescuento && (
-                        <div className="absolute top-2.5 left-2.5 z-10">
-                            <span className="bg-emerald-500 text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full shadow-lg uppercase tracking-wide">
-                                {producto.descuento}% OFF
-                            </span>
-                        </div>
-                    )}
-                </div>
-
-                <div className="p-3.5 flex flex-col flex-1 bg-card">
-                    <div className="flex-1">
-                        <h3 className="font-bold text-[14px] line-clamp-2 text-foreground leading-tight">
-                            {producto.nombre}
-                        </h3>
-                        {producto.descripcion && (
-                            <p className="mt-1 text-xs text-muted-foreground line-clamp-2 leading-snug font-medium">
-                                {producto.descripcion}
-                            </p>
-                        )}
-                    </div>
-
-                    <div className="flex items-baseline gap-1.5 mt-2">
-                        <span className={`font-black text-[17px] ${tieneDescuento ? 'text-emerald-600 dark:text-emerald-400' : 'text-primary'}`}>
-                            ${precioFinal.toFixed(0)}
-                        </span>
-                        {tieneDescuento && (
-                            <span className="text-[11px] font-semibold text-muted-foreground line-through opacity-70">
-                                ${precioOriginal.toFixed(0)}
-                            </span>
-                        )}
-                    </div>
-                    {tieneDescuento && producto.descuentoFechaFin && formatTimeLeft(producto.descuentoFechaFin) && (
-                        <div className="mt-1 flex items-center gap-1 text-[10px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 px-2 py-0.5 rounded-full border border-amber-500/20 w-fit">
-                            <span>⏱</span>
-                            <span>Vence en {formatTimeLeft(producto.descuentoFechaFin)}</span>
-                        </div>
-                    )}
-                </div>
-            </div>
-        )
-    }
-
+    // Diseño sólido (único): el glassmorphism quedó discontinuado.
     return (
         <div
-            className={`group relative ${fullWidth ? 'w-full' : 'w-44 shrink-0'} h-52 rounded-3xl overflow-hidden cursor-pointer ${!fullWidth ? 'snap-start' : ''} shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]`}
+            className={`group relative flex flex-col ${fullWidth ? 'w-full' : 'w-48 shrink-0'} h-[260px] rounded-[24px] bg-card border border-border/50 shadow-md hover:shadow-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] overflow-hidden ${!fullWidth ? 'snap-start' : ''}`}
             onClick={onClick}
         >
-            <div className="absolute inset-0 bg-zinc-900">
+            <div className="w-full h-[130px] shrink-0 bg-zinc-900 relative">
                 {producto.imagenUrl ? (
                     <img
                         src={producto.imagenUrl}
                         alt={producto.nombre}
-                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
                     />
                 ) : (
                     <div className="w-full h-full flex items-center justify-center bg-linear-to-br from-zinc-800 to-zinc-900">
-                        <Utensils className="w-12 h-12 text-primary" />
+                        <Utensils className="w-10 h-10 text-primary" />
+                    </div>
+                )}
+                {tieneDescuento && (
+                    <div className="absolute top-2.5 left-2.5 z-10">
+                        <span className="bg-emerald-500 text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full shadow-lg uppercase tracking-wide">
+                            {producto.descuento}% OFF
+                        </span>
                     </div>
                 )}
             </div>
-            <div className="absolute inset-0 bg-linear-to-t from-black/90 via-transparent to-transparent" />
-            {tieneDescuento && (
-                <div className="absolute top-2.5 left-2.5 z-10">
-                    <span className="bg-emerald-500 text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full shadow-lg uppercase tracking-wide">
-                        {producto.descuento}% OFF
-                    </span>
-                </div>
-            )}
-            <div className="absolute bottom-0 left-0 right-0 p-3.5">
-                <div className="rounded-2xl p-3 bg-white/70 dark:bg-white/10 backdrop-blur-md border border-white/30 dark:border-white/10 shadow-[0_4px_30px_rgba(0,0,0,0.1)]">
-                    <h3 className="font-semibold text-sm text-zinc-900 dark:text-white truncate leading-tight">
+
+            <div className="p-3.5 flex flex-col flex-1 bg-card">
+                <div className="flex-1">
+                    <h3 className="font-bold text-[14px] line-clamp-2 text-foreground leading-tight">
                         {producto.nombre}
                     </h3>
-                    <div className="flex items-baseline gap-2 mt-0.5">
-                        <span className={`font-bold text-lg ${tieneDescuento ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-800 dark:text-white/90'}`}>
-                            ${precioFinal.toFixed(0)}
-                        </span>
-                        {tieneDescuento && (
-                            <span className="text-xs text-zinc-500 dark:text-white/40 line-through">
-                                ${precioOriginal.toFixed(0)}
-                            </span>
-                        )}
-                    </div>
+                    {producto.descripcion && (
+                        <p className="mt-1 text-xs text-muted-foreground line-clamp-2 leading-snug font-medium">
+                            {producto.descripcion}
+                        </p>
+                    )}
                 </div>
+
+                <div className="flex items-baseline gap-1.5 mt-2">
+                    <span className={`font-black text-[17px] ${tieneDescuento ? 'text-emerald-600 dark:text-emerald-400' : 'text-primary'}`}>
+                        ${precioFinal.toFixed(0)}
+                    </span>
+                    {tieneDescuento && (
+                        <span className="text-[11px] font-semibold text-muted-foreground line-through opacity-70">
+                            ${precioOriginal.toFixed(0)}
+                        </span>
+                    )}
+                </div>
+                {tieneDescuento && producto.descuentoFechaFin && formatTimeLeft(producto.descuentoFechaFin) && (
+                    <div className="mt-1 flex items-center gap-1 text-[10px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 px-2 py-0.5 rounded-full border border-amber-500/20 w-fit">
+                        <span>⏱</span>
+                        <span>Vence en {formatTimeLeft(producto.descuentoFechaFin)}</span>
+                    </div>
+                )}
             </div>
         </div>
     )
