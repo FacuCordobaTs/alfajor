@@ -579,7 +579,7 @@ const MenuDelivery = () => {
         <div className="min-h-screen pb-32 bg-background font-sans selection:bg-primary/20">
             {themeStyles}
             <div className="sticky top-0 z-20 bg-background/80 backdrop-blur-md border-b border-border/50 supports-backdrop-filter:bg-background/60">
-                <div className="max-w-2xl mx-auto px-4 py-3">
+                <div className="max-w-2xl lg:max-w-5xl xl:max-w-6xl mx-auto px-4 py-3">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                             <ThemeToggle />
@@ -597,7 +597,7 @@ const MenuDelivery = () => {
 
             {!estadoAbierto.abierto && (
                 <div className={restaurante?.permitirPedidosProgramados ? "bg-amber-500 text-white" : "bg-red-600 text-white"}>
-                    <div className="max-w-2xl mx-auto px-5 py-3 flex items-center justify-center gap-2">
+                    <div className="max-w-2xl lg:max-w-5xl xl:max-w-6xl mx-auto px-5 py-3 flex items-center justify-center gap-2">
                         <Clock className="w-4 h-4 shrink-0" />
                         <p className="text-sm font-semibold text-center">
                             {restaurante?.permitirPedidosProgramados
@@ -609,7 +609,7 @@ const MenuDelivery = () => {
                 </div>
             )}
 
-            <div className="max-w-2xl mx-auto px-5 pt-4 space-y-6">
+            <div className="max-w-2xl lg:max-w-5xl xl:max-w-6xl mx-auto px-5 pt-4 space-y-6">
                 <section className="space-y-4">
                     <div className="flex items-center justify-center gap-4">
                         {restaurante.imagenUrl && (
@@ -633,7 +633,7 @@ const MenuDelivery = () => {
                     <section
                         role="button"
                         aria-label="Crear pedido entre amigos"
-                        className="flex items-center gap-4 px-4 py-4 rounded-2xl bg-primary/5 border border-primary/15 cursor-pointer hover:bg-primary/10 hover:border-primary/30 transition-all duration-200 active:scale-[0.98]"
+                        className="flex items-center gap-4 px-4 py-4 rounded-2xl bg-primary/5 border border-primary/15 cursor-pointer hover:bg-primary/10 hover:border-primary/30 transition-all duration-200 active:scale-[0.98] lg:max-w-2xl lg:mx-auto lg:w-full"
                         onClick={onArmarPedidoClick}
                     >
                         <AvatarStack />
@@ -653,7 +653,7 @@ const MenuDelivery = () => {
                 )}
 
                 {restaurante?.sistemaPuntos && (
-                    <section className="bg-primary/10 border border-primary/20 p-4 rounded-xl flex items-center justify-between shadow-sm">
+                    <section className="bg-primary/10 border border-primary/20 p-4 rounded-xl flex items-center justify-between shadow-sm lg:max-w-2xl lg:mx-auto lg:w-full">
                         <div className="flex flex-col">
                             <div className="flex items-center gap-2 mb-1">
                                 <span className="bg-primary text-primary-foreground text-xs px-2 py-0.5 rounded-full font-bold">PUNTOS</span>
@@ -714,7 +714,7 @@ const MenuDelivery = () => {
                                         <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider px-1">
                                             {categoriaNombre}
                                         </h3>
-                                        <div className="flex gap-4 overflow-x-auto pb-3  ml-2 scrollbar-hide snap-x snap-mandatory">
+                                        <div className="flex gap-4 overflow-x-auto pb-3 ml-2 scrollbar-hide snap-x snap-mandatory lg:grid lg:grid-cols-3 xl:grid-cols-4 lg:gap-5 lg:ml-0 lg:pb-0 lg:overflow-visible lg:snap-none">
                                             {productosDeCategoria.map((producto: any) => (
                                                 <ProductoCard
                                                     key={producto.id}
@@ -722,7 +722,7 @@ const MenuDelivery = () => {
                                                     onClick={() => abrirDetalleProducto(producto)}
                                                 />
                                             ))}
-                                            <div className="min-w-1 shrink-0" />
+                                            <div className="min-w-1 shrink-0 lg:hidden" />
                                         </div>
                                     </div>
                                 )
@@ -735,7 +735,7 @@ const MenuDelivery = () => {
                             <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider px-1">
                                 Productos a Canjear
                             </h3>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 px-1">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 px-1">
                                 {productos.filter(p => p.puntosNecesarios > 0).map((producto: any) => (
                                     <ProductoCanjeCard
                                         key={producto.id}
@@ -751,7 +751,7 @@ const MenuDelivery = () => {
                                 <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider px-1">
                                     {selectedCategory}
                                 </h3>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 px-1">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 px-1">
                                     {productosFiltrados.map((producto: any) => (
                                         <ProductoCard
                                             key={producto.id}
@@ -809,7 +809,7 @@ const MenuDelivery = () => {
                 className={`fixed inset-x-0 bottom-0 z-50 transition-transform duration-300 ease-out ${carritoAbierto ? 'translate-y-0' : 'translate-y-full pointer-events-none'}`}
             >
                 <div
-                    className={`mx-auto max-w-2xl bg-background rounded-t-3xl shadow-[0_-12px_40px_rgba(0,0,0,0.28)] border-t border-border flex flex-col transition-[height] duration-300 ease-out relative ${(!mostrarCheckoutEnCarrito || expandido) ? 'overflow-hidden' : 'overflow-y-auto'}`}
+                    className={`mx-auto max-w-2xl lg:max-w-lg bg-background rounded-t-3xl shadow-[0_-12px_40px_rgba(0,0,0,0.28)] border-t border-border flex flex-col transition-[height] duration-300 ease-out relative ${(!mostrarCheckoutEnCarrito || expandido) ? 'overflow-hidden' : 'overflow-y-auto'}`}
                     style={!mostrarCheckoutEnCarrito ? { height: alturaCarrito } : expandido ? { height: '85vh' } : { maxHeight: '88vh' }}
                 >
                     {submittingOrder && (
@@ -1082,7 +1082,7 @@ const ProductoCard = ({ producto, onClick, fullWidth }: { producto: any, onClick
     // Diseño sólido (único): el glassmorphism quedó discontinuado.
     return (
         <div
-            className={`group relative flex flex-col ${fullWidth ? 'w-full' : 'w-48 shrink-0'} h-[260px] rounded-[24px] bg-card border border-border/50 shadow-md hover:shadow-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] overflow-hidden ${!fullWidth ? 'snap-start' : ''}`}
+            className={`group relative flex flex-col ${fullWidth ? 'w-full' : 'w-48 shrink-0 lg:w-full'} h-[260px] rounded-[24px] bg-card border border-border/50 shadow-md hover:shadow-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] overflow-hidden ${!fullWidth ? 'snap-start' : ''}`}
             onClick={onClick}
         >
             <div className="w-full h-[130px] shrink-0 bg-zinc-900 relative">

@@ -922,7 +922,7 @@ export function CheckoutDeliveryGrupal({
 
   return (
     <div className={`flex flex-col ${compacto ? '' : 'flex-1 min-h-0'}`}>
-      <div className="shrink-0 flex items-center gap-3 px-5 pt-3 pb-1">
+      <div className="shrink-0 flex items-center gap-3 px-5 pt-3 pb-1 lg:w-full lg:max-w-md lg:mx-auto">
         <button
           type="button"
           onClick={handleAtras}
@@ -950,7 +950,7 @@ export function CheckoutDeliveryGrupal({
         )}
       </div>
 
-      <div className={compacto ? 'px-5 py-4 space-y-5' : 'flex-1 overflow-y-auto px-5 py-4 space-y-5 min-h-0'}>
+      <div className={`lg:w-full lg:max-w-md lg:mx-auto ${compacto ? 'px-5 py-4 space-y-5' : 'flex-1 overflow-y-auto px-5 py-4 space-y-5 min-h-0'}`}>
         {alguienEditando && (
           <div className="flex items-center gap-2.5 px-4 py-3 bg-secondary/60 rounded-2xl">
             <Loader2 className="w-4 h-4 animate-spin text-muted-foreground shrink-0" />
@@ -994,7 +994,7 @@ export function CheckoutDeliveryGrupal({
         )}
       </div>
 
-      <div className={`px-5 pb-5 pt-4 bg-background space-y-3 ${compacto ? 'sticky bottom-0 z-10' : 'shrink-0'}`}>
+      <div className={`px-5 pb-5 pt-4 bg-background space-y-3 lg:w-full lg:max-w-md lg:mx-auto ${compacto ? 'sticky bottom-0 z-10' : 'shrink-0'}`}>
         <div className="flex justify-between items-baseline">
           <span className="text-sm text-muted-foreground">Total</span>
           <span className="text-2xl font-black tracking-tight">${checkoutData?.total || total.toFixed(2)}</span>

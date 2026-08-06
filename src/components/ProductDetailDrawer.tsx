@@ -246,7 +246,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
 
   return (
     <Drawer open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DrawerContent className="overflow-hidden border-none bg-background p-0 outline-none [&>div:first-child]:hidden">
+      <DrawerContent className="overflow-hidden border-none bg-background p-0 outline-none [&>div:first-child]:hidden lg:mx-auto lg:max-w-md lg:rounded-t-[28px]">
         <motion.div
           className="relative overflow-hidden bg-background"
           animate={{ height: drawerHeight }}
