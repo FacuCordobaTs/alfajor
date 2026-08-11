@@ -684,18 +684,18 @@ const MenuDelivery = () => {
                 {categorias.length > 1 && (
                     <section className="space-y-3 pt-2">
                         <h2 className="text-lg font-bold text-foreground px-1">Categorías</h2>
-                        <div className="flex gap-2 overflow-x-auto pb-2 mx-2 scrollbar-hide snap-x">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 px-1">
                             {categorias.map((category) => (
                                 <Button
                                     key={category}
                                     onClick={() => setSelectedCategory(category || 'All')}
                                     variant={selectedCategory === category ? "default" : "secondary"}
-                                    className={`rounded-lg px-5 h-10 text-xs font-medium whitespace-nowrap snap-start transition-all ${selectedCategory === category
+                                    className={`rounded-lg px-5 h-10 text-xs font-medium transition-all ${selectedCategory === category
                                         ? "shadow-md"
                                         : "bg-secondary/50 hover:bg-secondary border border-transparent"
                                         }`}
                                 >
-                                    {category === 'All' ? 'Todas' : category}
+                                    <span className="truncate">{category === 'All' ? 'Todas' : category}</span>
                                 </Button>
                             ))}
                         </div>

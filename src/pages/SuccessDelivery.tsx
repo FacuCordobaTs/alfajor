@@ -386,6 +386,9 @@ const SuccessDelivery = () => {
     // Solo el plan Básico (sin avisos automáticos al cliente) muestra el botón manual.
     // Si el backend aún no envía el flag, se oculta por defecto (no mostrar de más).
     const mostrarEnvioWhatsapp = restauranteData?.avisosWhatsappClienteEnabled === false
+    // En Básico el cliente ya puede enviar el pedido completo al WhatsApp del local.
+    // No duplicamos esa acción con el envío separado del comprobante de transferencia.
+    const mostrarComprobanteWhatsapp = !mostrarEnvioWhatsapp
     const whatsappOrderButton = (whatsappOrderHref && mostrarEnvioWhatsapp) ? (
         <a
             href={whatsappOrderHref}
@@ -550,7 +553,7 @@ const SuccessDelivery = () => {
                                                 </div>
                                                 <Copy className="w-4 h-4 text-muted-foreground shrink-0 ml-3" />
                                             </button>
-                                            {whatsappHref ? (
+                                            {whatsappHref && mostrarComprobanteWhatsapp ? (
                                                 <a
                                                     href={whatsappHref}
                                                     target="_blank"
@@ -559,11 +562,11 @@ const SuccessDelivery = () => {
                                                 >
                                                     Enviar comprobante por WhatsApp
                                                 </a>
-                                            ) : (
+                                            ) : !mostrarEnvioWhatsapp ? (
                                                 <p className="text-sm text-center text-muted-foreground leading-snug">
                                                     Enviá el comprobante a las redes del local o presentalo al retirar.
                                                 </p>
-                                            )}
+                                            ) : null}
                                         </>
                                     ) : (
                                         <p className="text-sm text-muted-foreground">
