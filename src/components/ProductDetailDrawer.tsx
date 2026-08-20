@@ -105,6 +105,14 @@ const navVariants = {
 
 
 type CustomizationStage = 'primary' | 'secondary' | 'extrasPrimary' | 'extrasSecondary'
+type MedallonSelection = 'simple' | 'doble' | 'triple'
+
+const normalizarNombre = (nombre: string) => nombre
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase()
+  .replace(/\s+/g, ' ')
+  .trim()
 
 export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, siblings, onNavigate }: ProductDetailDrawerProps) {
   const [stage, setStage] = useState<CustomizationStage>('primary')
@@ -113,6 +121,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
   const [agregadosSeleccionados, setAgregadosSeleccionados] = useState<Agregado[]>([])
   const [varianteSeleccionada, setVarianteSeleccionada] = useState<Variante | null>(null)
   const [varianteSecundariaSeleccionada, setVarianteSecundariaSeleccionada] = useState<Variante | null>(null)
+  const [medallonSeleccionado, setMedallonSeleccionado] = useState<MedallonSelection>('simple')
   const [addCount, setAddCount] = useState(0)
   const [showCounter, setShowCounter] = useState(false)
   // Dirección del último salto entre productos (alimenta la animación de deslizamiento).
@@ -125,6 +134,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
       setAgregadosSeleccionados([])
       setVarianteSeleccionada(null)
       setVarianteSecundariaSeleccionada(null)
+      setMedallonSeleccionado('simple')
       setQuantity(1)
       setAddCount(0)
       setShowCounter(false)
@@ -132,12 +142,35 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
   }, [open, product?.id])
 
   const tieneIngredientes = !!(product?.ingredientes && product.ingredientes.length > 0)
-  const agregadosPrimarios = product?.agregadosPrimarios
+  const todosLosAgregados = [
+    ...(product?.agregados ?? []),
+    ...(product?.agregadosPrimarios ?? []),
+    ...(product?.agregadosSecundarios ?? []),
+  ]
+  const extraDobleMedallon = todosLosAgregados.find(ag => normalizarNombre(ag.nombre) === 'doble medallon')
+  const extraTripleMedallon = todosLosAgregados.find(ag => normalizarNombre(ag.nombre) === 'triple medallon')
+  const idsExtrasMedallon = new Set(
+    [extraDobleMedallon?.id, extraTripleMedallon?.id].filter((id): id is number => id !== undefined)
+  )
+  const tieneSelectorMedallon = idsExtrasMedallon.size > 0
+  const agregadoMedallonSeleccionado = medallonSeleccionado === 'doble'
+    ? extraDobleMedallon
+    : medallonSeleccionado === 'triple'
+      ? extraTripleMedallon
+      : undefined
+  const opcionesMedallon: Array<{ id: MedallonSelection; nombre: string; agregado?: Agregado }> = [
+    { id: 'simple', nombre: 'Simple' },
+    ...(extraDobleMedallon ? [{ id: 'doble' as const, nombre: 'Doble', agregado: extraDobleMedallon }] : []),
+    ...(extraTripleMedallon ? [{ id: 'triple' as const, nombre: 'Triple', agregado: extraTripleMedallon }] : []),
+  ]
+  // Estos agregados representan el tamaño de la hamburguesa: se eligen de
+  // forma exclusiva en la primera etapa y no se repiten en la lista de extras.
+  const agregadosPrimarios = (product?.agregadosPrimarios
     ?? product?.agregados?.filter(a => (a.grupo ?? 1) === 1)
-    ?? []
-  const agregadosSecundarios = product?.agregadosSecundarios
+    ?? []).filter(ag => !idsExtrasMedallon.has(ag.id))
+  const agregadosSecundarios = (product?.agregadosSecundarios
     ?? product?.agregados?.filter(a => a.grupo === 2)
-    ?? []
+    ?? []).filter(ag => !idsExtrasMedallon.has(ag.id))
   const tieneAgregadosPrimarios = agregadosPrimarios.length > 0
   const tieneAgregadosSecundarios = agregadosSecundarios.length > 0
   const tieneVariantes = !!(product?.variantes && product.variantes.length > 0)
@@ -214,7 +247,8 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
   const precioBase = precioBasePrimario + (varianteSecundariaSeleccionada ? parseFloat(varianteSecundariaSeleccionada.precio) : 0)
   const tieneDescuento = !!(product?.descuento && product.descuento > 0)
   const precioUnitConDescuento = tieneDescuento ? precioBase * (1 - (product!.descuento! / 100)) : precioBase
-  const precioAgregados = agregadosSeleccionados.reduce((sum, ag) => sum + parseFloat(ag.precio || '0'), 0)
+  const precioMedallon = parseFloat(agregadoMedallonSeleccionado?.precio || '0')
+  const precioAgregados = agregadosSeleccionados.reduce((sum, ag) => sum + parseFloat(ag.precio || '0'), precioMedallon)
   const total = (precioUnitConDescuento + precioAgregados) * quantity
   const totalTachado = (precioBase + precioAgregados) * quantity
 
@@ -233,11 +267,14 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
 
   const handleAdd = () => {
     if (!product) return
+    const agregadosFinales = agregadoMedallonSeleccionado
+      ? [agregadoMedallonSeleccionado, ...agregadosSeleccionados.filter(ag => ag.id !== agregadoMedallonSeleccionado.id)]
+      : agregadosSeleccionados
     onAddToOrder(
       product,
       quantity,
       ingredientesExcluidos.length > 0 ? ingredientesExcluidos : undefined,
-      agregadosSeleccionados.length > 0 ? agregadosSeleccionados : undefined,
+      agregadosFinales.length > 0 ? agregadosFinales : undefined,
       varianteSeleccionada ?? undefined,
       varianteSecundariaSeleccionada ?? undefined
     )
@@ -255,6 +292,9 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
 
   // ── Cálculo de altura dinámica del drawer ──
   const variantCount = product?.variantes?.length ?? 0
+  const medallonVariantCount = tieneSelectorMedallon
+    ? 1 + Number(!!extraDobleMedallon) + Number(!!extraTripleMedallon)
+    : 0
   const secondaryVariantCount = product?.variantesSecundarias?.length ?? 0
   const vh = typeof window !== 'undefined' ? window.innerHeight : 800
 
@@ -265,7 +305,9 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
   const stage1Height = Math.min(
     Math.max(
       stage1Base + LABEL_H + ROW_H,
-      stage1Base + (tieneVariantes ? LABEL_H + Math.min(variantCount, MAX_VISIBLE_VARIANTS) * ROW_H : 0)
+      stage1Base
+        + (tieneVariantes ? LABEL_H + Math.min(variantCount, MAX_VISIBLE_VARIANTS) * ROW_H : 0)
+        + (tieneSelectorMedallon ? LABEL_H + Math.min(medallonVariantCount, MAX_VISIBLE_VARIANTS) * ROW_H : 0)
     ),
     Math.round(vh * 0.85)
   )
@@ -497,6 +539,42 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                                 {stage === 'primary' && <p className="text-[15px] leading-relaxed text-foreground/70">
                                   {product.descripcion || 'Sin descripción.'}
                                 </p>}
+
+                                {stage === 'primary' && tieneSelectorMedallon && (
+                                  <div className="space-y-1">
+                                    <p className="px-1 pb-1 text-[13px] font-medium text-muted-foreground">
+                                      {tieneVariantes ? 'Elegí la cantidad de medallones' : (product.tituloVariantesPrimarias || 'Elegí una opción')}
+                                    </p>
+                                    <div
+                                      className="flex flex-col gap-0.5 overflow-y-auto overscroll-contain"
+                                      style={{ maxHeight: MAX_VISIBLE_VARIANTS * ROW_H }}
+                                    >
+                                      {opcionesMedallon.map((opcion) => {
+                                        const sel = medallonSeleccionado === opcion.id
+                                        const precioOpcion = parseFloat(String(product.precio || 0))
+                                          + parseFloat(opcion.agregado?.precio || '0')
+                                        return (
+                                          <button
+                                            key={opcion.id}
+                                            type="button"
+                                            onClick={() => setMedallonSeleccionado(opcion.id)}
+                                            className={cn(rowBtn, sel ? 'bg-primary/10' : 'bg-secondary/50')}
+                                          >
+                                            <span className={cn('text-[15px]', sel ? 'font-semibold text-primary' : 'text-foreground')}>
+                                              {opcion.nombre}
+                                            </span>
+                                            <span className="flex items-center gap-2">
+                                              <span className={cn('text-[15px]', sel ? 'font-semibold text-primary' : 'text-muted-foreground')}>
+                                                ${precioOpcion.toFixed(2)}
+                                              </span>
+                                              {sel && <Check className="h-[18px] w-[18px] text-primary" />}
+                                            </span>
+                                          </button>
+                                        )
+                                      })}
+                                    </div>
+                                  </div>
+                                )}
 
                                 {((stage === 'primary' && tieneVariantes) || (stage === 'secondary' && tieneVariantesSecundarias)) && (
                                   <div className="space-y-1">
