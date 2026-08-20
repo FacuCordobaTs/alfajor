@@ -414,7 +414,7 @@ const MenuDelivery = () => {
                 ? []
                 : productosFiltrados
 
-    const agregarAlPedido = (producto: any, cantidad: number = 1, ingredientesExcluidos?: number[], agregados?: any[]) => {
+    const agregarAlPedido = (producto: any, cantidad: number = 1, ingredientesExcluidos?: number[], agregados?: any[], varianteSeleccionada?: any, varianteSecundariaSeleccionada?: any) => {
         let ingExNombres: string[] = []
         if (ingredientesExcluidos && ingredientesExcluidos.length > 0) {
             ingExNombres = producto.ingredientes
@@ -431,23 +431,32 @@ const MenuDelivery = () => {
             }
         }
 
-        let precioFinal = producto.precio
+        let basePrecio = varianteSeleccionada ? parseFloat(varianteSeleccionada.precio) : parseFloat(producto.precio)
+        basePrecio += varianteSecundariaSeleccionada ? parseFloat(varianteSecundariaSeleccionada.precio) : 0
+        let precioFinal = basePrecio
         if (!esCanje && producto.descuento && producto.descuento > 0) {
-            precioFinal = (parseFloat(producto.precio) * (1 - producto.descuento / 100)).toFixed(2)
+            precioFinal = basePrecio * (1 - producto.descuento / 100)
         }
 
         const precioAgregados = agregados ? agregados.reduce((sum: number, ag: any) => sum + parseFloat(ag.precio || 0), 0) : 0;
-        const precioFinalNumber = esCanje ? 0 : parseFloat(precioFinal) + precioAgregados;
+        const precioFinalNumber = esCanje ? 0 : precioFinal + precioAgregados;
+
+        const nombresVariantes = [varianteSeleccionada?.nombre, varianteSecundariaSeleccionada?.nombre].filter(Boolean).join(' · ')
+        const baseNombre = nombresVariantes ? `${producto.nombre} - ${nombresVariantes}` : producto.nombre;
 
         const newItem = {
             id: Math.random().toString(36).substr(2, 9),
             productoId: producto.id,
-            nombre: esCanje ? `${producto.nombre} (Canje)` : producto.nombre,
+            nombre: esCanje ? `${baseNombre} (Canje)` : baseNombre,
             precio: precioFinalNumber.toFixed(2),
-            precioOriginal: producto.precio,
+            precioOriginal: varianteSeleccionada ? varianteSeleccionada.precio : producto.precio,
             descuento: producto.descuento || 0,
             imagenUrl: producto.imagenUrl,
             cantidad,
+            varianteId: varianteSeleccionada?.id,
+            varianteNombre: varianteSeleccionada?.nombre,
+            varianteSecundariaId: varianteSecundariaSeleccionada?.id,
+            varianteSecundariaNombre: varianteSecundariaSeleccionada?.nombre,
             ingredientesExcluidos: ingredientesExcluidos || [],
             ingredientesExcluidosNombres: ingExNombres,
             agregados: agregados || [],
