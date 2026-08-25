@@ -8,8 +8,6 @@ import {
     Package, Receipt, UtensilsCrossed, Utensils, Clock, Share2, User, Plus
 } from 'lucide-react'
 import { ProductDetailDrawer } from '@/components/ProductDetailDrawer'
-import { ThemeToggle } from '@/components/ThemeToggle'
-import { MisPedidosDrawer } from '@/components/MisPedidosDrawer'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { CheckoutDeliveryGrupal } from '@/components/CheckoutDeliveryGrupal'
@@ -84,12 +82,50 @@ const MenuDelivery = () => {
     const [drawerOpen, setDrawerOpen] = useState(false)
     const [selectedCategory, setSelectedCategory] = useState<string>('All')
     const [cartAnimation, setCartAnimation] = useState(false)
+    const [scrollDir, setScrollDir] = useState<'up' | 'down' | null>(null)
+    const scrollTimerRef = useRef<number | null>(null)
+
+    // El botón "Ver Pedido" reacciona a la dirección del scroll (efecto contra-scroll):
+    // mientras scrollés hacia arriba baja un poco, mientras scrollés hacia abajo sube un
+    // poco, y al dejar de scrollear (~150ms sin movimiento) vuelve a su posición.
+    useEffect(() => {
+        let lastY = window.scrollY
+        const handleScroll = () => {
+            const y = window.scrollY
+            const delta = y - lastY
+            lastY = y
+            if (Math.abs(delta) < 2) return
+            setScrollDir(delta > 0 ? 'down' : 'up')
+            if (scrollTimerRef.current) window.clearTimeout(scrollTimerRef.current)
+            scrollTimerRef.current = window.setTimeout(() => setScrollDir(null), 150)
+        }
+        window.addEventListener('scroll', handleScroll, { passive: true })
+        return () => {
+            window.removeEventListener('scroll', handleScroll)
+            if (scrollTimerRef.current) window.clearTimeout(scrollTimerRef.current)
+        }
+    }, [])
 
     const [restaurante, setRestaurante] = useState<any>(null)
     const [productos, setProductos] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
     const [horarios, setHorarios] = useState<HorarioTurno[]>([])
     const [estadoAbierto, setEstadoAbierto] = useState<{ abierto: boolean; proximaApertura: string | null }>({ abierto: true, proximaApertura: null })
+
+    // Píldora de Instagram: aparece desde arriba cuando el logo queda fuera de vista
+    // al scrollear, y desaparece cuando el logo vuelve a entrar en pantalla.
+    const logoRef = useRef<HTMLDivElement>(null)
+    const [logoOculto, setLogoOculto] = useState(false)
+
+    useEffect(() => {
+        const el = logoRef.current
+        if (!el) return
+        const obs = new IntersectionObserver(([entry]) => {
+            setLogoOculto(!entry.isIntersecting)
+        }, { threshold: 0 })
+        obs.observe(el)
+        return () => obs.disconnect()
+    }, [restaurante])
 
     const [modalSalaOpen, setModalSalaOpen] = useState(false)
     const [nombreSala, setNombreSala] = useState('')
@@ -126,7 +162,6 @@ const MenuDelivery = () => {
     const [puntosCliente, setPuntosCliente] = useState<number | null>(null)
     const [loadingPuntos, setLoadingPuntos] = useState(false)
     const [modalPuntosOpen, setModalPuntosOpen] = useState(false)
-    const [misPedidosOpen, setMisPedidosOpen] = useState(false)
 
     const fetchPuntos = useCallback(async (telefono: string, restauranteId: number) => {
         if (!telefono || !restauranteId) return
@@ -591,21 +626,39 @@ const MenuDelivery = () => {
     return (
         <div className="min-h-screen pb-32 bg-background font-sans selection:bg-primary/20">
             {themeStyles}
-            <div className="sticky top-0 z-20 bg-background/80 backdrop-blur-md border-b border-border/50 supports-backdrop-filter:bg-background/60">
-                <div className="max-w-2xl lg:max-w-5xl xl:max-w-6xl mx-auto px-4 py-3">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <ThemeToggle />
-                        </div>
-                        <button
-                            onClick={() => setMisPedidosOpen(true)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-primary hover:bg-primary/10 transition-colors border border-primary/20"
-                        >
-                            <Package className="w-3.5 h-3.5" />
-                            Mis Pedidos
-                        </button>
-                    </div>
-                </div>
+
+            {/* PÍLDORA INSTAGRAM: aparece deslizándose desde arriba cuando el logo queda fuera de
+                vista, y vuelve a esconderse cuando el logo reaparece. Mismo glassmorphism y mismo
+                contra-scroll que el botón "Ver Pedido". */}
+            <div className={`fixed top-0 left-0 right-0 flex justify-center z-40 transition-all duration-500 ${logoOculto ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0 pointer-events-none'}`}>
+                <a
+                    href="https://www.instagram.com/alfajorconpapas/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`
+                        mt-3 group relative flex items-center gap-3 pl-2 pr-5 py-2 rounded-full
+                        before:absolute before:inset-0 before:rounded-full before:pointer-events-none before:content-[''] before:bg-linear-to-b before:from-white/25 before:via-white/5 before:to-transparent
+                        hover:scale-[1.02] active:scale-95 transition-all duration-300
+                        bg-white/20 text-zinc-900 backdrop-blur-xl backdrop-saturate-150 border border-white/40
+                        shadow-[0_12px_32px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.7),inset_0_0_0_1px_rgba(255,255,255,0.3),inset_0_0_16px_rgba(255,255,255,0.3)]
+                        dark:bg-white/10 dark:text-white dark:backdrop-blur-xl dark:backdrop-saturate-150
+                        dark:border dark:border-white/15 dark:shadow-[0_12px_32px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.25),inset_0_0_0_1px_rgba(255,255,255,0.15),inset_0_0_16px_rgba(255,255,255,0.1)]
+                        ${scrollDir === 'down' ? '-translate-y-1.5' : scrollDir === 'up' ? 'translate-y-1.5' : 'translate-y-0'}
+                    `}
+                >
+                    <img
+                        src="/logo.webp"
+                        alt="Logo Alfajor con Papas"
+                        className="w-16 h-auto shrink-0 object-contain"
+                    />
+                    <div className="h-4 w-px bg-current opacity-20" />
+                    <span className="flex items-center gap-1.5">
+                        <span className={`w-2 h-2 rounded-full ${estadoAbierto.abierto ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                        <span className="font-semibold text-xs tracking-wide">
+                            {estadoAbierto.abierto ? 'Abierto' : 'Cerrado'}
+                        </span>
+                    </span>
+                </a>
             </div>
 
             {!estadoAbierto.abierto && (
@@ -624,7 +677,7 @@ const MenuDelivery = () => {
 
             <div className="max-w-2xl lg:max-w-5xl xl:max-w-6xl mx-auto px-5 pt-4 space-y-6">
                 <section className="space-y-4">
-                    <div className="flex items-center justify-center gap-4">
+                    <div ref={logoRef} className="flex items-center justify-center gap-4">
                         {restaurante.imagenUrl && (
                             <img
                                 src={restaurante.imagenUrl}
@@ -795,6 +848,7 @@ const MenuDelivery = () => {
             dark:bg-white/10 dark:text-white dark:backdrop-blur-xl dark:backdrop-saturate-150
             dark:border dark:border-white/15 dark:shadow-[0_12px_32px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.25),inset_0_0_0_1px_rgba(255,255,255,0.15),inset_0_0_16px_rgba(255,255,255,0.1)]
             ${cartAnimation ? 'scale-105' : 'scale-100'}
+            ${scrollDir === 'down' ? '-translate-y-1.5' : scrollDir === 'up' ? 'translate-y-1.5' : 'translate-y-0'}
           `}
                 >
                     <div className={`absolute -top-2 -right-1 bg-red-500 text-white text-[10px] font-bold h-5 min-w-[20px] px-1 flex items-center justify-center rounded-full border-2 border-background z-10 transition-transform duration-300 ${cartAnimation ? 'scale-125' : 'scale-100'}`}>
@@ -992,12 +1046,6 @@ const MenuDelivery = () => {
                 onAddToOrder={agregarAlPedido}
                 siblings={productosNavegables}
                 onNavigate={(p) => setSelectedProduct(p)}
-            />
-
-            <MisPedidosDrawer
-                open={misPedidosOpen}
-                onOpenChange={setMisPedidosOpen}
-                restauranteId={restaurante?.id ?? null}
             />
 
             <Dialog open={modalSalaOpen} onOpenChange={setModalSalaOpen}>
