@@ -10,7 +10,11 @@ import {
 import { ProductDetailDrawer, etiquetaVarianteMedallon } from '@/components/ProductDetailDrawer'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { CheckoutDeliveryGrupal } from '@/components/CheckoutDeliveryGrupal'
+import {
+    CheckoutDeliveryGrupal,
+    guardarDireccionCliente,
+    sincronizarDireccionesCliente,
+} from '@/components/CheckoutDeliveryGrupal'
 import { configurarGtm, contextoParaPedidoMarketing, registrarEventoTracking, registrarEventoTrackingUnaVez } from '@/lib/tracking'
 
 type PedidoHistorico = {
@@ -213,6 +217,12 @@ const MenuDelivery = () => {
     const [puntosCliente, setPuntosCliente] = useState<number | null>(null)
     const [loadingPuntos, setLoadingPuntos] = useState(false)
     const [modalPuntosOpen, setModalPuntosOpen] = useState(false)
+
+    useEffect(() => {
+        const telefono = telefonoCliente.replace(/\D/g, '')
+        if (!restaurante?.id || telefono.length < 8) return
+        void sincronizarDireccionesCliente(restaurante.id, telefono).catch(() => {})
+    }, [restaurante?.id, telefonoCliente])
 
     const fetchPuntos = useCallback(async (telefono: string, restauranteId: number) => {
         if (!telefono || !restauranteId) return
@@ -519,10 +529,18 @@ const MenuDelivery = () => {
                 })
                 localStorage.setItem('cliente_nombre', data.nombre)
                 localStorage.setItem('cliente_telefono', data.telefono)
+                setTelefonoCliente(data.telefono)
                 if (tipoPedido === 'delivery') {
                     localStorage.setItem('cliente_direccion', data.direccion || '')
                     if (data.lat != null) localStorage.setItem('cliente_lat', String(data.lat))
                     if (data.lng != null) localStorage.setItem('cliente_lng', String(data.lng))
+                    guardarDireccionCliente(
+                        restaurante.id,
+                        data.telefono,
+                        data.direccion || '',
+                        data.lat ?? null,
+                        data.lng ?? null,
+                    )
                 }
                 localStorage.removeItem(`deliveryCart_${username}`)
                 sessionStorage.setItem('deliveryOrderInfo', JSON.stringify({

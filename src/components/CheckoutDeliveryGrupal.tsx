@@ -14,7 +14,107 @@ import type { contextoParaPedidoMarketing } from '@/lib/tracking'
 type MetodoPublico = { id: string; label: string; automatico: boolean }
 type FranjaHorario = { id: number; nombre: string; horaInicio: string; horaFin: string }
 
-type PasoCheckout = 'tipo' | 'datos' | 'ubicacion' | 'extras'
+type PasoCheckout = 'tipo' | 'datos' | 'ubicacion' | 'domicilio' | 'extras'
+
+type DireccionGuardada = {
+  direccion: string
+  lat: number | null
+  lng: number | null
+  usadaEn: number
+}
+
+const MAX_DIRECCIONES_GUARDADAS = 6
+
+const normalizarTelefonoDireccion = (telefono: string) => telefono.replace(/\D/g, '')
+const normalizarDireccion = (direccion: string) => direccion
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/\s+/g, ' ')
+  .trim()
+  .toLowerCase()
+
+const storageKeyDirecciones = (restauranteId: number, telefono: string) =>
+  `cliente_direcciones_v1_${restauranteId}_${normalizarTelefonoDireccion(telefono)}`
+
+export const leerDireccionesCliente = (restauranteId: number, telefono: string): DireccionGuardada[] => {
+  if (!restauranteId || normalizarTelefonoDireccion(telefono).length < 8) return []
+  try {
+    const guardadas = JSON.parse(localStorage.getItem(storageKeyDirecciones(restauranteId, telefono)) || '[]')
+    if (!Array.isArray(guardadas)) return []
+    return guardadas
+      .filter((item): item is DireccionGuardada => !!item && typeof item.direccion === 'string' && !!item.direccion.trim())
+      .slice(0, MAX_DIRECCIONES_GUARDADAS)
+  } catch {
+    return []
+  }
+}
+
+const guardarDireccionesCliente = (
+  restauranteId: number,
+  telefono: string,
+  nuevas: DireccionGuardada[],
+): DireccionGuardada[] => {
+  if (!restauranteId || normalizarTelefonoDireccion(telefono).length < 8) return []
+
+  const combinadas = new Map<string, DireccionGuardada>()
+  for (const item of [...leerDireccionesCliente(restauranteId, telefono), ...nuevas]) {
+    const direccion = item.direccion.trim()
+    const clave = normalizarDireccion(direccion)
+    if (!clave) continue
+    const anterior = combinadas.get(clave)
+    const candidata = {
+      direccion,
+      lat: Number.isFinite(item.lat) ? item.lat : null,
+      lng: Number.isFinite(item.lng) ? item.lng : null,
+      usadaEn: Number.isFinite(item.usadaEn) ? item.usadaEn : Date.now(),
+    }
+    combinadas.set(clave, anterior ? {
+      direccion: candidata.usadaEn >= anterior.usadaEn ? candidata.direccion : anterior.direccion,
+      lat: candidata.lat ?? anterior.lat,
+      lng: candidata.lng ?? anterior.lng,
+      usadaEn: Math.max(anterior.usadaEn, candidata.usadaEn),
+    } : candidata)
+  }
+
+  const resultado = [...combinadas.values()]
+    .sort((a, b) => b.usadaEn - a.usadaEn)
+    .slice(0, MAX_DIRECCIONES_GUARDADAS)
+  try {
+    localStorage.setItem(storageKeyDirecciones(restauranteId, telefono), JSON.stringify(resultado))
+  } catch { /* localStorage puede estar bloqueado */ }
+  return resultado
+}
+
+export const guardarDireccionCliente = (
+  restauranteId: number,
+  telefono: string,
+  direccion: string,
+  lat: number | null,
+  lng: number | null,
+) => guardarDireccionesCliente(restauranteId, telefono, [{ direccion, lat, lng, usadaEn: Date.now() }])
+
+export const sincronizarDireccionesCliente = async (restauranteId: number, telefono: string) => {
+  const telefonoNormalizado = normalizarTelefonoDireccion(telefono)
+  if (!restauranteId || telefonoNormalizado.length < 8) return leerDireccionesCliente(restauranteId, telefono)
+
+  const url = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+  const response = await fetch(`${url}/public/restaurante/${restauranteId}/mis-pedidos/${encodeURIComponent(telefonoNormalizado)}`)
+  if (!response.ok) return leerDireccionesCliente(restauranteId, telefonoNormalizado)
+  const result = await response.json()
+  const pedidos = Array.isArray(result.data) ? result.data : []
+  return guardarDireccionesCliente(restauranteId, telefonoNormalizado, pedidos.flatMap((pedido: any) => {
+    if (pedido?.tipo !== 'delivery' || typeof pedido.direccion !== 'string' || !pedido.direccion.trim()) return []
+    const lat = pedido.latitud == null || pedido.latitud === '' ? null : Number(pedido.latitud)
+    const lng = pedido.longitud == null || pedido.longitud === '' ? null : Number(pedido.longitud)
+    const usadaEn = new Date(pedido.createdAt || 0).getTime()
+    return [{
+      direccion: pedido.direccion,
+      lat: lat !== null && Number.isFinite(lat) ? lat : null,
+      lng: lng !== null && Number.isFinite(lng) ? lng : null,
+      usadaEn: Number.isFinite(usadaEn) ? usadaEn : 0,
+    }]
+  }))
+}
 
 interface CheckoutDeliveryGrupalProps {
   restauranteId: number
@@ -101,6 +201,9 @@ export function CheckoutDeliveryGrupal({
   const [restauranteData, setRestauranteData] = useState<any>(null)
   const [isLoadingRestaurante, setIsLoadingRestaurante] = useState(false)
   const [franjas, setFranjas] = useState<FranjaHorario[]>([])
+  const [direccionesGuardadas, setDireccionesGuardadas] = useState<DireccionGuardada[]>(() =>
+    leerDireccionesCliente(restauranteId, checkoutData?.telefono || localStorage.getItem('cliente_telefono') || ''),
+  )
 
   const [zonaDeliveryFee, setZonaDeliveryFee] = useState<number | null>(checkoutData ? checkoutData.deliveryFee : null)
   const [zonaNombre, setZonaNombre] = useState<string | null>(checkoutData?.zonaNombre ?? null)
@@ -114,7 +217,9 @@ export function CheckoutDeliveryGrupal({
 
   const [paso, setPaso] = useState(0)
   const [editandoHabitual, setEditandoHabitual] = useState(false)
-  const pasos: PasoCheckout[] = ['tipo', 'datos', 'ubicacion', 'extras']
+  const pasos: PasoCheckout[] = tipoPedido === 'delivery'
+    ? ['tipo', 'datos', 'ubicacion', 'domicilio', 'extras']
+    : ['tipo', 'datos', 'ubicacion', 'extras']
 
   const estoyEditando = editSemaphore?.clienteId === clienteId
   const alguienEditando = editSemaphore && !estoyEditando
@@ -160,6 +265,44 @@ export function CheckoutDeliveryGrupal({
       return availablePaymentMethods[0].id
     })
   }, [availablePaymentMethods])
+
+  useEffect(() => {
+    const telefonoNormalizado = normalizarTelefonoDireccion(telefono)
+    if (!restauranteId || telefonoNormalizado.length < 8) {
+      setDireccionesGuardadas([])
+      return
+    }
+
+    let locales = leerDireccionesCliente(restauranteId, telefonoNormalizado)
+    if (locales.length === 0) {
+      const direccionAnterior = localStorage.getItem('cliente_direccion')?.trim()
+      if (direccionAnterior) {
+        const latGuardada = localStorage.getItem('cliente_lat')
+        const lngGuardada = localStorage.getItem('cliente_lng')
+        const latAnterior = latGuardada === null ? null : Number(latGuardada)
+        const lngAnterior = lngGuardada === null ? null : Number(lngGuardada)
+        locales = guardarDireccionCliente(
+          restauranteId,
+          telefonoNormalizado,
+          direccionAnterior,
+          latAnterior !== null && Number.isFinite(latAnterior) ? latAnterior : null,
+          lngAnterior !== null && Number.isFinite(lngAnterior) ? lngAnterior : null,
+        )
+      }
+    }
+    setDireccionesGuardadas(locales)
+
+    let cancelado = false
+    const timer = window.setTimeout(() => {
+      void sincronizarDireccionesCliente(restauranteId, telefonoNormalizado)
+        .then((direcciones) => { if (!cancelado) setDireccionesGuardadas(direcciones) })
+        .catch(() => { /* las sugerencias locales siguen disponibles sin conexión */ })
+    }, 450)
+    return () => {
+      cancelado = true
+      window.clearTimeout(timer)
+    }
+  }, [restauranteId, telefono])
 
   useEffect(() => {
     if (!checkoutData) return
@@ -436,11 +579,13 @@ export function CheckoutDeliveryGrupal({
         if (!direccion.trim()) { toast.error('Ingresa la dirección'); return false }
         if (lat === null || lng === null) { toast.error('Selecciona una dirección de las sugerencias'); return false }
         if (fueraDeZona) { toast.error('La dirección está fuera del área de delivery'); return false }
-        if (!tipoDomicilio) { toast.error('Indicá si es casa o departamento'); return false }
-        if (tipoDomicilio === 'departamento' && (!piso.trim() || !numeroDepartamento.trim())) { toast.error('Ingresá el piso y el número de departamento'); return false }
       } else {
         if (sucursales.length > 1 && !sucursalSeleccionada) { toast.error('Seleccioná un local de retiro'); return false }
       }
+    }
+    if (k === 'domicilio') {
+      if (!tipoDomicilio) { toast.error('Indicá si es casa o departamento'); return false }
+      if (tipoDomicilio === 'departamento' && (!piso.trim() || !numeroDepartamento.trim())) { toast.error('Ingresá el piso y el número de departamento'); return false }
     }
     if (k === 'extras') {
       const requiere = usarFranjas ? franjaObligatoria : (programacionObligatoria || programarPedido)
@@ -496,6 +641,33 @@ export function CheckoutDeliveryGrupal({
   const franjaObligatoria = usarFranjas && programacionObligatoria
 
   const inputCls = "h-12 rounded-2xl bg-secondary/60 border-0 shadow-none ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 text-base px-4"
+
+  const direccionesRecomendables = direccionesGuardadas.filter((item) => item.lat !== null && item.lng !== null)
+  const renderDireccionesGuardadas = (compacta = false) => direccionesRecomendables.length > 0 ? (
+    <div className="space-y-2">
+      <p className="px-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Tus direcciones</p>
+      <div className={compacta ? 'flex gap-2 overflow-x-auto pb-1' : 'space-y-2'}>
+        {direccionesRecomendables.map((item) => {
+          const seleccionada = normalizarDireccion(item.direccion) === normalizarDireccion(direccion)
+          return (
+            <button
+              key={normalizarDireccion(item.direccion)}
+              type="button"
+              aria-pressed={seleccionada}
+              onClick={() => handleAddressChange(item.direccion, item.lat, item.lng)}
+              className={`${compacta ? 'min-w-[15rem] shrink-0' : 'w-full'} flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left transition-colors ${
+                seleccionada ? 'bg-primary/10 text-foreground' : 'bg-secondary/50 text-muted-foreground hover:bg-secondary/80 hover:text-foreground'
+              }`}
+            >
+              <MapPin className={`h-4 w-4 shrink-0 ${seleccionada ? 'text-primary' : ''}`} />
+              <span className="min-w-0 flex-1 truncate text-sm font-medium">{item.direccion}</span>
+              {seleccionada && <Check className="h-4 w-4 shrink-0 text-primary" />}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  ) : null
 
   // ===== Secciones del formulario =====
 
@@ -579,6 +751,7 @@ export function CheckoutDeliveryGrupal({
         <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
           <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Dirección de entrega</Label>
           <AddressAutocomplete value={direccion} onChange={handleAddressChange} placeholder="Ej: Espora 811, Santa Fe" />
+          {renderDireccionesGuardadas()}
           {lat !== null && lng !== null && <AddressMapPreview lat={lat} lng={lng} />}
           {lat !== null && lng !== null && direccion && (
             <div className="animate-in fade-in duration-300">
@@ -608,46 +781,46 @@ export function CheckoutDeliveryGrupal({
         </div>
       )}
 
-      {tipoPedido === 'delivery' && (
-        <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
-          <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Tipo de domicilio</Label>
-          <div className="bg-secondary/60 rounded-2xl p-1 grid grid-cols-2 gap-1">
-            <button
-              type="button"
-              className={`flex items-center justify-center gap-2 py-4 rounded-xl transition-all duration-200 cursor-pointer ${tipoDomicilio === 'casa' ? 'bg-background shadow-sm' : ''}`}
-              onClick={() => { setTipoDomicilio('casa'); setPiso(''); setNumeroDepartamento('') }}
-            >
-              <Home className={`w-4 h-4 ${tipoDomicilio === 'casa' ? 'text-primary' : 'text-muted-foreground'}`} />
-              <span className={`text-sm font-semibold ${tipoDomicilio === 'casa' ? 'text-foreground' : 'text-muted-foreground'}`}>Casa</span>
-            </button>
-            <button
-              type="button"
-              className={`flex items-center justify-center gap-2 py-4 rounded-xl transition-all duration-200 cursor-pointer ${tipoDomicilio === 'departamento' ? 'bg-background shadow-sm' : ''}`}
-              onClick={() => setTipoDomicilio('departamento')}
-            >
-              <Building2 className={`w-4 h-4 ${tipoDomicilio === 'departamento' ? 'text-primary' : 'text-muted-foreground'}`} />
-              <span className={`text-sm font-semibold ${tipoDomicilio === 'departamento' ? 'text-foreground' : 'text-muted-foreground'}`}>Departamento</span>
-            </button>
-          </div>
-          {tipoDomicilio === 'departamento' && (
-            <div className="grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-top-2">
-              <div className="space-y-2">
-                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Piso</Label>
-                <Input id="piso-grupal" placeholder="Ej: 4" className={inputCls} value={piso} onChange={e => setPiso(e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Depto</Label>
-                <Input id="depto-grupal" placeholder="Ej: C" className={inputCls} value={numeroDepartamento} onChange={e => setNumeroDepartamento(e.target.value.toUpperCase())} />
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
       {tipoPedido === 'takeaway' && restauranteDireccion && sucursales.length <= 1 && (
         <div className="flex items-center gap-2.5 px-4 py-3 bg-secondary/50 rounded-2xl">
           <MapPin className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
           <span className="text-sm text-muted-foreground">Retirás en <span className="font-semibold text-foreground">{restauranteDireccion}</span></span>
+        </div>
+      )}
+    </div>
+  )
+
+  const secDomicilio = (
+    <div className="space-y-4 animate-in fade-in slide-in-from-right-2">
+      <p className="px-1 text-sm text-muted-foreground">Esto nos ayuda a entregar tu pedido sin demoras.</p>
+      <div className="bg-secondary/60 rounded-2xl p-1 grid grid-cols-2 gap-1">
+        <button
+          type="button"
+          className={`flex items-center justify-center gap-2 py-4 rounded-xl transition-all duration-200 cursor-pointer ${tipoDomicilio === 'casa' ? 'bg-background shadow-sm' : ''}`}
+          onClick={() => { setTipoDomicilio('casa'); setPiso(''); setNumeroDepartamento('') }}
+        >
+          <Home className={`w-4 h-4 ${tipoDomicilio === 'casa' ? 'text-primary' : 'text-muted-foreground'}`} />
+          <span className={`text-sm font-semibold ${tipoDomicilio === 'casa' ? 'text-foreground' : 'text-muted-foreground'}`}>Casa</span>
+        </button>
+        <button
+          type="button"
+          className={`flex items-center justify-center gap-2 py-4 rounded-xl transition-all duration-200 cursor-pointer ${tipoDomicilio === 'departamento' ? 'bg-background shadow-sm' : ''}`}
+          onClick={() => setTipoDomicilio('departamento')}
+        >
+          <Building2 className={`w-4 h-4 ${tipoDomicilio === 'departamento' ? 'text-primary' : 'text-muted-foreground'}`} />
+          <span className={`text-sm font-semibold ${tipoDomicilio === 'departamento' ? 'text-foreground' : 'text-muted-foreground'}`}>Departamento</span>
+        </button>
+      </div>
+      {tipoDomicilio === 'departamento' && (
+        <div className="grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-top-2">
+          <div className="space-y-2">
+            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Piso</Label>
+            <Input id="piso-grupal" placeholder="Ej: 4" className={inputCls} value={piso} onChange={e => setPiso(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Depto</Label>
+            <Input id="depto-grupal" placeholder="Ej: C" className={inputCls} value={numeroDepartamento} onChange={e => setNumeroDepartamento(e.target.value.toUpperCase())} />
+          </div>
         </div>
       )}
     </div>
@@ -835,6 +1008,7 @@ export function CheckoutDeliveryGrupal({
     tipo: '¿Cómo lo querés?',
     datos: 'Tus datos',
     ubicacion: tipoPedido === 'delivery' ? 'Dirección de entrega' : 'Retiro',
+    domicilio: '¿Casa o departamento?',
     extras: 'Pago y detalles',
   }
 
@@ -908,6 +1082,7 @@ export function CheckoutDeliveryGrupal({
             {checkoutData?.tipoPedido === 'delivery' && (
               <div className="space-y-2">
                 <AddressAutocomplete value={direccion} onChange={handleAddressChange} placeholder="Dirección de entrega" />
+                {renderDireccionesGuardadas(true)}
                 {isCheckingZona ? (
                   <p className="text-xs text-muted-foreground flex items-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin" /> Verificando dirección...</p>
                 ) : fueraDeZona ? (
@@ -1178,6 +1353,7 @@ export function CheckoutDeliveryGrupal({
               {secTipo}
               {secDatos}
               {secUbicacion}
+              {tipoPedido === 'delivery' && secDomicilio}
               {secExtras}
               {totalSummary}
             </>
@@ -1186,6 +1362,7 @@ export function CheckoutDeliveryGrupal({
               {pasos[paso] === 'tipo' && secTipo}
               {pasos[paso] === 'datos' && secDatos}
               {pasos[paso] === 'ubicacion' && secUbicacion}
+              {pasos[paso] === 'domicilio' && secDomicilio}
               {pasos[paso] === 'extras' && secExtras}
             </>
           )
