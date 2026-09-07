@@ -114,6 +114,15 @@ const normalizarNombre = (nombre: string) => nombre
   .replace(/\s+/g, ' ')
   .trim()
 
+/** En Alfajor estos agregados modelan el tamaño de la hamburguesa y se
+ * presentan como variantes, no como extras independientes. */
+export const etiquetaVarianteMedallon = (nombre: string): 'Doble' | 'Triple' | null => {
+  const nombreNormalizado = normalizarNombre(nombre)
+  if (nombreNormalizado === 'doble medallon') return 'Doble'
+  if (nombreNormalizado === 'triple medallon') return 'Triple'
+  return null
+}
+
 export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, siblings, onNavigate }: ProductDetailDrawerProps) {
   const [stage, setStage] = useState<CustomizationStage>('primary')
   const [quantity, setQuantity] = useState(1)
@@ -147,8 +156,8 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
     ...(product?.agregadosPrimarios ?? []),
     ...(product?.agregadosSecundarios ?? []),
   ]
-  const extraDobleMedallon = todosLosAgregados.find(ag => normalizarNombre(ag.nombre) === 'doble medallon')
-  const extraTripleMedallon = todosLosAgregados.find(ag => normalizarNombre(ag.nombre) === 'triple medallon')
+  const extraDobleMedallon = todosLosAgregados.find(ag => etiquetaVarianteMedallon(ag.nombre) === 'Doble')
+  const extraTripleMedallon = todosLosAgregados.find(ag => etiquetaVarianteMedallon(ag.nombre) === 'Triple')
   const idsExtrasMedallon = new Set(
     [extraDobleMedallon?.id, extraTripleMedallon?.id].filter((id): id is number => id !== undefined)
   )

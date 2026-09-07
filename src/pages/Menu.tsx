@@ -16,6 +16,7 @@ import { ThemeToggle } from '@/components/ThemeToggle'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { CheckoutDeliveryGrupal } from '@/components/CheckoutDeliveryGrupal'
 import { MisPedidosDrawer } from '@/components/MisPedidosDrawer'
+import { configurarGtm, contextoParaPedidoMarketing, registrarEventoTracking, registrarEventoTrackingUnaVez } from '@/lib/tracking'
 
 type HorarioTurno = { diaSemana: number; horaApertura: string; horaCierre: string }
 
@@ -74,8 +75,21 @@ const Menu = () => {
   const [bienvenidaOpen, setBienvenidaOpen] = useState(false)
 
   const esSala = typeof window !== 'undefined' && window.location.pathname.includes('/sala/')
+  const tokenTracking = urlQrToken || qrToken
   const [mostrarCheckoutEnCarrito, setMostrarCheckoutEnCarrito] = useState(false)
   const [tituloCheckout, setTituloCheckout] = useState('¿Cómo lo querés?')
+
+  useEffect(() => {
+    if (!esSala || !restaurante?.id || !restaurante.username || !tokenTracking) return
+    registrarEventoTrackingUnaVez(restaurante.id, restaurante.username, 'session_start', `sala-${tokenTracking}`)
+  }, [esSala, restaurante?.id, restaurante?.username, tokenTracking])
+
+  useEffect(() => {
+    if (!esSala || !drawerOpen || !selectedProduct?.id || !restaurante?.id || !restaurante.username) return
+    registrarEventoTrackingUnaVez(restaurante.id, restaurante.username, 'product_view', `sala-${tokenTracking ?? 'sin-token'}-producto-${selectedProduct.id}`, {
+      productoId: selectedProduct.id, nombreProducto: selectedProduct.nombre, valor: selectedProduct.precio,
+    })
+  }, [drawerOpen, esSala, restaurante?.id, restaurante?.username, selectedProduct?.id, selectedProduct?.precio, tokenTracking])
 
   const compartirLink = useCallback(() => {
     const mensaje = `Armemos un pedido juntos en ${restaurante?.nombre || 'el restaurante'} 🍽️`
@@ -125,6 +139,7 @@ const Menu = () => {
         const res = await fetch(`${url}/public/restaurante/${username}`)
         const data = await res.json()
         if (data.success && data.data) {
+          configurarGtm(data.data.restaurante?.gtmContainerId)
           setPermitirProgramados(!!data.data.restaurante?.permitirPedidosProgramados)
           if (Array.isArray(data.data.horarios)) {
             setHorarios(data.data.horarios)
@@ -264,6 +279,9 @@ const Menu = () => {
     }
     const precioAgregados = (agregados || []).reduce((sum: number, ag: any) => sum + parseFloat(ag.precio || '0'), 0)
     const precioUnitario = (precioBase + precioAgregados).toFixed(2)
+    if (esSala && restaurante?.id && restaurante.username) registrarEventoTracking(restaurante.id, restaurante.username, 'add_to_cart', {
+      productoId: producto.id, nombreProducto: producto.nombre, cantidad, valor: (Number(precioUnitario) * cantidad).toFixed(2),
+    })
     sendMessage({
       type: 'AGREGAR_ITEM',
       payload: {
@@ -355,6 +373,12 @@ const Menu = () => {
         const res = await fetch(`${url}/public/sala/${token}/order-created`)
         const data = await res.json()
         if (data.success && data.order) {
+          if (checkoutDeliveryData?.trackingClienteId === clienteId && restaurante?.id && restaurante.username) {
+            registrarEventoTrackingUnaVez(restaurante.id, restaurante.username, 'purchase', `pedido-${data.order.pedidoId}`, {
+              pedidoUnificadoId: data.order.pedidoId, valor: Number(data.order.total || 0), items: data.order.items,
+              metadata: { tipoPedido: data.order.tipoPedido, cantidadItems: Array.isArray(data.order.items) ? data.order.items.length : 0, grupal: true },
+            })
+          }
           sessionStorage.setItem('salaOrderInfo', JSON.stringify({
             token: data.order.token,
             pedidoId: data.order.pedidoId,
@@ -788,6 +812,7 @@ const Menu = () => {
               restauranteDireccion={restaurante?.direccion ?? undefined}
               onTituloChange={setTituloCheckout}
               localCerrado={localCerrado}
+              contextoMarketing={restaurante?.username ? contextoParaPedidoMarketing(restaurante.username) : undefined}
             />
           ) : todosLosItems.length === 0 ? (
             <div className={`flex flex-col items-center justify-center text-center gap-4 opacity-60 px-5 ${expandido ? 'flex-1' : 'py-12'}`}>
@@ -817,6 +842,9 @@ const Menu = () => {
                         return
                       }
                       if (esSala) {
+                        if (restaurante?.id && restaurante.username) registrarEventoTracking(restaurante.id, restaurante.username, 'checkout_start', {
+                          valor: totalPedido, metadata: { cantidadItems: todosLosItems.length, grupal: true },
+                        })
                         setMostrarCheckoutEnCarrito(true)
                         setExpandido(false)
                       } else {

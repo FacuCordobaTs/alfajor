@@ -4,10 +4,12 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from 'sonner'
-import { MapPin, Store, Truck, AlertTriangle, Loader2, Pencil, X, Tag, Home, Building2, Clock, CreditCard, Wallet, Banknote, ChevronLeft, Check, Zap } from 'lucide-react'
+import { MapPin, Store, Truck, AlertTriangle, Loader2, Pencil, X, Tag, Home, Building2, Clock, CreditCard, Wallet, Banknote, ChevronLeft, Check, Zap, UserRound } from 'lucide-react'
 import { AddressAutocomplete } from '@/components/AddressAutocomplete'
 import { AddressMapPreview } from '@/components/AddressMapPreview'
+import { etiquetaVarianteMedallon } from '@/components/ProductDetailDrawer'
 import type { CheckoutDeliveryData, CheckoutEditSemaphore } from '@/store/mesaStore'
+import type { contextoParaPedidoMarketing } from '@/lib/tracking'
 
 type MetodoPublico = { id: string; label: string; automatico: boolean }
 type FranjaHorario = { id: number; nombre: string; horaInicio: string; horaFin: string }
@@ -34,8 +36,27 @@ interface CheckoutDeliveryGrupalProps {
   onTituloChange?: (titulo: string) => void
   /** Texto personalizado para el botón del último paso (default: 'Guardar datos') */
   labelGuardar?: string
+  /** Texto personalizado para confirmar datos ya completos. */
+  labelConfirmar?: string
+  /** Ítems opcionales para mostrar al revisar un checkout precargado. */
+  itemsResumen?: {
+    id: string
+    nombre: string
+    productoNombre?: string
+    tieneSelectorMedallon?: boolean
+    cantidad: number
+    precio: string
+    imagenUrl?: string | null
+    varianteNombre?: string | null
+    varianteSecundariaNombre?: string | null
+    agregados?: { id: number; nombre: string }[]
+    ingredientesExcluidosNombres?: string[]
+  }[]
+  /** Presentación breve para la propuesta automática de repetir un pedido. */
+  pedidoHabitual?: boolean
   /** El local está cerrado ahora mismo. Si solo se permite pedir por estar habilitados los pedidos programados, obliga a elegir un horario (no se puede pedir "para ahora"). */
   localCerrado?: boolean
+  contextoMarketing?: ReturnType<typeof contextoParaPedidoMarketing>
 }
 
 export function CheckoutDeliveryGrupal({
@@ -54,7 +75,11 @@ export function CheckoutDeliveryGrupal({
   onVolverCarrito,
   onTituloChange,
   labelGuardar,
+  labelConfirmar,
+  itemsResumen = [],
+  pedidoHabitual = false,
   localCerrado = false,
+  contextoMarketing,
 }: CheckoutDeliveryGrupalProps) {
   const [tipoPedido, setTipoPedido] = useState<'delivery' | 'takeaway'>(checkoutData?.tipoPedido || 'delivery')
   const [nombre, setNombre] = useState(checkoutData?.nombre || localStorage.getItem('cliente_nombre') || '')
@@ -88,6 +113,7 @@ export function CheckoutDeliveryGrupal({
   const [codigoError, setCodigoError] = useState<string | null>(null)
 
   const [paso, setPaso] = useState(0)
+  const [editandoHabitual, setEditandoHabitual] = useState(false)
   const pasos: PasoCheckout[] = ['tipo', 'datos', 'ubicacion', 'extras']
 
   const estoyEditando = editSemaphore?.clienteId === clienteId
@@ -100,7 +126,7 @@ export function CheckoutDeliveryGrupal({
   const total = Math.max(0, subtotalConEnvio - montoDescuento)
 
   useEffect(() => {
-    if (!restauranteUsername || !estoyEditando || restauranteData) return
+    if (!restauranteUsername || (!estoyEditando && !pedidoHabitual) || restauranteData) return
     const fetchRestaurante = async () => {
       setIsLoadingRestaurante(true)
       try {
@@ -124,7 +150,7 @@ export function CheckoutDeliveryGrupal({
       finally { setIsLoadingRestaurante(false) }
     }
     fetchRestaurante()
-  }, [restauranteUsername, estoyEditando])
+  }, [restauranteUsername, estoyEditando, pedidoHabitual])
 
   useEffect(() => {
     if (!availablePaymentMethods.length) return
@@ -315,6 +341,8 @@ export function CheckoutDeliveryGrupal({
       metodoPago: metodoPago ?? null,
       horarioProgramado: usarFranjas ? horarioProgramado : ((programacionObligatoria || programarPedido) ? horarioProgramado : ''),
       sucursalId,
+      ...contextoMarketing,
+      trackingClienteId: clienteId,
     }
 
     sendMessage({ type: 'MODIFICAR_CHECKOUT', payload: { clienteId, updates } })
@@ -338,6 +366,53 @@ export function CheckoutDeliveryGrupal({
       return
     }
     onConfirmarClick()
+  }
+
+  const guardarCambiosHabituales = () => {
+    if (!checkoutData) return
+    if (!nombre.trim() || !telefono.trim()) {
+      toast.error('Completa nombre y celular')
+      return
+    }
+    if (checkoutData.tipoPedido === 'delivery') {
+      if (!direccion.trim() || lat === null || lng === null) {
+        toast.error('Selecciona una dirección válida')
+        return
+      }
+      if (fueraDeZona) {
+        toast.error('La dirección está fuera del área de delivery')
+        return
+      }
+    }
+    if (!metodoPago) {
+      toast.error('Selecciona un método de pago')
+      return
+    }
+
+    const nuevoTotal = parseFloat(itemsTotal) + (checkoutData.tipoPedido === 'delivery' ? deliveryFee : 0)
+    const updates: CheckoutDeliveryData = {
+      ...checkoutData,
+      nombre: nombre.trim(),
+      telefono: telefono.trim(),
+      direccion: checkoutData.tipoPedido === 'delivery' ? direccion.trim() : '',
+      lat: checkoutData.tipoPedido === 'delivery' ? lat : null,
+      lng: checkoutData.tipoPedido === 'delivery' ? lng : null,
+      deliveryFee: checkoutData.tipoPedido === 'delivery' ? deliveryFee : 0,
+      zonaNombre: checkoutData.tipoPedido === 'delivery' ? zonaNombre : null,
+      sucursalId: checkoutData.tipoPedido === 'delivery' ? (sucursalDelivery ?? checkoutData.sucursalId) : checkoutData.sucursalId,
+      metodoPago,
+      itemsTotal,
+      total: nuevoTotal.toFixed(2),
+    }
+    sendMessage({ type: 'MODIFICAR_CHECKOUT', payload: { clienteId, updates } })
+    localStorage.setItem('cliente_nombre', updates.nombre)
+    localStorage.setItem('cliente_telefono', updates.telefono)
+    if (updates.tipoPedido === 'delivery') {
+      localStorage.setItem('cliente_direccion', updates.direccion)
+      if (updates.lat != null) localStorage.setItem('cliente_lat', String(updates.lat))
+      if (updates.lng != null) localStorage.setItem('cliente_lng', String(updates.lng))
+    }
+    setEditandoHabitual(false)
   }
 
   useEffect(() => {
@@ -765,14 +840,138 @@ export function CheckoutDeliveryGrupal({
 
   useEffect(() => {
     if (!onTituloChange) return
-    if (estoyEditando && modo === 'pasos') {
+    if (pedidoHabitual && checkoutData && !estoyEditando) {
+      onTituloChange('¿Lo mismo de siempre?')
+    } else if (estoyEditando && modo === 'pasos') {
       onTituloChange(tituloPaso[pasos[paso]])
     } else if (checkoutData && !estoyEditando) {
       onTituloChange('Revisá tu pedido')
     } else {
       onTituloChange('Datos de envío')
     }
-  }, [onTituloChange, estoyEditando, modo, paso, checkoutData, tipoPedido])
+  }, [onTituloChange, estoyEditando, modo, paso, checkoutData, tipoPedido, pedidoHabitual])
+
+  const readOnlyHabitual = (
+    <div className="space-y-4">
+      <div className="space-y-2.5 px-4">
+        {itemsResumen.map(item => {
+          const varianteMedallon = item.agregados
+            ?.map(agregado => etiquetaVarianteMedallon(agregado.nombre))
+            .find((etiqueta): etiqueta is 'Doble' | 'Triple' => etiqueta !== null)
+          const variantes = [
+            item.tieneSelectorMedallon || varianteMedallon ? (varianteMedallon ?? 'Simple') : null,
+            item.varianteNombre,
+            item.varianteSecundariaNombre,
+          ].filter(Boolean)
+          const extras = item.agregados?.filter(agregado => etiquetaVarianteMedallon(agregado.nombre) === null) ?? []
+          return (
+            <div key={item.id} className="flex items-stretch gap-3 overflow-hidden rounded-2xl bg-secondary/45 pr-4">
+              <div className="relative min-h-16 w-20 shrink-0 bg-secondary">
+                {item.imagenUrl ? (
+                  <img src={item.imagenUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center"><Store className="w-5 h-5 text-muted-foreground" /></div>
+                )}
+                <span className="absolute right-1 top-1 min-w-5 h-5 px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center shadow-sm">
+                  {item.cantidad}
+                </span>
+              </div>
+              <div className="flex min-w-0 flex-1 flex-col justify-center py-3">
+                <p className="text-sm font-bold leading-snug">{item.productoNombre || item.nombre}</p>
+                {variantes.length > 0 && (
+                  <p className="mt-1 text-xs leading-snug text-muted-foreground">{variantes.join(' · ')}</p>
+                )}
+                {extras.length > 0 && (
+                  <p className="mt-1 text-xs leading-snug text-muted-foreground">
+                    + {extras.map(agregado => agregado.nombre).join(', ')}
+                  </p>
+                )}
+                {(item.ingredientesExcluidosNombres?.length ?? 0) > 0 && (
+                  <p className="mt-1 text-xs leading-snug text-muted-foreground">
+                    Sin: {item.ingredientesExcluidosNombres!.join(', ')}
+                  </p>
+                )}
+              </div>
+              <p className="flex shrink-0 items-center py-3 text-sm font-black">${(parseFloat(item.precio) * item.cantidad).toFixed(0)}</p>
+            </div>
+          )
+        })}
+      </div>
+
+      <div className="mx-4 rounded-2xl bg-background/40 py-3.5">
+        {editandoHabitual ? (
+          <div className="space-y-3.5 animate-in fade-in duration-200">
+            <div className="grid grid-cols-[1fr_0.9fr] gap-2.5">
+              <Input aria-label="Nombre" value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Nombre" className="h-10 rounded-xl bg-secondary/50 border-0" />
+              <Input aria-label="Celular" type="tel" value={telefono} onChange={e => setTelefono(e.target.value.replace(/\D/g, ''))} placeholder="Celular" className="h-10 rounded-xl bg-secondary/50 border-0" />
+            </div>
+            {checkoutData?.tipoPedido === 'delivery' && (
+              <div className="space-y-2">
+                <AddressAutocomplete value={direccion} onChange={handleAddressChange} placeholder="Dirección de entrega" />
+                {isCheckingZona ? (
+                  <p className="text-xs text-muted-foreground flex items-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin" /> Verificando dirección...</p>
+                ) : fueraDeZona ? (
+                  <p className="text-xs font-semibold text-destructive">Esta dirección está fuera de la zona de delivery.</p>
+                ) : zonaDeliveryFee !== null ? (
+                  <p className="text-xs text-muted-foreground">Envío ${deliveryFee.toFixed(0)}{zonaNombre ? ` · ${zonaNombre}` : ''}</p>
+                ) : null}
+              </div>
+            )}
+            {availablePaymentMethods.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {availablePaymentMethods.map(m => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => setMetodoPago(m.id)}
+                    className={`px-3 py-2 rounded-xl text-xs font-bold transition-colors ${
+                      metodoPago === m.id
+                        ? m.id.startsWith('mercadopago')
+                          ? 'bg-[#009EE3] text-white'
+                          : 'bg-primary text-primary-foreground'
+                        : 'bg-secondary/60 text-foreground'
+                    }`}
+                  >
+                    {m.id.startsWith('transferencia_automatica') ? 'Transferencia' : paymentTitle(m)}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex items-start gap-3">
+              <UserRound className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold leading-tight">{checkoutData?.nombre}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{checkoutData?.telefono}</p>
+              </div>
+              <button type="button" onClick={() => setEditandoHabitual(true)} className="text-xs font-bold text-primary px-2.5 py-1.5 rounded-full bg-primary/10">
+                Cambiar
+              </button>
+            </div>
+            {checkoutData?.tipoPedido === 'delivery' && checkoutData.direccion && (
+              <div className="flex items-start gap-3 pt-1">
+                <MapPin className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold leading-snug">{checkoutData.direccion}</p>
+                  {(checkoutData.deliveryFee ?? 0) > 0 && (
+                    <p className="text-xs text-muted-foreground mt-1">Envío ${checkoutData.deliveryFee.toFixed(0)}{checkoutData.zonaNombre ? ` · ${checkoutData.zonaNombre}` : ''}</p>
+                  )}
+                </div>
+              </div>
+            )}
+            {checkoutData?.tipoPedido === 'takeaway' && (
+              <div className="flex items-center gap-3 pt-1">
+                <Store className="w-4 h-4 text-primary shrink-0" />
+                <p className="text-sm font-semibold">Retirás en el local</p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
 
   const readOnly = (
     <div className="space-y-3">
@@ -883,7 +1082,13 @@ export function CheckoutDeliveryGrupal({
   const accionDisabled = tipoPedido === 'delivery' && (fueraDeZona || (isCheckingZona && (modo === 'completo' || pasos[paso] === 'ubicacion')))
 
   let footerButton: React.ReactNode
-  if (alguienEditando) {
+  if (pedidoHabitual && editandoHabitual) {
+    footerButton = (
+      <Button className="w-full h-12 rounded-2xl font-bold text-base" onClick={guardarCambiosHabituales} disabled={isCheckingZona || fueraDeZona}>
+        Guardar cambios
+      </Button>
+    )
+  } else if (alguienEditando) {
     footerButton = (
       <Button disabled className="w-full h-12 rounded-2xl font-bold text-base">
         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -903,8 +1108,15 @@ export function CheckoutDeliveryGrupal({
     )
   } else if (checkoutData) {
     footerButton = datosCompletos ? (
-      <Button className="w-full h-12 rounded-2xl font-bold text-base" onClick={handleConfirmarPedido}>
-        Confirmar Pedido
+      <Button
+        className={`w-full h-12 rounded-2xl font-bold text-base ${
+          pedidoHabitual && checkoutData.metodoPago?.startsWith('mercadopago')
+            ? 'bg-[#009EE3] text-white hover:bg-[#008DCC]'
+            : ''
+        }`}
+        onClick={handleConfirmarPedido}
+      >
+        {labelConfirmar || 'Confirmar Pedido'}
       </Button>
     ) : (
       <p className="text-xs text-muted-foreground text-center py-2">Esperando que se completen los datos...</p>
@@ -922,7 +1134,7 @@ export function CheckoutDeliveryGrupal({
 
   return (
     <div className={`flex flex-col ${compacto ? '' : 'flex-1 min-h-0'}`}>
-      <div className="shrink-0 flex items-center gap-3 px-5 pt-3 pb-1 lg:w-full lg:max-w-md lg:mx-auto">
+      {!pedidoHabitual && <div className="shrink-0 flex items-center gap-3 px-5 pt-3 pb-1 lg:w-full lg:max-w-md lg:mx-auto">
         <button
           type="button"
           onClick={handleAtras}
@@ -948,7 +1160,7 @@ export function CheckoutDeliveryGrupal({
             {estoyEditando ? 'Datos de envío' : checkoutData ? 'Revisá tu pedido' : 'Datos de envío'}
           </span>
         )}
-      </div>
+      </div>}
 
       <div className={`lg:w-full lg:max-w-md lg:mx-auto ${compacto ? 'px-5 py-4 space-y-5' : 'flex-1 overflow-y-auto px-5 py-4 space-y-5 min-h-0'}`}>
         {alguienEditando && (
@@ -981,8 +1193,8 @@ export function CheckoutDeliveryGrupal({
 
         {checkoutData && !estoyEditando && !alguienEditando && (
           <>
-            {readOnly}
-            {totalSummary}
+            {pedidoHabitual ? readOnlyHabitual : readOnly}
+            {!pedidoHabitual && totalSummary}
           </>
         )}
 
@@ -994,12 +1206,17 @@ export function CheckoutDeliveryGrupal({
         )}
       </div>
 
-      <div className={`px-5 pb-5 pt-4 bg-background space-y-3 lg:w-full lg:max-w-md lg:mx-auto ${compacto ? 'sticky bottom-0 z-10' : 'shrink-0'}`}>
+      <div className={`${pedidoHabitual ? 'px-9' : 'px-5'} pb-5 pt-4 bg-background space-y-3 lg:w-full lg:max-w-md lg:mx-auto ${compacto ? 'sticky bottom-0 z-10' : 'shrink-0'}`}>
         <div className="flex justify-between items-baseline">
           <span className="text-sm text-muted-foreground">Total</span>
           <span className="text-2xl font-black tracking-tight">${checkoutData?.total || total.toFixed(2)}</span>
         </div>
         {footerButton}
+        {pedidoHabitual && checkoutData && !estoyEditando && (
+          <button type="button" onClick={editandoHabitual ? () => setEditandoHabitual(false) : onVolverCarrito} className="w-full py-1 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors">
+            {editandoHabitual ? 'Cancelar' : 'No, quiero pedir otra cosa'}
+          </button>
+        )}
       </div>
     </div>
   )

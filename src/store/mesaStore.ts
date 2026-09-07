@@ -42,6 +42,12 @@ export interface CheckoutDeliveryData {
   horarioProgramado?: string
   sucursalId?: number | null
   tipoDomicilio?: 'casa' | 'departamento' | null
+  visitorId?: string
+  sesionUuid?: string
+  campaniaSlug?: string
+  recetaToken?: string
+  /** Participante que guardó checkout: sólo éste mide purchase de sala. */
+  trackingClienteId?: string
 }
 
 export interface CheckoutEditSemaphore {

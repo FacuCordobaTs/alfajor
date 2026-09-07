@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useNavigate } from 'react-router'
+import { useNavigate, useSearchParams } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { toast } from 'sonner'
@@ -7,10 +7,54 @@ import {
     Trash2, Maximize2, Minimize2, Loader2,
     Package, Receipt, UtensilsCrossed, Utensils, Clock, Share2, User, Plus
 } from 'lucide-react'
-import { ProductDetailDrawer } from '@/components/ProductDetailDrawer'
+import { ProductDetailDrawer, etiquetaVarianteMedallon } from '@/components/ProductDetailDrawer'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { CheckoutDeliveryGrupal } from '@/components/CheckoutDeliveryGrupal'
+import { configurarGtm, contextoParaPedidoMarketing, registrarEventoTracking, registrarEventoTrackingUnaVez } from '@/lib/tracking'
+
+type PedidoHistorico = {
+    id: number
+    tipo: 'delivery' | 'takeaway'
+    estado: string
+    nombreCliente: string | null
+    direccion: string | null
+    latitud: string | null
+    longitud: string | null
+    sucursalId: number | null
+    metodoPago: string | null
+    items: {
+        productoId: number
+        cantidad: number | null
+        varianteId: number | null
+        varianteSecundariaId: number | null
+        ingredientesExcluidos: unknown
+        agregados: unknown
+        esCanjePuntos: boolean | null
+    }[]
+}
+
+const firmaPedido = (pedido: PedidoHistorico) => pedido.items
+    .map(item => JSON.stringify({
+        productoId: item.productoId,
+        cantidad: item.cantidad ?? 1,
+        varianteId: item.varianteId ?? null,
+        varianteSecundariaId: item.varianteSecundariaId ?? null,
+        ingredientesExcluidos: Array.isArray(item.ingredientesExcluidos) ? [...item.ingredientesExcluidos].map(Number).sort((a, b) => a - b) : [],
+        agregados: Array.isArray(item.agregados) ? item.agregados.map((a: any) => Number(a?.id)).filter(Number.isFinite).sort((a: number, b: number) => a - b) : [],
+        esCanjePuntos: !!item.esCanjePuntos,
+    }))
+    .sort()
+    .join('|')
+
+const nombreMetodoPago = (metodo: string) => ({
+    cash: 'efectivo',
+    manual_transfer: 'transferencia',
+    transferencia_automatica_cucuru: 'transferencia',
+    transferencia_automatica_talo: 'transferencia',
+    mercadopago_checkout: 'Mercado Pago',
+    mercadopago_bricks: 'tarjeta',
+}[metodo] || metodo.replace(/_/g, ' '))
 
 type HorarioTurno = { diaSemana: number; horaApertura: string; horaCierre: string }
 
@@ -76,6 +120,9 @@ function checkIsOpen(horarios: HorarioTurno[]): { abierto: boolean; proximaApert
 const MenuDelivery = () => {
     const navigate = useNavigate()
     const username = 'alfajor'
+    const [searchParams, setSearchParams] = useSearchParams()
+    const productoAplicadoRef = useRef(false)
+    const repAplicadoRef = useRef(false)
 
     const [carritoAbierto, setCarritoAbierto] = useState(false)
     const [selectedProduct, setSelectedProduct] = useState<any>(null)
@@ -108,6 +155,7 @@ const MenuDelivery = () => {
 
     const [restaurante, setRestaurante] = useState<any>(null)
     const [productos, setProductos] = useState<any[]>([])
+    const [sucursales, setSucursales] = useState<{ id: number }[]>([])
     const [loading, setLoading] = useState(true)
     const [horarios, setHorarios] = useState<HorarioTurno[]>([])
     const [estadoAbierto, setEstadoAbierto] = useState<{ abierto: boolean; proximaApertura: string | null }>({ abierto: true, proximaApertura: null })
@@ -139,6 +187,9 @@ const MenuDelivery = () => {
     const [submittingOrder, setSubmittingOrder] = useState(false)
     const checkoutDataRef = useRef<any>(null)
     const isSubmittingRef = useRef(false)
+    const recomendacionIntentadaRef = useRef(false)
+    const sessionStartRef = useRef<string | null>(null)
+    const [esPedidoHabitual, setEsPedidoHabitual] = useState(false)
 
     const [cartItems, setCartItems] = useState<any[]>(() => {
         const saved = localStorage.getItem(`deliveryCart_${username}`)
@@ -199,6 +250,13 @@ const MenuDelivery = () => {
                 if (data.success) {
                     setRestaurante(data.data.restaurante)
                     setProductos(data.data.productos)
+                    configurarGtm(data.data.restaurante?.gtmContainerId)
+                    const sessionKey = `${data.data.restaurante?.id}:${username}`
+                    if (data.data.restaurante?.id && sessionStartRef.current !== sessionKey) {
+                        sessionStartRef.current = sessionKey
+                        registrarEventoTrackingUnaVez(data.data.restaurante.id, username, 'session_start', 'storefront')
+                    }
+                    setSucursales(Array.isArray(data.data.sucursales) ? data.data.sucursales : [])
                     if (data.data.horarios) {
                         setHorarios(data.data.horarios)
                         setEstadoAbierto(checkIsOpen(data.data.horarios))
@@ -226,6 +284,171 @@ const MenuDelivery = () => {
             fetchRestaurante()
         }
     }, [username])
+
+    useEffect(() => {
+        if (repAplicadoRef.current || productos.length === 0) return
+        const rep = searchParams.get('rep')
+        if (!rep) return
+        repAplicadoRef.current = true
+        const items = rep.split('-').flatMap((parte) => {
+            const coincidencia = /^(\d+)x(\d+)$/.exec(parte)
+            if (!coincidencia) return []
+            const producto = productos.find((item) => item.id === Number(coincidencia[1]) && item.disponible !== false)
+            return producto ? [{ id: `rep-${producto.id}`, productoId: producto.id, nombre: producto.nombre, precio: String(producto.precio), precioOriginal: producto.precio, descuento: producto.descuento || 0, imagenUrl: producto.imagenUrl, cantidad: Number(coincidencia[2]), ingredientesExcluidos: [], ingredientesExcluidosNombres: [], agregados: [], esCanjePuntos: false, puntosNecesarios: 0, puntosGanados: producto.puntosGanados }] : []
+        })
+        const params = new URLSearchParams(searchParams); params.delete('rep'); setSearchParams(params, { replace: true })
+        if (items.length) { setCartItems(items); setTimeout(() => abrirCarrito(), 250) }
+    }, [productos, searchParams, setSearchParams])
+
+    useEffect(() => {
+        if (productoAplicadoRef.current || productos.length === 0) return
+        const productoId = Number(searchParams.get('producto'))
+        if (!Number.isInteger(productoId) || productoId <= 0) return
+        productoAplicadoRef.current = true
+        const producto = productos.find((item) => item.id === productoId && item.disponible !== false)
+        const params = new URLSearchParams(searchParams); params.delete('producto'); setSearchParams(params, { replace: true })
+        if (producto) { setSelectedProduct(producto); setDrawerOpen(true) }
+    }, [productos, searchParams, setSearchParams])
+
+    useEffect(() => {
+        if (loading || !restaurante?.id || productos.length === 0 || recomendacionIntentadaRef.current) return
+        if (!estadoAbierto.abierto || restaurante.soloPedidosProgramados) return
+        recomendacionIntentadaRef.current = true
+
+        const telefono = localStorage.getItem('cliente_telefono')?.trim()
+        // En producción nunca pisamos un carrito iniciado. En desarrollo se permite
+        // reemplazarlo para probar el flujo con el cliente guardado en el navegador.
+        if (!telefono || (!import.meta.env.DEV && cartItems.length > 0)) return
+
+        const cargarPedidoHabitual = async () => {
+            try {
+                const url = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+                const res = await fetch(`${url}/public/restaurante/${restaurante.id}/mis-pedidos/${encodeURIComponent(telefono)}`)
+                if (!res.ok) return
+                const response = await res.json()
+                const pedidos: PedidoHistorico[] = Array.isArray(response.data)
+                    ? response.data.filter((p: PedidoHistorico) => p.estado !== 'cancelled' && p.items?.length > 0)
+                    : []
+                if (pedidos.length === 0 || (!import.meta.env.DEV && pedidos.length < 2)) return
+
+                const grupos = new Map<string, PedidoHistorico[]>()
+                pedidos.forEach(pedido => {
+                    const firma = firmaPedido(pedido)
+                    if (!firma) return
+                    grupos.set(firma, [...(grupos.get(firma) || []), pedido])
+                })
+                const grupoHabitual = [...grupos.values()].sort((a, b) => b.length - a.length)[0]
+                // En producción sólo recomendamos un patrón repetido. En DEV el pedido
+                // más reciente alcanza para poder probar visualmente todo el flujo.
+                if (!grupoHabitual || (!import.meta.env.DEV && grupoHabitual.length < 2)) return
+
+                const pedido = grupoHabitual[0]
+                const metodosDisponibles = new Set((restaurante.metodosPago || []).map((m: any) => m.id))
+                if (!pedido.nombreCliente?.trim() || !pedido.metodoPago || !metodosDisponibles.has(pedido.metodoPago)) return
+                if (pedido.tipo === 'delivery' && restaurante.deliveryEnabled === false) return
+                if (pedido.tipo === 'takeaway' && restaurante.takeawayEnabled === false) return
+
+                let deliveryFee = 0
+                let zonaNombre: string | null = null
+                let sucursalId = pedido.sucursalId ?? null
+                const lat = pedido.latitud == null ? null : Number(pedido.latitud)
+                const lng = pedido.longitud == null ? null : Number(pedido.longitud)
+                if (pedido.tipo === 'delivery') {
+                    if (!pedido.direccion?.trim() || !Number.isFinite(lat) || !Number.isFinite(lng)) return
+                    const zonaRes = await fetch(`${url}/public/restaurante/${restaurante.id}/check-zona?lat=${lat}&lng=${lng}`)
+                    const zona = await zonaRes.json()
+                    if (!zonaRes.ok || !zona.success || zona.code === 'FUERA_DE_ZONA') return
+                    deliveryFee = Number(zona.deliveryFee || 0)
+                    zonaNombre = zona.zonaNombre || null
+                    sucursalId = zona.sucursalId ?? null
+                } else if (sucursales.length > 0) {
+                    const sucursal = sucursales.find(s => s.id === pedido.sucursalId) || (sucursales.length === 1 ? sucursales[0] : null)
+                    if (!sucursal) return
+                    sucursalId = sucursal.id
+                }
+
+                const itemsReconstruidos = pedido.items.map((item, index) => {
+                    const producto = productos.find((p: any) => p.id === item.productoId)
+                    if (!producto || item.esCanjePuntos) return null
+                    const variante = item.varianteId ? producto.variantes?.find((v: any) => v.id === item.varianteId) : null
+                    const varianteSecundaria = item.varianteSecundariaId ? producto.variantesSecundarias?.find((v: any) => v.id === item.varianteSecundariaId) : null
+                    if ((producto.variantes?.length && !variante) || (producto.variantesSecundarias?.length && !varianteSecundaria)) return null
+
+                    const idsAgregados = Array.isArray(item.agregados) ? item.agregados.map((a: any) => Number(a?.id)) : []
+                    const agregados = idsAgregados.map(id => producto.agregados?.find((a: any) => a.id === id)).filter(Boolean)
+                    if (agregados.length !== idsAgregados.length) return null
+                    const excluidos = Array.isArray(item.ingredientesExcluidos) ? item.ingredientesExcluidos.map(Number) : []
+                    const ingredientesExcluidosNombres = excluidos.map(id => producto.ingredientes?.find((i: any) => i.id === id)?.nombre).filter(Boolean)
+                    if (ingredientesExcluidosNombres.length !== excluidos.length) return null
+
+                    let precio = variante ? Number(variante.precio) : Number(producto.precio)
+                    precio += varianteSecundaria ? Number(varianteSecundaria.precio) : 0
+                    if (producto.descuento > 0) precio *= (1 - producto.descuento / 100)
+                    precio += agregados.reduce((sum: number, a: any) => sum + Number(a.precio || 0), 0)
+                    const variantesNombre = [variante?.nombre, varianteSecundaria?.nombre].filter(Boolean).join(' · ')
+                    return {
+                        id: `habitual-${pedido.id}-${index}`,
+                        productoId: producto.id,
+                        productoNombre: producto.nombre,
+                        tieneSelectorMedallon: producto.agregados?.some((agregado: any) => etiquetaVarianteMedallon(agregado.nombre) !== null) ?? false,
+                        nombre: variantesNombre ? `${producto.nombre} - ${variantesNombre}` : producto.nombre,
+                        precio: precio.toFixed(2),
+                        precioOriginal: variante?.precio || producto.precio,
+                        descuento: producto.descuento || 0,
+                        imagenUrl: producto.imagenUrl,
+                        cantidad: item.cantidad ?? 1,
+                        varianteId: variante?.id,
+                        varianteNombre: variante?.nombre,
+                        varianteSecundariaId: varianteSecundaria?.id,
+                        varianteSecundariaNombre: varianteSecundaria?.nombre,
+                        ingredientesExcluidos: excluidos,
+                        ingredientesExcluidosNombres,
+                        agregados,
+                        esCanjePuntos: false,
+                        puntosNecesarios: 0,
+                        puntosGanados: producto.puntosGanados,
+                    }
+                })
+                if (itemsReconstruidos.some(Boolean) && itemsReconstruidos.some(item => item === null)) return
+                const items = itemsReconstruidos.filter(Boolean) as any[]
+                if (items.length === 0) return
+
+                const itemsTotal = items.reduce((sum, item) => sum + Number(item.precio) * item.cantidad, 0)
+                const checkout = {
+                    tipoPedido: pedido.tipo,
+                    nombre: pedido.nombreCliente.trim(),
+                    telefono,
+                    direccion: pedido.tipo === 'delivery' ? pedido.direccion!.trim() : '',
+                    lat: pedido.tipo === 'delivery' ? lat : null,
+                    lng: pedido.tipo === 'delivery' ? lng : null,
+                    notas: '',
+                    tipoDomicilio: null,
+                    deliveryFee,
+                    zonaNombre,
+                    itemsTotal: itemsTotal.toFixed(2),
+                    total: (itemsTotal + deliveryFee).toFixed(2),
+                    codigoDescuentoId: null,
+                    montoDescuento: 0,
+                    metodoPago: pedido.metodoPago,
+                    horarioProgramado: '',
+                    sucursalId,
+                }
+                setCartItems(items)
+                checkoutDataRef.current = checkout
+                setCheckoutDeliveryData(checkout)
+                setEditSemaphoreLocal(null)
+                setMostrarCheckoutEnCarrito(true)
+                setExpandido(false)
+                setEsPedidoHabitual(true)
+                window.history.pushState({ drawer: 'carrito' }, '')
+                setCarritoAbierto(true)
+            } catch (error) {
+                console.error('Error preparando el pedido habitual:', error)
+            }
+        }
+
+        cargarPedidoHabitual()
+    }, [loading, restaurante, productos, sucursales, cartItems.length, estadoAbierto.abierto])
 
     useEffect(() => {
         if (horarios.length === 0) return
@@ -270,6 +493,7 @@ const MenuDelivery = () => {
                     esCanjePuntos: i.esCanjePuntos || false
                 })),
                 metodoPago: data.metodoPago,
+                ...contextoParaPedidoMarketing(username),
             }
             if (data.codigoDescuentoId) payload.codigoDescuentoId = data.codigoDescuentoId
             if (tipoPedido === 'delivery') {
@@ -287,6 +511,12 @@ const MenuDelivery = () => {
             })
             const result = await res.json()
             if (result.success) {
+                registrarEventoTrackingUnaVez(restaurante.id, username, 'purchase', `pedido-${result.data.id}`, {
+                    pedidoUnificadoId: result.data.id,
+                    valor: result.data.total ? parseFloat(result.data.total) : parseFloat(data.total || '0'),
+                    items: cartItems,
+                    metadata: { tipoPedido, cantidadItems: cartItems.length },
+                })
                 localStorage.setItem('cliente_nombre', data.nombre)
                 localStorage.setItem('cliente_telefono', data.telefono)
                 if (tipoPedido === 'delivery') {
@@ -355,6 +585,7 @@ const MenuDelivery = () => {
         setEditSemaphoreLocal(null)
         setCheckoutDeliveryData(null)
         checkoutDataRef.current = null
+        setEsPedidoHabitual(false)
         if (window.history.state?.drawer === 'carrito') {
             window.history.back()
         }
@@ -439,6 +670,13 @@ const MenuDelivery = () => {
         abrirProductoDrawer()
     }
 
+    useEffect(() => {
+        if (!drawerOpen || !selectedProduct?.id || !restaurante?.id) return
+        registrarEventoTrackingUnaVez(restaurante.id, username, 'product_view', `producto-${selectedProduct.id}`, {
+            productoId: selectedProduct.id, nombreProducto: selectedProduct.nombre, valor: selectedProduct.precio,
+        })
+    }, [drawerOpen, restaurante?.id, selectedProduct?.id, selectedProduct?.precio, username])
+
     // Lista ordenada de productos "hermanos" para poder saltar de uno a otro dentro
     // del drawer (mismo orden en que se ven en pantalla). El canje por puntos queda
     // fuera: es un flujo aparte (`intentandoCanjear`) que no se navega.
@@ -483,6 +721,8 @@ const MenuDelivery = () => {
         const newItem = {
             id: Math.random().toString(36).substr(2, 9),
             productoId: producto.id,
+            productoNombre: producto.nombre,
+            tieneSelectorMedallon: producto.agregados?.some((agregado: any) => etiquetaVarianteMedallon(agregado.nombre) !== null) ?? false,
             nombre: esCanje ? `${baseNombre} (Canje)` : baseNombre,
             precio: precioFinalNumber.toFixed(2),
             precioOriginal: varianteSeleccionada ? varianteSeleccionada.precio : producto.precio,
@@ -502,6 +742,9 @@ const MenuDelivery = () => {
         }
 
         setCartItems(prev => [...prev, newItem])
+        if (restaurante?.id) registrarEventoTracking(restaurante.id, username, 'add_to_cart', {
+            productoId: producto.id, nombreProducto: producto.nombre, cantidad, valor: (precioFinalNumber * cantidad).toFixed(2),
+        })
 
         setTimeout(() => {
             setCartAnimation(true)
@@ -612,8 +855,15 @@ const MenuDelivery = () => {
         return (
             <div className="min-h-screen bg-background text-foreground flex justify-center items-center">
                 {themeStyles}
-                <div className="flex flex-col items-center gap-2">
-                    <span className="text-sm font-medium animate-pulse">Cargando...</span>
+                <div className="flex flex-col items-center gap-5 px-6 text-center">
+                    <img
+                        src="/logo.webp"
+                        alt="Alfajor"
+                        className="w-28 h-28 object-contain animate-pulse"
+                    />
+                    <span className="text-base font-semibold tracking-wide animate-pulse">
+                        Armando los alfajores
+                    </span>
                 </div>
             </div>
         )
@@ -896,10 +1146,10 @@ const MenuDelivery = () => {
                         </div>
                         <div className="flex items-center justify-between px-4 pb-3 pt-2">
                             <div className="w-8 h-8" />
-                            <span className="text-xl font-extrabold">
+                            <span className={`${esPedidoHabitual ? 'text-lg' : 'text-xl'} font-extrabold text-center px-2`}>
                                 {mostrarCheckoutEnCarrito ? tituloCheckout : 'Tu Pedido'}
                             </span>
-                            {mostrarCheckoutEnCarrito ? (
+                            {mostrarCheckoutEnCarrito && !esPedidoHabitual ? (
                                 <button
                                     onClick={() => setExpandido(e => !e)}
                                     className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-secondary transition-colors"
@@ -917,17 +1167,22 @@ const MenuDelivery = () => {
                         <CheckoutDeliveryGrupal
                             modo={expandido ? 'completo' : 'pasos'}
                             onVolverCarrito={() => {
+                                if (esPedidoHabitual) {
+                                    setCartItems([])
+                                    cerrarCarrito()
+                                    return
+                                }
                                 setMostrarCheckoutEnCarrito(false)
                                 setExpandido(true)
                                 setCheckoutDeliveryData(null)
                                 checkoutDataRef.current = null
                                 setEditSemaphoreLocal(null)
+                                setEsPedidoHabitual(false)
                             }}
                             restauranteId={restaurante?.id ?? 0}
                             restauranteUsername={username}
                             itemsTotal={totalPedido}
                             totalItems={cartItems.length}
-                            onConfirmarClick={() => {}}
                             sendMessage={handleCheckoutMessage}
                             clienteId="solo"
                             clienteNombre={localStorage.getItem('cliente_nombre') || ''}
@@ -936,7 +1191,18 @@ const MenuDelivery = () => {
                             restauranteDireccion={restaurante?.direccion ?? undefined}
                             onTituloChange={setTituloCheckout}
                             labelGuardar="Confirmar y pedir"
+                            labelConfirmar={esPedidoHabitual && checkoutDeliveryData?.metodoPago
+                                ? `Pedir y pagar con ${nombreMetodoPago(checkoutDeliveryData.metodoPago)}`
+                                : undefined}
+                            itemsResumen={esPedidoHabitual ? cartItems : undefined}
+                            pedidoHabitual={esPedidoHabitual}
                             localCerrado={!estadoAbierto.abierto}
+                            contextoMarketing={contextoParaPedidoMarketing(username)}
+                            onConfirmarClick={() => {
+                                if (isSubmittingRef.current || !checkoutDataRef.current) return
+                                isSubmittingRef.current = true
+                                submitOrder(checkoutDataRef.current)
+                            }}
                         />
                     ) : cartItems.length === 0 ? (
                         <div className="flex flex-col items-center justify-center text-center gap-4 opacity-60 px-5 py-12">
@@ -953,47 +1219,47 @@ const MenuDelivery = () => {
                                     const imagen = item.imagenUrl
                                     const precio = parseFloat(item.precio || 0)
                                     return (
-                                        <div key={item.id} className="relative flex gap-4 p-3 rounded-2xl border transition-all bg-card border-primary/20 shadow-sm">
-                                            <div className="w-20 h-20 shrink-0 rounded-xl overflow-hidden bg-secondary">
+                                        <article key={item.id} className="grid min-h-[112px] grid-cols-[108px_minmax(0,1fr)] overflow-hidden rounded-[20px] border border-border bg-card transition-colors hover:border-foreground/15">
+                                            <div className="min-h-[112px] w-[108px] overflow-hidden bg-muted">
                                                 {imagen ? (
-                                                    <img src={imagen} alt="img" className="w-full h-full object-cover" />
+                                                    <img src={imagen} alt={item.nombre} className="h-full w-full object-cover" />
                                                 ) : (
-                                                    <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                                                        <Utensils className="w-6 h-6 text-primary" />
+                                                    <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+                                                        <Utensils className="h-5 w-5" />
                                                     </div>
                                                 )}
                                             </div>
-                                            <div className="flex-1 flex flex-col justify-between py-0.5 min-w-0">
-                                                <div className="flex justify-between items-start gap-2">
-                                                    <div className="min-w-0">
-                                                        <p className="font-bold text-sm truncate">{item.nombre}</p>
+                                            <div className="flex min-w-0 flex-col justify-between px-3.5 py-3">
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="line-clamp-2 text-[15px] font-bold leading-5 text-foreground">{item.nombre}</p>
                                                         {item.ingredientesExcluidosNombres?.length > 0 && (
-                                                            <p className="text-xs text-primary/80 font-medium mt-1">
+                                                            <p className="mt-2 text-xs leading-4 text-muted-foreground">
                                                                 ⚠️ Sin: {item.ingredientesExcluidosNombres.join(', ')}
                                                             </p>
                                                         )}
                                                         {item.agregados?.length > 0 && (
-                                                            <div className="mt-1">
+                                                            <div className="mt-1 space-y-0.5">
                                                                 {item.agregados.map((ag: any) => (
-                                                                    <p key={ag.id} className="text-xs text-muted-foreground font-medium">+ {ag.nombre}</p>
+                                                                    <p key={ag.id} className="text-xs leading-4 text-muted-foreground">+ {ag.nombre}</p>
                                                                 ))}
                                                             </div>
                                                         )}
                                                     </div>
-                                                    <div className="text-right">
+                                                    <div className="shrink-0 text-right tabular-nums">
                                                         {item.descuento > 0 && (
                                                             <p className="text-[10px] text-muted-foreground line-through">${(parseFloat(item.precioOriginal) * item.cantidad).toFixed(2)}</p>
                                                         )}
-                                                        <p className="font-bold text-base">${(precio * item.cantidad).toFixed(2)}</p>
+                                                        <p className="text-lg font-black leading-5 tracking-tight text-foreground">${(precio * item.cantidad).toFixed(2)}</p>
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center justify-end gap-3 mt-2">
-                                                    <button onClick={() => handleEliminarItem(item.id)} className="w-8 h-8 flex items-center justify-center rounded-full bg-destructive/10 text-destructive hover:bg-destructive hover:text-white transition-colors">
-                                                        <Trash2 className="w-4 h-4" />
+                                                <div className="mt-2 flex justify-end">
+                                                    <button type="button" onClick={() => handleEliminarItem(item.id)} aria-label={`Quitar ${item.nombre} del carrito`} className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                                                        <Trash2 className="h-4 w-4" />
                                                     </button>
                                                 </div>
                                             </div>
-                                        </div>
+                                        </article>
                                     )
                                 })}
                             </div>
@@ -1007,8 +1273,12 @@ const MenuDelivery = () => {
                                     disabled={!estadoAbierto.abierto && !restaurante?.permitirPedidosProgramados}
                                     onClick={() => {
                                         if (!estadoAbierto.abierto && !restaurante?.permitirPedidosProgramados) return
+                                        setEsPedidoHabitual(false)
                                         setMostrarCheckoutEnCarrito(true)
                                         setExpandido(false)
+                                        if (restaurante?.id) registrarEventoTracking(restaurante.id, username, 'checkout_start', {
+                                            valor: totalPedido, metadata: { cantidadItems: cartItems.length },
+                                        })
                                     }}
                                 >
                                     {!estadoAbierto.abierto && !restaurante?.permitirPedidosProgramados ? 'Cerrado' : 'Continuar'}
