@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, type TouchEvent, type WheelEvent } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -7,7 +7,7 @@ import {
   Plus,
   Minus,
   CheckCircle2,
-  ChevronsUp,
+  ChevronsDown,
 } from 'lucide-react';
 import {
   PRODUCTOS_ROPA,
@@ -17,8 +17,6 @@ import { useCarritoRopaStore } from '../store/carritoRopaStore';
 import { CarritoRopaDrawer } from '../components/ropa/CarritoRopaDrawer';
 
 type Tema = { primario: string; secundario: string };
-const PANEL_MIN_VH = 25;
-const PANEL_MAX_VH = 66;
 
 function temaValido(tema: Tema | null): tema is Tema {
   return !!tema && /^#[0-9a-f]{6}$/i.test(tema.primario) && /^#[0-9a-f]{6}$/i.test(tema.secundario);
@@ -50,10 +48,7 @@ export default function ProductoRopaDetalle() {
   const [fotoIndex, setFotoIndex] = useState<number>(0);
   const [cantidad, setCantidad] = useState<number>(1);
   const [notificacionToast, setNotificacionToast] = useState<string | null>(null);
-  const [panelHeightVh, setPanelHeightVh] = useState(PANEL_MIN_VH);
-  const panelScrollRef = useRef<HTMLDivElement>(null);
-  const touchYRef = useRef<number | null>(null);
-  const gestoDesdePanelRef = useRef(false);
+  const [mostrarIndicadorScroll, setMostrarIndicadorScroll] = useState(true);
 
   const [tema, setTema] = useState<Tema | null>(() => {
     try {
@@ -82,6 +77,18 @@ export default function ProductoRopaDetalle() {
     return () => controller.abort();
   }, []);
 
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }, [id]);
+
+  useEffect(() => {
+    const actualizarIndicador = () => setMostrarIndicadorScroll(window.scrollY < 48);
+
+    actualizarIndicador();
+    window.addEventListener('scroll', actualizarIndicador, { passive: true });
+    return () => window.removeEventListener('scroll', actualizarIndicador);
+  }, []);
+
   const totalPrendasEnCarrito = totalPrendas();
 
   const formatearPrecio = (valor: number) => {
@@ -107,65 +114,6 @@ export default function ProductoRopaDetalle() {
     setTimeout(() => {
       setNotificacionToast(null);
     }, 2800);
-  };
-
-  const panelExpandido = panelHeightVh >= PANEL_MAX_VH;
-
-  const redimensionarPanel = (deltaVh: number) => {
-    setPanelHeightVh((alturaActual) => (
-      Math.min(PANEL_MAX_VH, Math.max(PANEL_MIN_VH, alturaActual + deltaVh))
-    ));
-  };
-
-  // El gesto se escucha en toda la pantalla: el panel sólo se contrae en el mismo
-  // gesto si el contenido del panel ya está arriba de todo (o si el gesto arrancó afuera).
-  const puedeContraerDesde = (origen: EventTarget | null) => {
-    const arrancoEnPanel = !!panelScrollRef.current?.contains(origen as Node);
-    const scrollEnInicio = (panelScrollRef.current?.scrollTop || 0) <= 0;
-    return (!arrancoEnPanel || scrollEnInicio) && panelHeightVh > PANEL_MIN_VH;
-  };
-
-  const handleGestoWheel = (event: WheelEvent<HTMLDivElement>) => {
-    if (isDrawerOpen) return;
-
-    const quiereExpandir = event.deltaY > 0 && !panelExpandido;
-    const quiereContraer = event.deltaY < 0 && puedeContraerDesde(event.target);
-
-    if (!quiereExpandir && !quiereContraer) return;
-
-    const paso = Math.min(8, Math.max(2.5, Math.abs(event.deltaY) * 0.045));
-    redimensionarPanel(quiereExpandir ? paso : -paso);
-  };
-
-  const handleGestoTouchStart = (event: TouchEvent<HTMLDivElement>) => {
-    if (isDrawerOpen) return;
-    touchYRef.current = event.touches[0]?.clientY ?? null;
-    gestoDesdePanelRef.current = !!panelScrollRef.current?.contains(event.target as Node);
-  };
-
-  const handleGestoTouchMove = (event: TouchEvent<HTMLDivElement>) => {
-    if (isDrawerOpen) return;
-
-    const touchActual = event.touches[0]?.clientY;
-    if (touchActual == null || touchYRef.current == null) return;
-
-    const desplazamiento = touchYRef.current - touchActual;
-    const scrollEnInicio = (panelScrollRef.current?.scrollTop || 0) <= 0;
-    const puedeContraer = (!gestoDesdePanelRef.current || scrollEnInicio) && panelHeightVh > PANEL_MIN_VH;
-    const quiereExpandir = desplazamiento > 0 && !panelExpandido;
-    const quiereContraer = desplazamiento < 0 && puedeContraer;
-
-    if (quiereExpandir || quiereContraer) {
-      const paso = Math.min(6, Math.max(1, Math.abs(desplazamiento) * 0.06));
-      redimensionarPanel(quiereExpandir ? paso : -paso);
-    }
-
-    touchYRef.current = touchActual;
-  };
-
-  const handleGestoTouchEnd = () => {
-    touchYRef.current = null;
-    gestoDesdePanelRef.current = false;
   };
 
   if (!producto) {
@@ -201,55 +149,23 @@ export default function ProductoRopaDetalle() {
   ) : null;
 
   return (
-    <div
-      onWheelCapture={handleGestoWheel}
-      onTouchStart={handleGestoTouchStart}
-      onTouchMove={handleGestoTouchMove}
-      onTouchEnd={handleGestoTouchEnd}
-      onTouchCancel={handleGestoTouchEnd}
-      className="relative h-[100dvh] min-h-[100dvh] w-full bg-zinc-950 text-foreground overflow-hidden flex flex-col justify-between selection:bg-primary selection:text-primary-foreground"
-    >
+    <div className="relative min-h-[100dvh] w-full bg-zinc-950 text-foreground selection:bg-primary selection:text-primary-foreground">
       {themeStyles}
-
-      {/* Toast Flotante */}
-      <AnimatePresence>
-        {notificacionToast && (
-          <motion.div
-            initial={{ opacity: 0, y: -40, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -20, scale: 0.9 }}
-            transition={{ type: 'spring', damping: 20, stiffness: 300 }}
-            className="fixed top-5 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-full bg-zinc-950/90 backdrop-blur-md text-white shadow-floating flex items-center gap-3 border border-white/15"
-          >
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span className="text-xs sm:text-sm font-semibold tracking-wide">
-              {notificacionToast}
-            </span>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Imagen de Fondo Completa */}
       <div className="fixed inset-0 z-0 bg-zinc-950">
-        <AnimatePresence mode="wait">
-          <motion.img
-            key={fotoIndex}
-            src={producto.imagenes[fotoIndex] || producto.imagenes[0]}
-            alt={producto.nombre}
-            initial={{ opacity: 0.3, scale: 1.04 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0.3, scale: 0.98 }}
-            transition={{ duration: 0.45, ease: 'easeOut' }}
-            className="w-full h-full object-cover object-top sm:object-center"
-          />
-        </AnimatePresence>
+        <img
+          src={producto.imagenes[fotoIndex] || producto.imagenes[0]}
+          alt={producto.nombre}
+          className="h-full w-full object-cover object-top sm:object-center"
+        />
 
         {/* Gradiente sutil para garantizar legibilidad de la botonera y la tarjeta */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-black/40 pointer-events-none" />
       </div>
 
-      {/* Barra Superior Flotante: Volver y Bolsa */}
-      <header className="relative z-20 w-full px-5 pt-5 sm:px-8 sm:pt-7 flex items-center justify-between">
+      {/* Volver es el único control de la página por encima del panel. */}
+      <div className="fixed left-5 top-5 z-[60] sm:left-8 sm:top-7">
         <motion.button
           whileTap={{ scale: 0.9 }}
           onClick={() => navigate('/ropa')}
@@ -258,7 +174,9 @@ export default function ProductoRopaDetalle() {
         >
           <ChevronLeft className="w-5 h-5" />
         </motion.button>
+      </div>
 
+      <div className="fixed right-5 top-5 z-30 sm:right-8 sm:top-7">
         <motion.button
           whileTap={{ scale: 0.9 }}
           onClick={() => setIsDrawerOpen(true)}
@@ -272,11 +190,11 @@ export default function ProductoRopaDetalle() {
             </span>
           )}
         </motion.button>
-      </header>
+      </div>
 
       {/* Miniaturas Verticales a la derecha (Inspiradas en Screen 3) */}
       {producto.imagenes.length > 1 && (
-        <div className="absolute right-4 sm:right-7 top-24 sm:top-28 z-20 flex flex-col gap-2.5">
+        <div className="fixed right-4 top-24 z-30 flex flex-col gap-2.5 sm:right-7 sm:top-28">
           {producto.imagenes.map((img, idx) => {
             const isSelected = fotoIndex === idx;
             return (
@@ -301,35 +219,45 @@ export default function ProductoRopaDetalle() {
         </div>
       )}
 
-      {/* Espaciador flexible para que el panel crezca desde el borde inferior */}
-      <div className="flex-1" />
+      {/* El documento hace el scroll; la imagen permanece fija detrás del panel. */}
+      <main className="relative z-50 mx-auto w-[calc(100%-2rem)] max-w-xl pt-[75dvh] sm:w-[calc(100%-3rem)] sm:pt-[70dvh]">
+        <AnimatePresence>
+          {mostrarIndicadorScroll && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1, y: [0, 6, 0] }}
+              exit={{ opacity: 0, y: 8 }}
+              transition={{
+                opacity: { duration: 0.18 },
+                y: { duration: 1.25, repeat: Infinity, ease: 'easeInOut' },
+              }}
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-0 -top-12 z-10 mx-auto flex w-fit items-center justify-center text-white drop-shadow-[0_3px_5px_rgba(0,0,0,0.9)]"
+            >
+              <ChevronsDown className="h-8 w-8" strokeWidth={2.25} />
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-      {/* Panel inferior: unido al borde inferior, flotante arriba y a los costados */}
-      <motion.div
-        initial={{ y: 50, opacity: 0, height: `${PANEL_MIN_VH}dvh` }}
-        animate={{ y: 0, opacity: 1, height: `${panelHeightVh}dvh` }}
-        transition={{ type: 'spring', damping: 28, stiffness: 240 }}
-        className="relative z-20 mt-auto w-[calc(100%-2rem)] sm:w-[calc(100%-3rem)] max-w-xl mx-auto"
-      >
-        <motion.button
-          type="button"
-          whileTap={{ scale: 0.9 }}
-          onClick={() => setPanelHeightVh(panelExpandido ? PANEL_MIN_VH : PANEL_MAX_VH)}
-          aria-label={panelExpandido ? 'Achicar el panel' : 'Ver las opciones'}
-          aria-expanded={panelExpandido}
-          title={panelExpandido ? 'Achicar el panel' : 'Ver las opciones'}
-          className="absolute inset-x-0 -top-11 z-20 mx-auto flex h-10 w-10 items-center justify-center bg-transparent text-white drop-shadow-[0_3px_4px_rgba(0,0,0,0.9)]"
-        >
-          <ChevronsUp
-            className={`h-7 w-7 transition-transform duration-200 ${panelExpandido ? 'rotate-180' : ''}`}
-          />
-        </motion.button>
+        <AnimatePresence>
+          {notificacionToast && (
+            <motion.div
+              initial={{ opacity: 0, y: -40, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -20, scale: 0.9 }}
+              transition={{ type: 'spring', damping: 20, stiffness: 300 }}
+              className="fixed left-1/2 top-5 z-10 flex -translate-x-1/2 items-center gap-3 rounded-full border border-white/15 bg-zinc-950/90 px-5 py-3 text-white shadow-floating backdrop-blur-md"
+            >
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+              <span className="text-xs font-semibold tracking-wide sm:text-sm">
+                {notificacionToast}
+              </span>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <div
-          ref={panelScrollRef}
-          className={`h-full overscroll-contain rounded-t-[32px] sm:rounded-t-[38px] bg-background/95 text-foreground backdrop-blur-2xl shadow-floating-lg border-x border-t border-primary/20 px-5 pt-3 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-6 sm:pb-[max(1.5rem,env(safe-area-inset-bottom))] space-y-5 ${
-            panelExpandido ? 'overflow-y-auto' : 'overflow-y-hidden'
-          }`}
+          className="space-y-5 rounded-t-[32px] border-x border-t border-primary/20 bg-background/95 px-5 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] text-foreground shadow-floating-lg backdrop-blur-2xl sm:rounded-t-[38px] sm:px-6 sm:pt-6 sm:pb-[max(1.5rem,env(safe-area-inset-bottom))]"
         >
           {/* Fila Superior: Nombre del producto y Precio */}
           <div className="flex items-start justify-between gap-4 pb-4 border-b border-primary/15">
@@ -456,7 +384,7 @@ export default function ProductoRopaDetalle() {
             </motion.button>
           </div>
         </div>
-      </motion.div>
+      </main>
 
       {/* Drawer Flotante de Bolsa de Compras */}
       <CarritoRopaDrawer
