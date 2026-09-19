@@ -127,7 +127,7 @@ export default function TiendaRopa() {
     }).format(valor);
   };
 
-  const abrirProducto = (productoId: string) => {
+  const abrirProducto = async (productoId: string) => {
     const tiendaRopaScrollY = window.scrollY;
     try { sessionStorage.setItem(TIENDA_ROPA_SCROLL_KEY, String(tiendaRopaScrollY)); } catch { /* Storage opcional. */ }
 
@@ -136,9 +136,29 @@ export default function TiendaRopa() {
     // El snapshot inicial debe contener únicamente la prenda pulsada.
     flushSync(() => setProductoEnTransicion(productoId));
 
+    // El botón/gesto Atrás recupera esta entrada del historial, no el state
+    // de la pantalla de detalle. Guardamos acá el destino de la foto
+    // compartida para que el POP también pueda completar la View Transition.
+    const estadoActual = (
+      location.state !== null
+      && typeof location.state === 'object'
+      && !Array.isArray(location.state)
+    ) ? location.state : {};
+
+    await navigate(location.pathname, {
+      replace: true,
+      preventScrollReset: true,
+      state: {
+        ...estadoActual,
+        productoRopaTransitionId: productoId,
+        tiendaRopaScrollY,
+      },
+    });
+
     void navigate(`/ropa/producto/${productoId}`, {
       state: { productoRopaTransitionId: productoId, tiendaRopaScrollY },
       viewTransition: true,
+      flushSync: true,
     });
   };
 

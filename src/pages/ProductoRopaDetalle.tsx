@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useLocation, useNavigate, useParams, useViewTransitionState } from 'react-router';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useBlocker, useLocation, useNavigate, useParams, useViewTransitionState } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   ChevronLeft,
@@ -82,6 +82,13 @@ export default function ProductoRopaDetalle() {
   const [mostrarIndicadorScroll, setMostrarIndicadorScroll] = useState(true);
   const [entradaComponentesLista, setEntradaComponentesLista] = useState(false);
   const [ocultandoComponentes, setOcultandoComponentes] = useState(false);
+  const salidaEnCursoRef = useRef(false);
+
+  const bloqueoAtras = useBlocker(({ currentLocation, nextLocation, historyAction }) => (
+    historyAction === 'POP'
+    && currentLocation.pathname === location.pathname
+    && nextLocation.pathname === '/ropa'
+  ));
 
   const [tema, setTema] = useState<Tema | null>(() => {
     try {
@@ -146,9 +153,7 @@ export default function ProductoRopaDetalle() {
     }).format(valor);
   };
 
-  const volverALaTienda = async () => {
-    if (ocultandoComponentes) return;
-
+  const prepararSalida = useCallback(async () => {
     if (producto) {
       setOcultandoComponentes(true);
       setMostrarIndicadorScroll(false);
@@ -163,12 +168,29 @@ export default function ProductoRopaDetalle() {
     }
 
     document.documentElement.dataset.ropaTransition = 'tienda';
+  }, [producto]);
+
+  useEffect(() => {
+    if (bloqueoAtras.state !== 'blocked' || salidaEnCursoRef.current) return;
+
+    salidaEnCursoRef.current = true;
+    void prepararSalida().then(() => {
+      bloqueoAtras.proceed();
+    });
+  }, [bloqueoAtras, prepararSalida]);
+
+  const volverALaTienda = async () => {
+    if (salidaEnCursoRef.current) return;
+
+    salidaEnCursoRef.current = true;
+    await prepararSalida();
     void navigate('/ropa', {
       state: {
         ...(producto ? { productoRopaTransitionId: producto.id } : {}),
         ...(tiendaRopaScrollY !== null ? { tiendaRopaScrollY } : {}),
       },
       viewTransition: true,
+      flushSync: true,
     });
   };
 
