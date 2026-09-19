@@ -1,10 +1,12 @@
 import { useState, useMemo, useEffect } from 'react';
+import { flushSync } from 'react-dom';
 import { motion } from 'motion/react';
 import {
   ShoppingBag,
   ArrowRight,
 } from 'lucide-react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
+import '../styles/ropa-view-transitions.css';
 import {
   PRODUCTOS_ROPA,
   type ProductoRopa,
@@ -23,6 +25,15 @@ function temaValido(tema: Tema | null): tema is Tema {
 
 export default function TiendaRopa() {
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const [productoEnTransicion, setProductoEnTransicion] = useState<string | null>(() => {
+    const locationState = location.state as { productoRopaTransitionId?: unknown } | null;
+    return typeof locationState?.productoRopaTransitionId === 'string'
+      ? locationState.productoRopaTransitionId
+      : null;
+  });
+  const regresandoDesdeDetalle = productoEnTransicion !== null;
 
   // Estados de interacción
   // Store global de carrito
@@ -84,6 +95,18 @@ export default function TiendaRopa() {
     }).format(valor);
   };
 
+  const abrirProducto = (productoId: string) => {
+    document.documentElement.dataset.ropaTransition = 'detalle';
+
+    // El snapshot inicial debe contener únicamente la prenda pulsada.
+    flushSync(() => setProductoEnTransicion(productoId));
+
+    void navigate(`/ropa/producto/${productoId}`, {
+      state: { productoRopaTransitionId: productoId },
+      viewTransition: true,
+    });
+  };
+
   const primario = tema?.primario;
   const secundario = tema?.secundario;
   const themeStyles = (primario && secundario) ? (
@@ -131,7 +154,7 @@ export default function TiendaRopa() {
     return (
       <motion.div
         key={prod.id}
-        initial={{ opacity: 0, y: 20 }}
+        initial={regresandoDesdeDetalle ? false : { opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{
           duration: 0.35,
@@ -139,14 +162,21 @@ export default function TiendaRopa() {
           ease: 'easeOut',
         }}
         whileHover={{ y: -4 }}
-        onClick={() => navigate(`/ropa/producto/${prod.id}`)}
+        onClick={() => abrirProducto(prod.id)}
         className="group cursor-pointer flex flex-col transition-all bg-transparent"
       >
         {/* Imagen Flotante (sin bordes de tarjeta ni fondo de distinto color) */}
-        <div className="relative aspect-[3/4] w-full rounded-[26px] sm:rounded-[32px] overflow-hidden bg-secondary/30 mb-2.5 shadow-floating-sm group-hover:shadow-floating transition-shadow duration-300">
+        <div
+          style={productoEnTransicion === prod.id
+            ? { viewTransitionName: 'ropa-producto-activo' }
+            : undefined}
+          className="relative aspect-[3/4] w-full rounded-[26px] sm:rounded-[32px] overflow-hidden bg-secondary/30 mb-2.5 shadow-floating-sm group-hover:shadow-floating transition-shadow duration-300"
+        >
           <img
             src={prod.imagenes[0]}
             alt={prod.nombre}
+            decoding="sync"
+            loading="eager"
             className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500 ease-out"
           />
         </div>

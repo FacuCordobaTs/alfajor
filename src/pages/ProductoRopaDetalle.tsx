@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router';
+import { useLocation, useNavigate, useParams, useViewTransitionState } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   ChevronLeft,
@@ -18,13 +18,35 @@ import { CarritoRopaDrawer } from '../components/ropa/CarritoRopaDrawer';
 
 type Tema = { primario: string; secundario: string };
 
+const DURACION_SALIDA_MS = 520;
+const EASE_APARICION = [0.22, 1, 0.36, 1] as const;
+
 function temaValido(tema: Tema | null): tema is Tema {
   return !!tema && /^#[0-9a-f]{6}$/i.test(tema.primario) && /^#[0-9a-f]{6}$/i.test(tema.secundario);
+}
+
+let imagenesCatalogoDecodificadas: Promise<void> | null = null;
+
+function prepararImagenesCatalogo() {
+  if (!imagenesCatalogoDecodificadas) {
+    const imagenes = PRODUCTOS_ROPA.map((producto) => producto.imagenes[0]);
+    imagenesCatalogoDecodificadas = Promise.allSettled(
+      imagenes.map((src) => {
+        const imagen = new Image();
+        imagen.src = src;
+        return imagen.decode();
+      })
+    ).then(() => undefined);
+  }
+
+  return imagenesCatalogoDecodificadas;
 }
 
 export default function ProductoRopaDetalle() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const transicionVistaActiva = useViewTransitionState(location.pathname);
 
   const {
     items,
@@ -49,6 +71,8 @@ export default function ProductoRopaDetalle() {
   const [cantidad, setCantidad] = useState<number>(1);
   const [notificacionToast, setNotificacionToast] = useState<string | null>(null);
   const [mostrarIndicadorScroll, setMostrarIndicadorScroll] = useState(true);
+  const [entradaComponentesLista, setEntradaComponentesLista] = useState(false);
+  const [ocultandoComponentes, setOcultandoComponentes] = useState(false);
 
   const [tema, setTema] = useState<Tema | null>(() => {
     try {
@@ -82,6 +106,19 @@ export default function ProductoRopaDetalle() {
   }, [id]);
 
   useEffect(() => {
+    if (transicionVistaActiva) {
+      setEntradaComponentesLista(false);
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      setEntradaComponentesLista(true);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [id, transicionVistaActiva]);
+
+  useEffect(() => {
     const actualizarIndicador = () => setMostrarIndicadorScroll(window.scrollY < 48);
 
     actualizarIndicador();
@@ -90,6 +127,7 @@ export default function ProductoRopaDetalle() {
   }, []);
 
   const totalPrendasEnCarrito = totalPrendas();
+  const componentesVisibles = entradaComponentesLista && !ocultandoComponentes;
 
   const formatearPrecio = (valor: number) => {
     return new Intl.NumberFormat('es-AR', {
@@ -97,6 +135,29 @@ export default function ProductoRopaDetalle() {
       currency: 'ARS',
       maximumFractionDigits: 0,
     }).format(valor);
+  };
+
+  const volverALaTienda = async () => {
+    if (ocultandoComponentes) return;
+
+    if (producto) {
+      setOcultandoComponentes(true);
+      setMostrarIndicadorScroll(false);
+      setNotificacionToast(null);
+
+      await Promise.all([
+        prepararImagenesCatalogo(),
+        new Promise((resolve) => setTimeout(resolve, DURACION_SALIDA_MS)),
+      ]);
+    } else {
+      await prepararImagenesCatalogo();
+    }
+
+    document.documentElement.dataset.ropaTransition = 'tienda';
+    void navigate('/ropa', {
+      state: producto ? { productoRopaTransitionId: producto.id } : undefined,
+      viewTransition: true,
+    });
   };
 
   const handleAgregar = () => {
@@ -124,7 +185,7 @@ export default function ProductoRopaDetalle() {
           La prenda que buscas no está disponible o ha sido retirada del drop.
         </p>
         <button
-          onClick={() => navigate('/ropa')}
+          onClick={volverALaTienda}
           className="px-6 py-3 rounded-2xl bg-white text-zinc-950 font-bold text-sm hover:bg-zinc-200 transition-colors"
         >
           Volver a la tienda
@@ -153,33 +214,48 @@ export default function ProductoRopaDetalle() {
       {themeStyles}
 
       {/* Imagen de Fondo Completa */}
-      <div className="fixed inset-0 z-0 bg-zinc-950">
+      <div
+        style={{ viewTransitionName: 'ropa-producto-activo' }}
+        className="fixed inset-0 z-0 overflow-hidden bg-zinc-950"
+      >
         <img
           src={producto.imagenes[fotoIndex] || producto.imagenes[0]}
           alt={producto.nombre}
           className="h-full w-full object-cover object-top sm:object-center"
         />
-
-        {/* Gradiente sutil para garantizar legibilidad de la botonera y la tarjeta */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-black/40 pointer-events-none" />
       </div>
 
+      {/* Fuera del elemento compartido para no mezclarlo con la foto durante la transición. */}
+      <div className="fixed inset-0 z-0 bg-gradient-to-t from-black/80 via-black/10 to-black/40 pointer-events-none" />
+
       {/* Volver es el único control de la página por encima del panel. */}
-      <div className="fixed left-5 top-5 z-[60] sm:left-8 sm:top-7">
+      <motion.div
+        initial={{ opacity: 0, x: -72 }}
+        animate={componentesVisibles ? { opacity: 1, x: 0 } : { opacity: 0, x: -72 }}
+        transition={{ duration: 0.4, ease: EASE_APARICION }}
+        className="fixed left-5 top-5 z-[60] sm:left-8 sm:top-7"
+      >
         <motion.button
           whileTap={{ scale: 0.9 }}
-          onClick={() => navigate('/ropa')}
+          onClick={volverALaTienda}
+          disabled={ocultandoComponentes}
           className="w-11 h-11 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-xl border border-white/20 flex items-center justify-center text-white transition-all shadow-floating"
           title="Volver a la tienda"
         >
           <ChevronLeft className="w-5 h-5" />
         </motion.button>
-      </div>
+      </motion.div>
 
-      <div className="fixed right-5 top-5 z-30 sm:right-8 sm:top-7">
+      <motion.div
+        initial={{ opacity: 0, x: 72 }}
+        animate={componentesVisibles ? { opacity: 1, x: 0 } : { opacity: 0, x: 72 }}
+        transition={{ duration: 0.4, ease: EASE_APARICION }}
+        className="fixed right-5 top-5 z-30 sm:right-8 sm:top-7"
+      >
         <motion.button
           whileTap={{ scale: 0.9 }}
           onClick={() => setIsDrawerOpen(true)}
+          disabled={ocultandoComponentes}
           className="relative w-11 h-11 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-xl border border-white/20 flex items-center justify-center text-white transition-all shadow-floating"
           title="Ver bolsa de compras"
         >
@@ -190,11 +266,16 @@ export default function ProductoRopaDetalle() {
             </span>
           )}
         </motion.button>
-      </div>
+      </motion.div>
 
       {/* Miniaturas Verticales a la derecha (Inspiradas en Screen 3) */}
       {producto.imagenes.length > 1 && (
-        <div className="fixed right-4 top-24 z-30 flex flex-col gap-2.5 sm:right-7 sm:top-28">
+        <motion.div
+          initial={{ opacity: 0, x: 72 }}
+          animate={componentesVisibles ? { opacity: 1, x: 0 } : { opacity: 0, x: 72 }}
+          transition={{ duration: 0.44, delay: ocultandoComponentes ? 0 : 0.08, ease: EASE_APARICION }}
+          className="fixed right-4 top-24 z-30 flex flex-col gap-2.5 sm:right-7 sm:top-28"
+        >
           {producto.imagenes.map((img, idx) => {
             const isSelected = fotoIndex === idx;
             return (
@@ -202,6 +283,7 @@ export default function ProductoRopaDetalle() {
                 key={idx}
                 whileTap={{ scale: 0.92 }}
                 onClick={() => setFotoIndex(idx)}
+                disabled={ocultandoComponentes}
                 className={`relative w-12 h-16 sm:w-14 sm:h-18 rounded-2xl overflow-hidden backdrop-blur-md transition-all ${
                   isSelected
                     ? 'ring-2 ring-primary scale-105 shadow-floating border border-white/80'
@@ -216,7 +298,7 @@ export default function ProductoRopaDetalle() {
               </motion.button>
             );
           })}
-        </div>
+        </motion.div>
       )}
 
       {/* El documento hace el scroll; la imagen permanece fija detrás del panel. */}
@@ -224,11 +306,14 @@ export default function ProductoRopaDetalle() {
         <AnimatePresence>
           {mostrarIndicadorScroll && (
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1, y: [0, 6, 0] }}
-              exit={{ opacity: 0, y: 8 }}
+              initial={{ opacity: 0, x: 56 }}
+              animate={componentesVisibles
+                ? { opacity: 1, x: 0, y: [0, 6, 0] }
+                : { opacity: 0, x: 56, y: 0 }}
+              exit={{ opacity: 0, x: 56, y: 0 }}
               transition={{
                 opacity: { duration: 0.18 },
+                x: { duration: 0.4, ease: EASE_APARICION },
                 y: { duration: 1.25, repeat: Infinity, ease: 'easeInOut' },
               }}
               aria-hidden="true"
@@ -242,9 +327,9 @@ export default function ProductoRopaDetalle() {
         <AnimatePresence>
           {notificacionToast && (
             <motion.div
-              initial={{ opacity: 0, y: -40, scale: 0.9 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -20, scale: 0.9 }}
+              initial={{ opacity: 0, x: 72, scale: 0.9 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: 72, scale: 0.9 }}
               transition={{ type: 'spring', damping: 20, stiffness: 300 }}
               className="fixed left-1/2 top-5 z-10 flex -translate-x-1/2 items-center gap-3 rounded-full border border-white/15 bg-zinc-950/90 px-5 py-3 text-white shadow-floating backdrop-blur-md"
             >
@@ -256,7 +341,10 @@ export default function ProductoRopaDetalle() {
           )}
         </AnimatePresence>
 
-        <div
+        <motion.div
+          initial={{ opacity: 0, y: '100%' }}
+          animate={componentesVisibles ? { opacity: 1, y: 0 } : { opacity: 0, y: '100%' }}
+          transition={{ duration: 0.5, ease: EASE_APARICION }}
           className="space-y-5 rounded-t-[32px] border-x border-t border-primary/20 bg-background/95 px-5 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] text-foreground shadow-floating-lg backdrop-blur-2xl sm:rounded-t-[38px] sm:px-6 sm:pt-6 sm:pb-[max(1.5rem,env(safe-area-inset-bottom))]"
         >
           {/* Fila Superior: Nombre del producto y Precio */}
@@ -383,7 +471,7 @@ export default function ProductoRopaDetalle() {
               </span>
             </motion.button>
           </div>
-        </div>
+        </motion.div>
       </main>
 
       {/* Drawer Flotante de Bolsa de Compras */}
