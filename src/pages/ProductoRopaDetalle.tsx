@@ -17,6 +17,10 @@ import { useCarritoRopaStore } from '../store/carritoRopaStore';
 import { CarritoRopaDrawer } from '../components/ropa/CarritoRopaDrawer';
 
 type Tema = { primario: string; secundario: string };
+type TiendaRopaNavigationState = {
+  productoRopaTransitionId?: unknown;
+  tiendaRopaScrollY?: unknown;
+};
 
 const DURACION_SALIDA_MS = 520;
 const EASE_APARICION = [0.22, 1, 0.36, 1] as const;
@@ -47,6 +51,11 @@ export default function ProductoRopaDetalle() {
   const navigate = useNavigate();
   const location = useLocation();
   const transicionVistaActiva = useViewTransitionState(location.pathname);
+  const locationState = location.state as TiendaRopaNavigationState | null;
+  const tiendaRopaScrollY = (
+    typeof locationState?.tiendaRopaScrollY === 'number'
+    && Number.isFinite(locationState.tiendaRopaScrollY)
+  ) ? Math.max(0, locationState.tiendaRopaScrollY) : null;
 
   const {
     items,
@@ -155,7 +164,10 @@ export default function ProductoRopaDetalle() {
 
     document.documentElement.dataset.ropaTransition = 'tienda';
     void navigate('/ropa', {
-      state: producto ? { productoRopaTransitionId: producto.id } : undefined,
+      state: {
+        ...(producto ? { productoRopaTransitionId: producto.id } : {}),
+        ...(tiendaRopaScrollY !== null ? { tiendaRopaScrollY } : {}),
+      },
       viewTransition: true,
     });
   };

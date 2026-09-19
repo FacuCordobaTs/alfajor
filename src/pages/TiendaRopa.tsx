@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useLayoutEffect } from 'react';
 import { flushSync } from 'react-dom';
 import { motion } from 'motion/react';
 import {
@@ -16,8 +16,14 @@ import { CarritoRopaDrawer } from '../components/ropa/CarritoRopaDrawer';
 
 type Tema = { primario: string; secundario: string };
 
-const LOGO_ALFAJOR = '/alfajor.jpeg';
+const LOGO_ALFAJOR = '/logo.webp';
 const IMAGEN_HERO = '/ropa9.jpeg';
+const TIENDA_ROPA_SCROLL_KEY = 'alfajor:tienda-ropa-scroll-y';
+
+type TiendaRopaNavigationState = {
+  productoRopaTransitionId?: unknown;
+  tiendaRopaScrollY?: unknown;
+};
 
 function temaValido(tema: Tema | null): tema is Tema {
   return !!tema && /^#[0-9a-f]{6}$/i.test(tema.primario) && /^#[0-9a-f]{6}$/i.test(tema.secundario);
@@ -28,12 +34,38 @@ export default function TiendaRopa() {
   const location = useLocation();
 
   const [productoEnTransicion, setProductoEnTransicion] = useState<string | null>(() => {
-    const locationState = location.state as { productoRopaTransitionId?: unknown } | null;
+    const locationState = location.state as TiendaRopaNavigationState | null;
     return typeof locationState?.productoRopaTransitionId === 'string'
       ? locationState.productoRopaTransitionId
       : null;
   });
+  const [scrollARestaurar] = useState<number | null>(() => {
+    const locationState = location.state as TiendaRopaNavigationState | null;
+    if (
+      typeof locationState?.tiendaRopaScrollY === 'number'
+      && Number.isFinite(locationState.tiendaRopaScrollY)
+    ) {
+      return Math.max(0, locationState.tiendaRopaScrollY);
+    }
+
+    try {
+      const scrollGuardado = sessionStorage.getItem(TIENDA_ROPA_SCROLL_KEY);
+      if (scrollGuardado === null) return null;
+
+      const scrollY = Number(scrollGuardado);
+      return Number.isFinite(scrollY) ? Math.max(0, scrollY) : null;
+    } catch {
+      return null;
+    }
+  });
   const regresandoDesdeDetalle = productoEnTransicion !== null;
+
+  useLayoutEffect(() => {
+    if (scrollARestaurar === null) return;
+
+    window.scrollTo({ top: scrollARestaurar, behavior: 'auto' });
+    try { sessionStorage.removeItem(TIENDA_ROPA_SCROLL_KEY); } catch { /* Storage opcional. */ }
+  }, [scrollARestaurar]);
 
   // Estados de interacción
   // Store global de carrito
@@ -96,13 +128,16 @@ export default function TiendaRopa() {
   };
 
   const abrirProducto = (productoId: string) => {
+    const tiendaRopaScrollY = window.scrollY;
+    try { sessionStorage.setItem(TIENDA_ROPA_SCROLL_KEY, String(tiendaRopaScrollY)); } catch { /* Storage opcional. */ }
+
     document.documentElement.dataset.ropaTransition = 'detalle';
 
     // El snapshot inicial debe contener únicamente la prenda pulsada.
     flushSync(() => setProductoEnTransicion(productoId));
 
     void navigate(`/ropa/producto/${productoId}`, {
-      state: { productoRopaTransitionId: productoId },
+      state: { productoRopaTransitionId: productoId, tiendaRopaScrollY },
       viewTransition: true,
     });
   };
@@ -225,24 +260,15 @@ export default function TiendaRopa() {
 
           <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/40 to-transparent" />
 
-          <div className="absolute top-6 left-6 z-10 overflow-hidden rounded-2xl border border-white/20 shadow-floating backdrop-blur-md">
+          <div className="relative z-10 max-w-lg space-y-4">
             <img
               src={LOGO_ALFAJOR}
               alt="Alfajor con Papas"
-              className="h-14 w-14 sm:h-16 sm:w-16 object-cover"
+              className="w-full max-w-[320px] sm:max-w-[440px] h-auto object-contain object-left drop-shadow-lg"
             />
-          </div>
-
-          <div className="relative z-10 max-w-lg space-y-4">
-            <h1 className="text-4xl sm:text-6xl font-display font-extrabold tracking-tight leading-[0.95] text-white">
-              ALFAJOR <br />
-              <span className="font-serif-editorial italic font-normal text-primary">
-                con Papas.
-              </span>
-            </h1>
 
             <p className="text-xs sm:text-sm text-zinc-300 max-w-sm leading-relaxed font-sans-modern">
-              El merch oficial para llevar un poco de Alfajor con Papas a todos lados.
+              El merch oficial para llevar un poco de Alfajor a todos lados.
               Prendas y accesorios hechos para quienes siempre vuelven por otra mordida.
             </p>
 
