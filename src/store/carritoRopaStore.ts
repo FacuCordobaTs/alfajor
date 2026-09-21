@@ -1,6 +1,13 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { ItemCarritoRopa } from '../data/ropaMockData';
+import type { ItemCarritoRopa } from '../lib/ropa';
+
+/**
+ * v2: el carrito pasó de la maqueta (`ropaMockData`, ids string y colores con id) al catálogo
+ * real de la API (ids numéricos, colores por nombre). Los carritos guardados con la forma
+ * vieja no se pueden migrar sin ambigüedad, así que se descartan.
+ */
+const VERSION_CARRITO = 2;
 
 interface CarritoRopaState {
   items: ItemCarritoRopa[];
@@ -27,7 +34,7 @@ export const useCarritoRopaStore = create<CarritoRopaState>()(
             (i) =>
               i.producto.id === nuevoItem.producto.id &&
               i.talle === nuevoItem.talle &&
-              i.color.id === nuevoItem.color.id
+              i.color.nombre === nuevoItem.color.nombre
           );
 
           if (indexExistente > -1) {
@@ -66,7 +73,10 @@ export const useCarritoRopaStore = create<CarritoRopaState>()(
     }),
     {
       name: 'piru-ropa-carrito-storage',
+      version: VERSION_CARRITO,
       partialize: (state) => ({ items: state.items }),
+      // Cualquier carrito de una versión anterior viene de la maqueta: se arranca vacío.
+      migrate: () => ({ items: [] }),
     }
   )
 );

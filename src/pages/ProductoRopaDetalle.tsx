@@ -8,11 +8,15 @@ import {
   Minus,
   CheckCircle2,
   ChevronsDown,
+  Loader2,
 } from 'lucide-react';
 import {
-  PRODUCTOS_ROPA,
-  type ProductoColor,
-} from '../data/ropaMockData';
+  formatearPrecioRopa,
+  prepararImagenesCatalogo,
+  ropaApi,
+  type RopaColor,
+  type RopaProducto,
+} from '../lib/ropa';
 import { useCarritoRopaStore } from '../store/carritoRopaStore';
 import { CarritoRopaDrawer } from '../components/ropa/CarritoRopaDrawer';
 
@@ -28,23 +32,6 @@ const EASE_APARICION = [0.22, 1, 0.36, 1] as const;
 
 function temaValido(tema: Tema | null): tema is Tema {
   return !!tema && /^#[0-9a-f]{6}$/i.test(tema.primario) && /^#[0-9a-f]{6}$/i.test(tema.secundario);
-}
-
-let imagenesCatalogoDecodificadas: Promise<void> | null = null;
-
-function prepararImagenesCatalogo() {
-  if (!imagenesCatalogoDecodificadas) {
-    const imagenes = PRODUCTOS_ROPA.map((producto) => producto.imagenes[0]);
-    imagenesCatalogoDecodificadas = Promise.allSettled(
-      imagenes.map((src) => {
-        const imagen = new Image();
-        imagen.src = src;
-        return imagen.decode();
-      })
-    ).then(() => undefined);
-  }
-
-  return imagenesCatalogoDecodificadas;
 }
 
 export default function ProductoRopaDetalle() {
@@ -67,14 +54,48 @@ export default function ProductoRopaDetalle() {
     totalPrendas,
   } = useCarritoRopaStore();
 
-  const producto = PRODUCTOS_ROPA.find((p) => p.id === id);
+  const productoId = Number(id);
+  const idValido = Number.isInteger(productoId) && productoId > 0;
 
-  const [talleSeleccionado, setTalleSeleccionado] = useState<string>(
-    producto?.talles[0] || 'M'
-  );
-  const [colorSeleccionado, setColorSeleccionado] = useState<ProductoColor>(
-    producto?.colores[0] || { id: 'c1', nombre: 'Default', hex: '#000000' }
-  );
+  const [producto, setProducto] = useState<RopaProducto | null>(null);
+  const [cargandoProducto, setCargandoProducto] = useState(true);
+  const [errorProducto, setErrorProducto] = useState<string | null>(null);
+
+  // La prenda sale de la API: ya no hay catálogo hardcodeado que buscar en memoria.
+  useEffect(() => {
+    if (!idValido) {
+      setProducto(null);
+      setErrorProducto(null);
+      setCargandoProducto(false);
+      return;
+    }
+
+    let vigente = true;
+    setCargandoProducto(true);
+    setErrorProducto(null);
+    setProducto(null);
+
+    ropaApi
+      .producto(productoId)
+      .then((respuesta) => {
+        if (vigente) setProducto(respuesta.data);
+      })
+      .catch((err) => {
+        if (vigente) {
+          setErrorProducto(
+            err instanceof Error ? err.message : 'No pudimos cargar la prenda.'
+          );
+        }
+      })
+      .finally(() => {
+        if (vigente) setCargandoProducto(false);
+      });
+
+    return () => { vigente = false; };
+  }, [productoId, idValido]);
+
+  const [talleSeleccionado, setTalleSeleccionado] = useState<string>('');
+  const [colorSeleccionado, setColorSeleccionado] = useState<RopaColor | null>(null);
   const [fotoIndex, setFotoIndex] = useState<number>(0);
   const [cantidad, setCantidad] = useState<number>(1);
   const [notificacionToast, setNotificacionToast] = useState<string | null>(null);
@@ -82,6 +103,14 @@ export default function ProductoRopaDetalle() {
   const [entradaComponentesLista, setEntradaComponentesLista] = useState(false);
   const [ocultandoComponentes, setOcultandoComponentes] = useState(false);
   const salidaEnCursoRef = useRef(false);
+
+  // La primera talla y el primer color se eligen recién cuando la prenda terminó de llegar.
+  useEffect(() => {
+    setTalleSeleccionado(producto?.talles[0] ?? '');
+    setColorSeleccionado(producto?.colores[0] ?? null);
+    setFotoIndex(0);
+    setCantidad(1);
+  }, [producto]);
 
   const bloqueoAtras = useBlocker(({ currentLocation, nextLocation, historyAction }) => (
     historyAction === 'POP'
@@ -144,26 +173,22 @@ export default function ProductoRopaDetalle() {
   const totalPrendasEnCarrito = totalPrendas();
   const componentesVisibles = entradaComponentesLista && !ocultandoComponentes;
 
-  const formatearPrecio = (valor: number) => {
-    return new Intl.NumberFormat('es-AR', {
-      style: 'currency',
-      currency: 'ARS',
-      maximumFractionDigits: 0,
-    }).format(valor);
-  };
-
   const prepararSalida = useCallback(async () => {
+    // Si el comprador llegó desde la tienda, usa las portadas del catálogo ya registradas;
+    // si entró directo a esta URL, al menos deja decodificadas las fotos de esta prenda.
+    const respaldo = producto?.imagenes ?? [];
+
     if (producto) {
       setOcultandoComponentes(true);
       setMostrarIndicadorScroll(false);
       setNotificacionToast(null);
 
       await Promise.all([
-        prepararImagenesCatalogo(),
+        prepararImagenesCatalogo(respaldo),
         new Promise((resolve) => setTimeout(resolve, DURACION_SALIDA_MS)),
       ]);
     } else {
-      await prepararImagenesCatalogo();
+      await prepararImagenesCatalogo(respaldo);
     }
 
     document.documentElement.dataset.ropaTransition = 'tienda';
@@ -199,27 +224,42 @@ export default function ProductoRopaDetalle() {
 
   const handleAgregar = () => {
     if (!producto) return;
+    // Los accesorios pueden no tener talles ni colores: sólo se exige elegir si hay opciones.
+    if (producto.talles.length > 0 && !talleSeleccionado) return;
+    if (producto.colores.length > 0 && !colorSeleccionado) return;
 
     agregarItem({
       producto,
       talle: talleSeleccionado,
-      color: colorSeleccionado,
+      color: colorSeleccionado ?? { nombre: '', hex: '#000000' },
       cantidad,
       imagenSeleccionada: producto.imagenes[fotoIndex] || producto.imagenes[0],
     });
 
-    setNotificacionToast(`Agregaste ${producto.nombre} (${talleSeleccionado})`);
+    const detalleTalle = talleSeleccionado ? ` (${talleSeleccionado})` : '';
+    setNotificacionToast(`Agregaste ${producto.nombre}${detalleTalle}`);
     setTimeout(() => {
       setNotificacionToast(null);
     }, 2800);
   };
+
+  if (cargandoProducto) {
+    return (
+      <div className="min-h-screen bg-zinc-950 text-white flex flex-col items-center justify-center gap-3 p-6">
+        <Loader2 className="w-6 h-6 animate-spin text-zinc-400" />
+        <p className="text-sm text-zinc-400">Cargando la prenda…</p>
+      </div>
+    );
+  }
 
   if (!producto) {
     return (
       <div className="min-h-screen bg-zinc-950 text-white flex flex-col items-center justify-center p-6 text-center">
         <h2 className="text-2xl font-bold font-display mb-2">Prenda no encontrada</h2>
         <p className="text-sm text-zinc-400 mb-6 max-w-xs">
-          La prenda que buscas no está disponible o ha sido retirada del drop.
+          {errorProducto
+            ? 'No pudimos cargar esta prenda. Probá de nuevo en un momento.'
+            : 'La prenda que buscas no está disponible o ha sido retirada del drop.'}
         </p>
         <button
           onClick={volverALaTienda}
@@ -400,11 +440,11 @@ export default function ProductoRopaDetalle() {
 
             <div className="text-right shrink-0">
               <span className="text-xl sm:text-2xl font-sans-modern font-extrabold text-foreground">
-                {formatearPrecio(producto.precio)}
+                {formatearPrecioRopa(producto.precio)}
               </span>
               {producto.precioAnterior && (
                 <div className="text-[11px] text-foreground/45 line-through">
-                  {formatearPrecio(producto.precioAnterior)}
+                  {formatearPrecioRopa(producto.precioAnterior)}
                 </div>
               )}
             </div>
@@ -412,57 +452,61 @@ export default function ProductoRopaDetalle() {
 
           {/* Opciones apiladas, cada una ocupando todo el ancho disponible */}
           <div className="flex flex-col gap-3">
-            <section className="w-full rounded-2xl border border-primary/15 bg-primary/[0.07] p-3.5 sm:p-4">
-              <span className="mb-2.5 block text-[10px] font-extrabold uppercase tracking-wider text-foreground/60">
-                Elegí tu talle
-              </span>
-              <div className="grid w-full grid-cols-3 gap-2 sm:grid-cols-4">
-                {producto.talles.map((talle) => {
-                  const isSel = talleSeleccionado === talle;
-                  return (
-                    <button
-                      key={talle}
-                      onClick={() => setTalleSeleccionado(talle)}
-                      className={`h-10 w-full rounded-xl text-xs font-extrabold transition-all ${
-                        isSel
-                          ? 'bg-primary text-primary-foreground shadow-floating-sm'
-                          : 'border border-primary/15 bg-background/70 text-foreground hover:bg-primary/10'
-                      }`}
-                    >
-                      {talle}
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
+            {producto.talles.length > 0 && (
+              <section className="w-full rounded-2xl border border-primary/15 bg-primary/[0.07] p-3.5 sm:p-4">
+                <span className="mb-2.5 block text-[10px] font-extrabold uppercase tracking-wider text-foreground/60">
+                  Elegí tu talle
+                </span>
+                <div className="grid w-full grid-cols-3 gap-2 sm:grid-cols-4">
+                  {producto.talles.map((talle) => {
+                    const isSel = talleSeleccionado === talle;
+                    return (
+                      <button
+                        key={talle}
+                        onClick={() => setTalleSeleccionado(talle)}
+                        className={`h-10 w-full rounded-xl text-xs font-extrabold transition-all ${
+                          isSel
+                            ? 'bg-primary text-primary-foreground shadow-floating-sm'
+                            : 'border border-primary/15 bg-background/70 text-foreground hover:bg-primary/10'
+                        }`}
+                      >
+                        {talle}
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
 
-            <section className="w-full rounded-2xl border border-primary/15 bg-primary/[0.07] p-3.5 sm:p-4">
-              <span className="mb-2.5 block text-[10px] font-extrabold uppercase tracking-wider text-foreground/60">
-                Color: <strong className="text-foreground">{colorSeleccionado.nombre}</strong>
-              </span>
-              <div className="grid w-full grid-cols-2 gap-2">
-                {producto.colores.map((color) => {
-                  const isSel = colorSeleccionado.id === color.id;
-                  return (
-                    <button
-                      key={color.id}
-                      onClick={() => setColorSeleccionado(color)}
-                      className={`flex h-11 w-full items-center gap-2.5 rounded-xl px-3 text-left text-xs font-bold transition-all ${
-                        isSel
-                          ? 'bg-primary text-primary-foreground shadow-floating-sm'
-                          : 'border border-primary/15 bg-background/70 text-foreground hover:bg-primary/10'
-                      }`}
-                    >
-                      <span
-                        className="h-5 w-5 shrink-0 rounded-full border border-black/10 shadow-sm"
-                        style={{ backgroundColor: color.hex }}
-                      />
-                      <span className="truncate">{color.nombre}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
+            {producto.colores.length > 0 && (
+              <section className="w-full rounded-2xl border border-primary/15 bg-primary/[0.07] p-3.5 sm:p-4">
+                <span className="mb-2.5 block text-[10px] font-extrabold uppercase tracking-wider text-foreground/60">
+                  Color: <strong className="text-foreground">{colorSeleccionado?.nombre}</strong>
+                </span>
+                <div className="grid w-full grid-cols-2 gap-2">
+                  {producto.colores.map((color) => {
+                    const isSel = colorSeleccionado?.nombre === color.nombre;
+                    return (
+                      <button
+                        key={color.nombre}
+                        onClick={() => setColorSeleccionado(color)}
+                        className={`flex h-11 w-full items-center gap-2.5 rounded-xl px-3 text-left text-xs font-bold transition-all ${
+                          isSel
+                            ? 'bg-primary text-primary-foreground shadow-floating-sm'
+                            : 'border border-primary/15 bg-background/70 text-foreground hover:bg-primary/10'
+                        }`}
+                      >
+                        <span
+                          className="h-5 w-5 shrink-0 rounded-full border border-black/10 shadow-sm"
+                          style={{ backgroundColor: color.hex }}
+                        />
+                        <span className="truncate">{color.nombre}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
 
             <section className="flex w-full items-center justify-between gap-4 rounded-2xl border border-primary/15 bg-primary/[0.07] p-3.5 sm:p-4">
               <div>
@@ -504,7 +548,7 @@ export default function ProductoRopaDetalle() {
                 Agregar
               </span>
               <span className="font-sans-modern text-sm font-extrabold">
-                {formatearPrecio(producto.precio * cantidad)}
+                {formatearPrecioRopa(producto.precio * cantidad)}
               </span>
             </motion.button>
           </div>

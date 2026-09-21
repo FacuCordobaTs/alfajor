@@ -1,21 +1,24 @@
-import { useState, useMemo, useEffect, useLayoutEffect } from 'react';
+import { useState, useMemo, useEffect, useLayoutEffect, useCallback } from 'react';
 import { flushSync } from 'react-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import {
   ShoppingCart,
   ArrowRight,
-  ArrowLeft,
-  Check,
+  Loader2,
+  AlertCircle,
 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router';
 import '../styles/ropa-view-transitions.css';
 import {
-  PRODUCTOS_ROPA,
-  type ItemCarritoRopa,
-  type ProductoRopa,
-} from '../data/ropaMockData';
+  formatearPrecioRopa,
+  registrarImagenesCatalogo,
+  ropaApi,
+  type RopaCatalogo,
+  type RopaProducto,
+} from '../lib/ropa';
 import { useCarritoRopaStore } from '../store/carritoRopaStore';
 import { CarritoRopaDrawer } from '../components/ropa/CarritoRopaDrawer';
+import { CheckoutRopa } from '../components/ropa/CheckoutRopa';
 
 type Tema = { primario: string; secundario: string };
 
@@ -33,223 +36,13 @@ function temaValido(tema: Tema | null): tema is Tema {
   return !!tema && /^#[0-9a-f]{6}$/i.test(tema.primario) && /^#[0-9a-f]{6}$/i.test(tema.secundario);
 }
 
-const formatearPrecio = (valor: number) => new Intl.NumberFormat('es-AR', {
-  style: 'currency',
-  currency: 'ARS',
-  maximumFractionDigits: 0,
-}).format(valor);
-
-const inputCheckout = 'h-12 w-full rounded-xl border border-border bg-transparent px-4 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-foreground';
-
-type CheckoutRopaProps = {
-  items: ItemCarritoRopa[];
-  onClose: () => void;
-};
-
-function CheckoutRopa({ items, onClose }: CheckoutRopaProps) {
-  const [metodoPago, setMetodoPago] = useState<'mercado-pago' | 'transferencia'>('mercado-pago');
-  const [confirmado, setConfirmado] = useState(false);
-  const total = items.reduce(
-    (acumulado, item) => acumulado + item.producto.precio * item.cantidad,
-    0
-  );
-
-  useEffect(() => {
-    const overflowAnterior = document.body.style.overflow;
-    const cerrarConEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-
-    document.body.style.overflow = 'hidden';
-    window.addEventListener('keydown', cerrarConEscape);
-
-    return () => {
-      document.body.style.overflow = overflowAnterior;
-      window.removeEventListener('keydown', cerrarConEscape);
-    };
-  }, [onClose]);
-
-  if (confirmado) {
-    return (
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[60] flex items-center justify-center bg-background px-6"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="checkout-confirmado"
-      >
-        <div className="w-full max-w-sm text-center">
-          <div className="mx-auto mb-6 flex h-12 w-12 items-center justify-center rounded-full bg-foreground text-background">
-            <Check className="h-5 w-5" />
-          </div>
-          <h2 id="checkout-confirmado" className="font-display text-2xl font-bold">
-            Pedido confirmado
-          </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Maqueta: no se realizó ningún cobro.
-          </p>
-          <button
-            type="button"
-            onClick={onClose}
-            className="mt-8 h-12 w-full rounded-xl bg-foreground text-sm font-bold text-background transition-opacity hover:opacity-85"
-          >
-            Volver a la tienda
-          </button>
-        </div>
-      </motion.div>
-    );
-  }
-
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[60] overflow-y-auto bg-background text-foreground"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="checkout-titulo"
-    >
-      <header className="sticky top-0 z-10 border-b border-border bg-background/90 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4 sm:px-8">
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex items-center gap-2 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Volver
-          </button>
-          <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-            Checkout
-          </span>
-        </div>
-      </header>
-
-      <form
-        className="mx-auto grid max-w-5xl gap-12 px-4 py-10 sm:px-8 lg:grid-cols-[minmax(0,1fr)_340px] lg:py-16"
-        onSubmit={(event) => {
-          event.preventDefault();
-          setConfirmado(true);
-        }}
-      >
-        <div className="max-w-xl">
-          <h1 id="checkout-titulo" className="font-display text-3xl font-bold tracking-tight sm:text-4xl">
-            Finalizar compra
-          </h1>
-
-          <div className="mt-10 space-y-8">
-            <section>
-              <h2 className="mb-4 text-sm font-bold">Contacto</h2>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="sr-only" htmlFor="checkout-nombre">Nombre</label>
-                <input id="checkout-nombre" name="nombre" autoComplete="name" required placeholder="Nombre" className={inputCheckout} />
-                <label className="sr-only" htmlFor="checkout-telefono">Teléfono</label>
-                <input id="checkout-telefono" name="telefono" autoComplete="tel" required inputMode="tel" placeholder="Teléfono" className={inputCheckout} />
-                <label className="sr-only" htmlFor="checkout-email">Email</label>
-                <input id="checkout-email" name="email" autoComplete="email" required type="email" placeholder="Email" className={`${inputCheckout} sm:col-span-2`} />
-              </div>
-            </section>
-
-            <section>
-              <h2 className="mb-4 text-sm font-bold">Envío</h2>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="sr-only" htmlFor="checkout-direccion">Dirección</label>
-                <input id="checkout-direccion" name="direccion" autoComplete="street-address" required placeholder="Dirección" className={`${inputCheckout} sm:col-span-2`} />
-                <label className="sr-only" htmlFor="checkout-ciudad">Ciudad</label>
-                <input id="checkout-ciudad" name="ciudad" autoComplete="address-level2" required placeholder="Ciudad" className={inputCheckout} />
-                <label className="sr-only" htmlFor="checkout-codigo-postal">Código postal</label>
-                <input id="checkout-codigo-postal" name="codigo-postal" autoComplete="postal-code" required placeholder="Código postal" className={inputCheckout} />
-              </div>
-            </section>
-
-            <fieldset>
-              <legend className="mb-4 text-sm font-bold">Pago</legend>
-              <div className="grid grid-cols-2 gap-3">
-                {([
-                  ['mercado-pago', 'Mercado Pago'],
-                  ['transferencia', 'Transferencia'],
-                ] as const).map(([valor, etiqueta]) => (
-                  <button
-                    key={valor}
-                    type="button"
-                    aria-pressed={metodoPago === valor}
-                    onClick={() => setMetodoPago(valor)}
-                    className={`h-12 rounded-xl border text-sm font-semibold transition-colors ${
-                      metodoPago === valor
-                        ? 'border-foreground bg-foreground text-background'
-                        : 'border-border hover:border-foreground'
-                    }`}
-                  >
-                    {etiqueta}
-                  </button>
-                ))}
-              </div>
-            </fieldset>
-          </div>
-        </div>
-
-        <aside className="lg:sticky lg:top-28 lg:self-start">
-          <div className="border-y border-border py-6 lg:border lg:p-6">
-            <div className="space-y-5">
-              {items.map((item, index) => (
-                <div
-                  key={`${item.producto.id}-${item.talle}-${item.color.id}-${index}`}
-                  className="flex items-center gap-4"
-                >
-                  <div className="relative h-20 w-16 shrink-0 overflow-hidden rounded-xl bg-secondary">
-                    <img
-                      src={item.imagenSeleccionada}
-                      alt=""
-                      className="h-full w-full object-cover"
-                    />
-                    <span className="absolute right-1 top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-zinc-950 px-1 text-[10px] font-bold text-white">
-                      {item.cantidad}
-                    </span>
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-bold">{item.producto.nombre}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {item.talle} · {item.color.nombre}
-                    </p>
-                  </div>
-                  <span className="text-sm font-semibold">
-                    {formatearPrecio(item.producto.precio * item.cantidad)}
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-6 flex items-center justify-between border-t border-border pt-5">
-              <span className="text-sm font-bold">Total</span>
-              <span className="font-display text-xl font-bold">{formatearPrecio(total)}</span>
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            className="mt-4 h-14 w-full rounded-xl bg-foreground text-sm font-bold text-background transition-opacity hover:opacity-85"
-          >
-            Confirmar · {formatearPrecio(total)}
-          </button>
-          <p className="mt-3 text-center text-[11px] text-muted-foreground">
-            Maqueta · no procesa pagos
-          </p>
-        </aside>
-      </form>
-    </motion.div>
-  );
-}
-
 export default function TiendaRopa() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const [productoEnTransicion, setProductoEnTransicion] = useState<string | null>(() => {
+  const [productoEnTransicion, setProductoEnTransicion] = useState<number | null>(() => {
     const locationState = location.state as TiendaRopaNavigationState | null;
-    return typeof locationState?.productoRopaTransitionId === 'string'
+    return typeof locationState?.productoRopaTransitionId === 'number'
       ? locationState.productoRopaTransitionId
       : null;
   });
@@ -292,8 +85,40 @@ export default function TiendaRopa() {
     isDrawerOpen,
     setIsDrawerOpen,
     actualizarCantidad,
+    vaciarCarrito,
     totalPrendas,
   } = useCarritoRopaStore();
+
+  // El catálogo sale de la API: no hay productos hardcodeados en la tienda.
+  const [catalogo, setCatalogo] = useState<RopaCatalogo | null>(null);
+  const [cargandoCatalogo, setCargandoCatalogo] = useState(true);
+  const [errorCatalogo, setErrorCatalogo] = useState<string | null>(null);
+
+  const cargarCatalogo = useCallback(async (signal?: AbortSignal) => {
+    setCargandoCatalogo(true);
+    setErrorCatalogo(null);
+    try {
+      const respuesta = await ropaApi.catalogo();
+      if (signal?.aborted) return;
+      setCatalogo(respuesta.data);
+      registrarImagenesCatalogo(
+        respuesta.data.productos.map((producto) => producto.imagenes[0])
+      );
+    } catch (err) {
+      if (signal?.aborted) return;
+      setErrorCatalogo(
+        err instanceof Error ? err.message : 'No pudimos cargar el catálogo.'
+      );
+    } finally {
+      if (!signal?.aborted) setCargandoCatalogo(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void cargarCatalogo(controller.signal);
+    return () => controller.abort();
+  }, [cargarCatalogo]);
 
   const [tema, setTema] = useState<Tema | null>(() => {
     try {
@@ -324,18 +149,19 @@ export default function TiendaRopa() {
   }, []);
 
   // División para grilla asimétrica (columna 1 más arriba que columna 2)
+  const productos = catalogo?.productos ?? [];
   const columnaIzquierda = useMemo(
-    () => PRODUCTOS_ROPA.filter((_, idx) => idx % 2 === 0),
-    []
+    () => productos.filter((_, idx) => idx % 2 === 0),
+    [productos]
   );
   const columnaDerecha = useMemo(
-    () => PRODUCTOS_ROPA.filter((_, idx) => idx % 2 !== 0),
-    []
+    () => productos.filter((_, idx) => idx % 2 !== 0),
+    [productos]
   );
 
   const totalPrendasEnCarrito = totalPrendas();
 
-  const abrirProducto = async (productoId: string) => {
+  const abrirProducto = async (productoId: number) => {
     const tiendaRopaScrollY = window.scrollY;
     try { sessionStorage.setItem(TIENDA_ROPA_SCROLL_KEY, String(tiendaRopaScrollY)); } catch { /* Storage opcional. */ }
 
@@ -413,7 +239,7 @@ export default function TiendaRopa() {
   ) : null;
 
   // Render de tarjeta de producto flotante (sin fondo de caja, sin tags, sin estrellas, sin descripción)
-  const renderProductCard = (prod: ProductoRopa, animIndex: number) => {
+  const renderProductCard = (prod: RopaProducto, animIndex: number) => {
     return (
       <motion.div
         key={prod.id}
@@ -453,19 +279,21 @@ export default function TiendaRopa() {
           <div className="flex items-baseline justify-between pt-0.5">
             <div className="flex items-baseline gap-1.5">
               <span className="font-bold text-sm sm:text-base font-sans-modern text-foreground">
-                {formatearPrecio(prod.precio)}
+                {formatearPrecioRopa(prod.precio)}
               </span>
               {prod.precioAnterior && (
                 <span className="text-[10px] sm:text-xs text-zinc-400 line-through">
-                  {formatearPrecio(prod.precioAnterior)}
+                  {formatearPrecioRopa(prod.precioAnterior)}
                 </span>
               )}
             </div>
 
             {/* Micro Pill de Talles Disponibles */}
-            <span className="text-[10px] font-bold text-zinc-400 bg-secondary px-1.5 py-0.5 rounded-md hidden sm:inline-block">
-              {prod.talles.join(' ')}
-            </span>
+            {prod.talles.length > 0 && (
+              <span className="text-[10px] font-bold text-zinc-400 bg-secondary px-1.5 py-0.5 rounded-md hidden sm:inline-block">
+                {prod.talles.join(' ')}
+              </span>
+            )}
           </div>
         </div>
       </motion.div>
@@ -533,6 +361,36 @@ export default function TiendaRopa() {
             )}
           </div>
         </div>
+
+        {cargandoCatalogo && (
+          <div className="flex items-center justify-center gap-2 py-20 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Cargando el catálogo…
+          </div>
+        )}
+
+        {!cargandoCatalogo && errorCatalogo && (
+          <div className="flex flex-col items-center gap-4 py-20 text-center">
+            <AlertCircle className="h-6 w-6 text-muted-foreground" />
+            <div>
+              <p className="text-sm font-semibold">No pudimos cargar el catálogo</p>
+              <p className="mt-1 text-xs text-muted-foreground">{errorCatalogo}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void cargarCatalogo()}
+              className="rounded-xl border border-border px-5 py-2.5 text-xs font-bold transition-colors hover:border-foreground"
+            >
+              Reintentar
+            </button>
+          </div>
+        )}
+
+        {!cargandoCatalogo && !errorCatalogo && productos.length === 0 && (
+          <p className="py-20 text-center text-sm text-muted-foreground">
+            Todavía no hay prendas publicadas.
+          </p>
+        )}
       </main>
 
       {/* Navbar Flotante Inferior: ÚNICAMENTE Botón de Carrito */}
@@ -574,10 +432,17 @@ export default function TiendaRopa() {
       />
 
       <AnimatePresence>
-        {checkoutAbierto && carrito.length > 0 && (
+        {checkoutAbierto && carrito.length > 0 && catalogo && (
           <CheckoutRopa
             items={carrito}
+            envio={catalogo.envio}
+            metodosPago={catalogo.metodosPago}
             onClose={() => setCheckoutAbierto(false)}
+            onVaciarCarrito={vaciarCarrito}
+            onPedidoCreado={(pedidoId) => {
+              setCheckoutAbierto(false);
+              void navigate(`/ropa/pedido/${pedidoId}`);
+            }}
           />
         )}
       </AnimatePresence>

@@ -17,6 +17,7 @@ import { TrackingBootstrap } from './components/TrackingBootstrap'
 import { CampanaLinkResolver, RecetaLinkResolver } from './pages/MarketingLinkResolver'
 import TiendaRopa from './pages/TiendaRopa'
 import ProductoRopaDetalle from './pages/ProductoRopaDetalle'
+import PedidoRopa from './pages/PedidoRopa'
 
 const rutas = [
   {
@@ -30,6 +31,11 @@ const rutas = [
   {
     path: "/ropa/producto/:id",
     element: <ProductoRopaDetalle />,
+  },
+  {
+    // Seguimiento del pedido: destino de los back_urls de Mercado Pago.
+    path: "/ropa/pedido/:id",
+    element: <PedidoRopa />,
   },
   {
     path: "/ropa/:id",

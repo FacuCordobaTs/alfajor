@@ -6,7 +6,7 @@ import {
   ArrowRight,
   ShoppingCart,
 } from 'lucide-react';
-import type { ItemCarritoRopa } from '../../data/ropaMockData';
+import type { ItemCarritoRopa } from '../../lib/ropa';
 
 interface CarritoRopaDrawerProps {
   isOpen: boolean;
@@ -98,7 +98,7 @@ export const CarritoRopaDrawer = ({
             ) : (
               items.map((item, index) => (
                 <motion.div
-                  key={`${item.producto.id}-${item.talle}-${item.color.id}-${index}`}
+                  key={`${item.producto.id}-${item.talle}-${item.color.nombre}-${index}`}
                   layout
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -118,19 +118,25 @@ export const CarritoRopaDrawer = ({
                       {item.producto.nombre}
                     </h5>
 
-                    {/* Talle y Color Chips */}
-                    <div className="flex items-center gap-2 mt-1 mb-2">
-                      <span className="text-[11px] font-bold text-zinc-700 dark:text-zinc-300">
-                        Talle: {item.talle}
-                      </span>
-                      <span className="text-[11px] font-medium text-zinc-500 flex items-center gap-1">
-                        <span
-                          className="w-2.5 h-2.5 rounded-full inline-block"
-                          style={{ backgroundColor: item.color.hex }}
-                        />
-                        {item.color.nombre}
-                      </span>
-                    </div>
+                    {/* Talle y Color Chips (los accesorios pueden no tener ninguno) */}
+                    {(item.talle || item.color.nombre) && (
+                      <div className="flex items-center gap-2 mt-1 mb-2">
+                        {item.talle && (
+                          <span className="text-[11px] font-bold text-zinc-700 dark:text-zinc-300">
+                            Talle: {item.talle}
+                          </span>
+                        )}
+                        {item.color.nombre && (
+                          <span className="text-[11px] font-medium text-zinc-500 flex items-center gap-1">
+                            <span
+                              className="w-2.5 h-2.5 rounded-full inline-block"
+                              style={{ backgroundColor: item.color.hex }}
+                            />
+                            {item.color.nombre}
+                          </span>
+                        )}
+                      </div>
+                    )}
 
                     {/* Precios y Stepper */}
                     <div className="flex items-center justify-between">
