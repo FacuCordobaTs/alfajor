@@ -15,7 +15,7 @@ import {
     guardarDireccionCliente,
     sincronizarDireccionesCliente,
 } from '@/components/CheckoutDeliveryGrupal'
-import { configurarGtm, contextoParaPedidoMarketing, registrarEventoTracking, registrarEventoTrackingUnaVez } from '@/lib/tracking'
+import { codigoPromocionalMarketing, configurarGtm, contextoParaPedidoMarketing, guardarContextoTracking, registrarEventoTracking, registrarEventoTrackingUnaVez } from '@/lib/tracking'
 
 type PedidoHistorico = {
     id: number
@@ -121,12 +121,84 @@ function checkIsOpen(horarios: HorarioTurno[]): { abierto: boolean; proximaApert
     return { abierto: false, proximaApertura: mejor?.texto || null }
 }
 
-const MenuDelivery = () => {
+/** Contexto público de un Smart Link. Una campaña normal no tiene producto ni
+ * oferta, pero conserva el mismo touch para atribuir visitas y pedidos. */
+export interface CampanaPublica {
+    campanaId: number
+    nombre: string
+    slug: string
+    tipo?: 'adquisicion' | 'recompra' | 'retencion' | 'lo_mismo' | 'reactivacion'
+    destinoTipo?: 'tienda' | 'producto' | 'carrito'
+    productoId: number | null
+    carritoRep?: string | null
+    descuentoPorcentaje: number
+    limiteUsos: number | null
+    usosActuales: number
+    usosRestantes: number | null
+    fechaInicio: string | null
+    fechaFin: string | null
+}
+
+export type CampanaProductoPublica = CampanaPublica
+
+type ItemCarritoPrearmado = {
+    productoId: number
+    cantidad: number
+    varianteId?: number
+    varianteSecundariaId?: number
+    agregadoIds: number[]
+}
+
+/** Acepta los links históricos `12x2-15x1` y el formato v2 de campañas. */
+function parseCarritoPrearmado(rep: string): ItemCarritoPrearmado[] {
+    if (/^\d+x\d+(?:-\d+x\d+)*$/.test(rep)) {
+        return rep.split('-').map((parte) => {
+            const [productoId, cantidad] = parte.split('x').map(Number)
+            return { productoId, cantidad, agregadoIds: [] }
+        })
+    }
+    if (!rep.startsWith('v2:')) return []
+    try {
+        const bruto: unknown = JSON.parse(rep.slice(3))
+        if (!Array.isArray(bruto)) return []
+        return bruto.flatMap((item): ItemCarritoPrearmado[] => {
+            if (!item || typeof item !== 'object') return []
+            const raw = item as Record<string, unknown>
+            if (!Number.isInteger(raw.p) || !Number.isInteger(raw.q) || (raw.q as number) < 1) return []
+            if (raw.v !== undefined && !Number.isInteger(raw.v)) return []
+            if (raw.s !== undefined && !Number.isInteger(raw.s)) return []
+            if (raw.a !== undefined && (!Array.isArray(raw.a) || raw.a.some((id) => !Number.isInteger(id)))) return []
+            return [{
+                productoId: raw.p as number,
+                cantidad: Math.min(99, raw.q as number),
+                ...(raw.v === undefined ? {} : { varianteId: raw.v as number }),
+                ...(raw.s === undefined ? {} : { varianteSecundariaId: raw.s as number }),
+                agregadoIds: (raw.a ?? []) as number[],
+            }]
+        })
+    } catch { return [] }
+}
+
+const extrasTrackingCampana = (campana: CampanaPublica | null, metadata: Record<string, unknown> = {}) => ({
+    ...(campana ? { touch: { tipo: 'campana' as const, campanaId: campana.campanaId } } : {}),
+    ...((campana || Object.keys(metadata).length) ? {
+        metadata: { ...metadata, ...(campana ? { campaniaSlug: campana.slug } : {}) },
+    } : {}),
+})
+
+const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) => {
     const navigate = useNavigate()
     const username = 'alfajor'
     const [searchParams, setSearchParams] = useSearchParams()
     const productoAplicadoRef = useRef(false)
     const repAplicadoRef = useRef(false)
+    const tkAplicadoRef = useRef<string | null>(null)
+    const [bannerGrowth, setBannerGrowth] = useState<{
+        texto: string
+        porcentaje: number
+        expiraAt: number | null
+    } | null>(null)
+    const [descuentoGrowthCodigo, setDescuentoGrowthCodigo] = useState<string | null>(null)
 
     const [carritoAbierto, setCarritoAbierto] = useState(false)
     const [selectedProduct, setSelectedProduct] = useState<any>(null)
@@ -295,20 +367,73 @@ const MenuDelivery = () => {
         }
     }, [username])
 
+    // El link de recompra histórico usa `12x2-15x1`; una campaña de carrito
+    // usa `v2:` y conserva variantes (incluso dobles) y extras. En ambos casos
+    // se vuelve a resolver todo contra el menú actual: ningún precio, nombre u
+    // opción desactualizada viaja confiada en el link.
     useEffect(() => {
         if (repAplicadoRef.current || productos.length === 0) return
-        const rep = searchParams.get('rep')
+        const rep = searchParams.get('rep') || campana?.carritoRep
         if (!rep) return
         repAplicadoRef.current = true
-        const items = rep.split('-').flatMap((parte) => {
-            const coincidencia = /^(\d+)x(\d+)$/.exec(parte)
-            if (!coincidencia) return []
-            const producto = productos.find((item) => item.id === Number(coincidencia[1]) && item.disponible !== false)
-            return producto ? [{ id: `rep-${producto.id}`, productoId: producto.id, nombre: producto.nombre, precio: String(producto.precio), precioOriginal: producto.precio, descuento: producto.descuento || 0, imagenUrl: producto.imagenUrl, cantidad: Number(coincidencia[2]), ingredientesExcluidos: [], ingredientesExcluidosNombres: [], agregados: [], esCanjePuntos: false, puntosNecesarios: 0, puntosGanados: producto.puntosGanados }] : []
-        })
-        const params = new URLSearchParams(searchParams); params.delete('rep'); setSearchParams(params, { replace: true })
-        if (items.length) { setCartItems(items); setTimeout(() => abrirCarrito(), 250) }
-    }, [productos, searchParams, setSearchParams])
+
+        const pares = parseCarritoPrearmado(rep)
+
+        const nuevos: any[] = []
+        for (const par of pares) {
+            const producto = productos.find(p => p.id === par.productoId)
+            if (!producto) continue
+            if (producto.disponible === false) continue
+            if (producto.puntosNecesarios > 0) continue // el canje por puntos no se precarga
+            const variante = par.varianteId == null ? undefined : producto.variantes?.find((item: any) => item.id === par.varianteId)
+            const varianteSecundaria = par.varianteSecundariaId == null ? undefined : producto.variantesSecundarias?.find((item: any) => item.id === par.varianteSecundariaId)
+            // Una campaña v2 siempre guarda las variantes requeridas. Si el menú
+            // cambió, omitimos sólo ese item antes que crear una orden inválida.
+            if (rep.startsWith('v2:') && ((producto.variantes?.length && !variante) || (producto.variantesSecundarias?.length && !varianteSecundaria))) continue
+            const agregados = (producto.agregados ?? []).filter((item: any) => par.agregadoIds.includes(item.id))
+            const basePrecio = variante ? parseFloat(variante.precio) : parseFloat(producto.precio)
+            const baseConSecundaria = basePrecio + (varianteSecundaria ? parseFloat(varianteSecundaria.precio) : 0)
+            const precioConDescuento = producto.descuento && producto.descuento > 0
+                ? baseConSecundaria * (1 - producto.descuento / 100)
+                : baseConSecundaria
+            const precioFinal = precioConDescuento + agregados.reduce((total: number, agregado: any) => total + parseFloat(agregado.precio || 0), 0)
+            const variantesNombre = [variante?.nombre, varianteSecundaria?.nombre].filter(Boolean).join(' · ')
+            nuevos.push({
+                id: Math.random().toString(36).substr(2, 9),
+                productoId: producto.id,
+                categoria: producto.categoria,
+                nombre: variantesNombre ? `${producto.nombre} - ${variantesNombre}` : producto.nombre,
+                precio: precioFinal.toFixed(2),
+                precioOriginal: variante ? variante.precio : producto.precio,
+                descuento: producto.descuento || 0,
+                imagenUrl: producto.imagenUrl,
+                cantidad: par.cantidad,
+                varianteId: variante?.id,
+                varianteNombre: variante?.nombre,
+                varianteSecundariaId: varianteSecundaria?.id,
+                varianteSecundariaNombre: varianteSecundaria?.nombre,
+                ingredientesExcluidos: [],
+                ingredientesExcluidosNombres: [],
+                agregados,
+                esCanjePuntos: false,
+                puntosNecesarios: 0,
+                puntosGanados: producto.puntosGanados
+            })
+        }
+
+        // Limpiamos el query param para que no se reaplique al navegar / recargar.
+        if (searchParams.has('rep')) {
+            const nuevosParams = new URLSearchParams(searchParams)
+            nuevosParams.delete('rep')
+            setSearchParams(nuevosParams, { replace: true })
+        }
+
+        if (nuevos.length > 0) {
+            setCartItems(nuevos)
+            toast.success('Te dejamos el carrito listo 🛒')
+            setTimeout(() => abrirCarrito(), 500)
+        }
+    }, [productos, restaurante?.id, searchParams, setSearchParams, campana])
 
     useEffect(() => {
         if (productoAplicadoRef.current || productos.length === 0) return
@@ -320,8 +445,205 @@ const MenuDelivery = () => {
         if (producto) { setSelectedProduct(producto); setDrawerOpen(true) }
     }, [productos, searchParams, setSearchParams])
 
+    // Resuelve micro-campañas persistentes seguras cifradas con AES-256-GCM (?tk=v1... o ?c=v1...)
+    useEffect(() => {
+        const tk = searchParams.get('tk') || searchParams.get('c')
+        if (!tk || tkAplicadoRef.current === tk) return
+        if (loading || !restaurante || productos.length === 0) return
+
+        tkAplicadoRef.current = tk
+
+        const resolverToken = async () => {
+            try {
+                const url = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+                const res = await fetch(`${url}/public/growth/resolver-enlace`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token: tk, restauranteSlug: username }),
+                })
+
+                if (res.status === 410) {
+                    toast.info('Este beneficio exclusivo ha expirado, pero podés disfrutar de toda nuestra carta.')
+                    return
+                }
+
+                if (!res.ok) {
+                    const errorData = await res.json().catch(() => null)
+                    console.error('Error resolviendo growth token:', res.status, errorData)
+                    toast.error(errorData?.message || 'El enlace no es válido o ha expirado.')
+                    return
+                }
+
+                const response = await res.json()
+                if (!response.success || !response.data) return
+                const data = response.data
+
+                // Sincronizar datos de cliente en localStorage
+                if (data.cliente?.nombre) localStorage.setItem('cliente_nombre', data.cliente.nombre)
+                if (data.cliente?.telefono) {
+                    localStorage.setItem('cliente_telefono', data.cliente.telefono)
+                    setTelefonoCliente(data.cliente.telefono)
+                }
+                if (data.cliente?.direccionHabitual?.direccion) {
+                    localStorage.setItem('cliente_direccion', data.cliente.direccionHabitual.direccion)
+                    if (data.cliente.direccionHabitual.lat != null) localStorage.setItem('cliente_lat', String(data.cliente.direccionHabitual.lat))
+                    if (data.cliente.direccionHabitual.lng != null) localStorage.setItem('cliente_lng', String(data.cliente.direccionHabitual.lng))
+                }
+
+                // Registrar contexto atribuible en la sesión para el checkout
+                guardarContextoTracking({
+                    username,
+                    campaniaSlug: data.campanaSlug,
+                    campanaId: data.campanaId ?? undefined,
+                    recetaToken: tk,
+                    codigoPromocional: data.descuento?.codigoCupon ?? undefined,
+                })
+
+                // Configurar beneficio de descuento si está presente
+                if (data.descuento?.activo && data.descuento?.porcentaje > 0) {
+                    const pct = data.descuento.porcentaje
+                    const exp = data.descuento.expiraAt ? new Date(data.descuento.expiraAt).toISOString() : null
+                    const texto = pct >= 20
+                        ? '⏳ Oportunidad Exclusiva: 20% OFF por 48 horas aplicado a tu pedido'
+                        : `¡Te extrañamos! Tenés un ${pct}% OFF aplicado a tu pedido 🎁`
+
+                    setBannerGrowth({ texto, porcentaje: pct, expiraAt: data.descuento.expiraAt })
+                    if (data.descuento.codigoCupon) {
+                        setDescuentoGrowthCodigo(data.descuento.codigoCupon)
+                    }
+
+                    // Reflejar el porcentaje de descuento en todos los productos de la carta
+                    setProductos(prev => prev.map((prod: any) => {
+                        const descActual = Number(prod.descuento || 0)
+                        return {
+                            ...prod,
+                            descuento: Math.max(descActual, pct),
+                            descuentoFechaFin: pct >= descActual ? (exp || prod.descuentoFechaFin) : prod.descuentoFechaFin,
+                        }
+                    }))
+
+                    // Actualizar selectedProduct si el drawer de producto está abierto
+                    setSelectedProduct((prev: any) => {
+                        if (!prev) return null
+                        const descActual = Number(prev.descuento || 0)
+                        return {
+                            ...prev,
+                            descuento: Math.max(descActual, pct),
+                            descuentoFechaFin: pct >= descActual ? (exp || prev.descuentoFechaFin) : prev.descuentoFechaFin,
+                        }
+                    })
+                }
+
+                // Caso 1: Campaña "¿Lo Mismo de Siempre?" (Drawer 1-Click Buy)
+                if (data.modalidad === 'drawer_habitual') {
+                    const items = Array.isArray(data.carrito) ? data.carrito : []
+                    if (items.length > 0) {
+                        const dir = data.cliente?.direccionHabitual
+                        const tipoPedido = (dir?.tipoPedido === 'delivery' || dir?.tipoPedido === 'takeaway')
+                            ? dir.tipoPedido
+                            : (restaurante.deliveryEnabled !== false ? 'delivery' : 'takeaway')
+
+                        const fee = dir?.deliveryFee != null ? Number(dir.deliveryFee) : (tipoPedido === 'delivery' ? Number(restaurante.deliveryFee || 0) : 0)
+                        const itemsTotalNum = items.reduce((sum: number, it: any) => sum + (parseFloat(it.precio) * it.cantidad), 0)
+
+                        const metodosDisponibles = new Set((restaurante.metodosPago || []).map((m: any) => m.id))
+                        const metodoPago = dir?.metodoPago && metodosDisponibles.has(dir.metodoPago)
+                            ? dir.metodoPago
+                            : (restaurante.metodosPago?.[0]?.id || 'efectivo')
+
+                        const checkout = {
+                            tipoPedido,
+                            nombre: data.cliente?.nombre || '',
+                            telefono: data.cliente?.telefono || '',
+                            direccion: tipoPedido === 'delivery' ? (dir?.direccion || '') : '',
+                            lat: dir?.lat ?? null,
+                            lng: dir?.lng ?? null,
+                            notas: '',
+                            tipoDomicilio: null,
+                            deliveryFee: fee,
+                            zonaNombre: null,
+                            itemsTotal: itemsTotalNum.toFixed(2),
+                            total: (itemsTotalNum + fee).toFixed(2),
+                            codigoDescuentoId: data.descuento?.codigoDescuentoId ?? null,
+                            montoDescuento: 0,
+                            metodoPago,
+                            horarioProgramado: '',
+                            sucursalId: dir?.sucursalId ?? null,
+                        }
+
+                        setCartItems(items)
+                        checkoutDataRef.current = checkout
+                        setCheckoutDeliveryData(checkout)
+                        setEditSemaphoreLocal(null)
+                        setMostrarCheckoutEnCarrito(true)
+                        setExpandido(false)
+                        setEsPedidoHabitual(true)
+                        window.history.pushState({ drawer: 'carrito' }, '')
+                        setCarritoAbierto(true)
+                    }
+                } else if (data.modalidad === 'descuento_banner') {
+                    // Caso 2: Campaña "Reactivación con Descuento"
+                    const items = Array.isArray(data.carrito) ? data.carrito : []
+                    const pct = data.descuento?.porcentaje ?? 0
+                    if (items.length > 0 && cartItems.length === 0) {
+                        const itemsConDescuento = items.map((it: any) => {
+                            const descActual = Number(it.descuento || 0)
+                            const nuevoDesc = Math.max(descActual, pct)
+                            const precioOrig = parseFloat(it.precioOriginal || it.precio || 0)
+                            return {
+                                ...it,
+                                descuento: nuevoDesc,
+                                precioOriginal: (it.precioOriginal || it.precio).toString(),
+                                precio: nuevoDesc > 0 ? (precioOrig * (1 - nuevoDesc / 100)).toFixed(2) : it.precio,
+                            }
+                        })
+                        setCartItems(itemsConDescuento)
+                        // El toast promete lo que el resolver pudo verificar: si el cupón del toque ya
+                        // se usó o venció, el carrito se arma igual pero sin descuento que anunciar.
+                        if (data.descuento?.activo && pct > 0) {
+                            toast.success('Te dejamos tu pedido listo con descuento 🛒')
+                        } else {
+                            toast.success('Te dejamos tu pedido listo 🛒')
+                        }
+                    } else if (data.descuento?.activo) {
+                        toast.success(`Beneficio aplicado: ${data.descuento.porcentaje}% OFF 🎉`)
+                    }
+                }
+            } catch (err) {
+                console.error('Error resolviendo token de micro-campaña:', err)
+            }
+        }
+
+        void resolverToken()
+    }, [searchParams, loading, restaurante, productos.length])
+
+    // Soporte para micro-campañas independientes sin token individual (?c=reactivacion)
+    useEffect(() => {
+        if (!campana || searchParams.has('tk') || searchParams.has('c') || tkAplicadoRef.current) return
+
+        if (campana.tipo === 'reactivacion' || campana.slug === 'reactivacion') {
+            const pct = campana.descuentoPorcentaje > 0 ? campana.descuentoPorcentaje : 10
+            setBannerGrowth({
+                texto: `¡Te extrañamos! Tenés un ${pct}% OFF aplicado a tu pedido 🎁`,
+                porcentaje: pct,
+                expiraAt: null,
+            })
+            setProductos(prev => prev.map((prod: any) => {
+                const descActual = Number(prod.descuento || 0)
+                return {
+                    ...prod,
+                    descuento: Math.max(descActual, pct),
+                    descuentoFechaFin: prod.descuentoFechaFin || null,
+                }
+            }))
+        }
+    }, [campana, searchParams])
+
     useEffect(() => {
         if (loading || !restaurante?.id || productos.length === 0 || recomendacionIntentadaRef.current) return
+        const esCampanaLoMismo = campana?.tipo === 'lo_mismo' || campana?.slug === 'lo-mismo'
+        // Un Smart Link tiene prioridad sobre la recomendación histórica, excepto si es la campaña "Lo Mismo de Siempre".
+        if ((campana && !esCampanaLoMismo) || repAplicadoRef.current || productoAplicadoRef.current || searchParams.has('rep') || searchParams.has('producto') || searchParams.has('tk') || searchParams.has('c') || tkAplicadoRef.current) return
         if (!estadoAbierto.abierto || restaurante.soloPedidosProgramados) return
         recomendacionIntentadaRef.current = true
 
@@ -339,7 +661,7 @@ const MenuDelivery = () => {
                 const pedidos: PedidoHistorico[] = Array.isArray(response.data)
                     ? response.data.filter((p: PedidoHistorico) => p.estado !== 'cancelled' && p.items?.length > 0)
                     : []
-                if (pedidos.length === 0 || (!import.meta.env.DEV && pedidos.length < 2)) return
+                if (pedidos.length === 0 || (!esCampanaLoMismo && !import.meta.env.DEV && pedidos.length < 2)) return
 
                 const grupos = new Map<string, PedidoHistorico[]>()
                 pedidos.forEach(pedido => {
@@ -350,7 +672,7 @@ const MenuDelivery = () => {
                 const grupoHabitual = [...grupos.values()].sort((a, b) => b.length - a.length)[0]
                 // En producción sólo recomendamos un patrón repetido. En DEV el pedido
                 // más reciente alcanza para poder probar visualmente todo el flujo.
-                if (!grupoHabitual || (!import.meta.env.DEV && grupoHabitual.length < 2)) return
+                if (!grupoHabitual || (!esCampanaLoMismo && !import.meta.env.DEV && grupoHabitual.length < 2)) return
 
                 const pedido = grupoHabitual[0]
                 const metodosDisponibles = new Set((restaurante.metodosPago || []).map((m: any) => m.id))
@@ -458,7 +780,7 @@ const MenuDelivery = () => {
         }
 
         cargarPedidoHabitual()
-    }, [loading, restaurante, productos, sucursales, cartItems.length, estadoAbierto.abierto])
+    }, [loading, restaurante, productos, sucursales, cartItems.length, estadoAbierto.abierto, campana, searchParams])
 
     useEffect(() => {
         if (horarios.length === 0) return
@@ -525,7 +847,7 @@ const MenuDelivery = () => {
                     pedidoUnificadoId: result.data.id,
                     valor: result.data.total ? parseFloat(result.data.total) : parseFloat(data.total || '0'),
                     items: cartItems,
-                    metadata: { tipoPedido, cantidadItems: cartItems.length },
+                    ...extrasTrackingCampana(campana, { tipoPedido, cantidadItems: cartItems.length }),
                 })
                 localStorage.setItem('cliente_nombre', data.nombre)
                 localStorage.setItem('cliente_telefono', data.telefono)
@@ -682,6 +1004,7 @@ const MenuDelivery = () => {
         : productos.filter(p => p.categoria === selectedCategory)
 
     const categoriasOrdenadas = Object.keys(productosPorCategoria).sort(compararCategorias)
+    const productoCampana = campana?.productoId != null ? productos.find((producto) => producto.id === campana.productoId) ?? null : null
 
     const abrirDetalleProducto = (producto: any) => {
         setSelectedProduct(producto)
@@ -692,8 +1015,9 @@ const MenuDelivery = () => {
         if (!drawerOpen || !selectedProduct?.id || !restaurante?.id) return
         registrarEventoTrackingUnaVez(restaurante.id, username, 'product_view', `producto-${selectedProduct.id}`, {
             productoId: selectedProduct.id, nombreProducto: selectedProduct.nombre, valor: selectedProduct.precio,
+            ...extrasTrackingCampana(campana),
         })
-    }, [drawerOpen, restaurante?.id, selectedProduct?.id, selectedProduct?.precio, username])
+    }, [drawerOpen, restaurante?.id, selectedProduct?.id, selectedProduct?.precio, username, campana])
 
     // Lista ordenada de productos "hermanos" para poder saltar de uno a otro dentro
     // del drawer (mismo orden en que se ven en pantalla). El canje por puntos queda
@@ -775,6 +1099,12 @@ const MenuDelivery = () => {
     }
 
     const totalPedido = cartItems.reduce((sum, item) => sum + (parseFloat(item.precio) * item.cantidad), 0).toFixed(2)
+    const tieneCodigoCampana = Boolean(descuentoGrowthCodigo || codigoPromocionalMarketing(username))
+    // El cupón se valida contra el precio de lista: si el carrito ya viene rebajado
+    // por la campaña, medir el mínimo sobre el total rebajado lo rechazaría y
+    // descontaría dos veces el mismo porcentaje.
+    const subtotalBaseOriginal = cartItems.reduce((sum, item) => sum + (parseFloat(item.precioOriginal || item.precio || 0) * item.cantidad), 0).toFixed(2)
+    const itemsTotalCheckout = tieneCodigoCampana ? subtotalBaseOriginal : totalPedido
     const puntosEnCarrito = () => cartItems.reduce((sum, item) => sum + (item.esCanjePuntos ? item.puntosNecesarios * item.cantidad : 0), 0)
     const puntosGanadosCarrito = () => cartItems.reduce((sum, item) => sum + (!item.esCanjePuntos && item.puntosGanados ? item.puntosGanados * item.cantidad : 0), 0)
 
@@ -944,6 +1274,26 @@ const MenuDelivery = () => {
             )}
 
             <div className="max-w-2xl lg:max-w-5xl xl:max-w-6xl mx-auto px-5 pt-4 space-y-6">
+                {bannerGrowth && (
+                    <div className="rounded-2xl bg-gradient-to-r from-emerald-500/15 via-emerald-500/10 to-transparent border border-emerald-500/30 p-4 shadow-sm flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                        <div className="flex items-center gap-3 min-w-0">
+                            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-black text-sm">
+                                {bannerGrowth.porcentaje}%
+                            </span>
+                            <div className="min-w-0">
+                                <p className="text-sm font-bold text-foreground leading-snug">
+                                    {bannerGrowth.texto}
+                                </p>
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                    Se descontará automáticamente al confirmar tu compra
+                                </p>
+                            </div>
+                        </div>
+                        <span className="rounded-full bg-emerald-600 px-3 py-1 text-[11px] font-bold text-white shrink-0 shadow-sm">
+                            Aplicado
+                        </span>
+                    </div>
+                )}
                 <section className="space-y-4">
                     <div ref={logoRef} className="flex items-center justify-center gap-4">
                         {restaurante.imagenUrl && (
@@ -963,7 +1313,9 @@ const MenuDelivery = () => {
                     </div>
                 </section>
 
-                {restaurante?.orderGroupEnabled !== false && (
+                {productoCampana && campana ? (
+                    <CampanaProductoHero campana={campana} producto={productoCampana} onClick={() => abrirDetalleProducto(productoCampana)} />
+                ) : restaurante?.orderGroupEnabled !== false && (
                     <section
                         role="button"
                         aria-label="Crear pedido entre amigos"
@@ -1199,7 +1551,7 @@ const MenuDelivery = () => {
                             }}
                             restauranteId={restaurante?.id ?? 0}
                             restauranteUsername={username}
-                            itemsTotal={totalPedido}
+                            itemsTotal={itemsTotalCheckout}
                             totalItems={cartItems.length}
                             sendMessage={handleCheckoutMessage}
                             clienteId="solo"
@@ -1215,7 +1567,11 @@ const MenuDelivery = () => {
                             itemsResumen={esPedidoHabitual ? cartItems : undefined}
                             pedidoHabitual={esPedidoHabitual}
                             localCerrado={!estadoAbierto.abierto}
-                            contextoMarketing={contextoParaPedidoMarketing(username)}
+                            contextoMarketing={{
+                                ...contextoParaPedidoMarketing(username),
+                                ...(campana ? { campaniaSlug: campana.slug, campanaId: campana.campanaId } : {}),
+                            }}
+                            codigoPromocionalInicial={descuentoGrowthCodigo || codigoPromocionalMarketing(username)}
                             onConfirmarClick={() => {
                                 if (isSubmittingRef.current || !checkoutDataRef.current) return
                                 isSubmittingRef.current = true
@@ -1424,6 +1780,29 @@ const EmptyState = () => (
         <p className="text-sm">Sin productos disponibles.</p>
     </div>
 )
+
+/** Landing de una campaña con producto: reemplaza la tarjeta de "pedido entre
+ * amigos" para que el link muestre la oferta antes que la carta completa. */
+const CampanaProductoHero = ({ campana, producto, onClick }: { campana: CampanaProductoPublica; producto: any; onClick: () => void }) => {
+    const precioOriginal = Number(producto.precio || 0)
+    const descuento = Math.max(0, Number(producto.descuento || campana.descuentoPorcentaje || 0))
+    const precioFinal = precioOriginal * (1 - descuento / 100)
+    return (
+        <section className="overflow-hidden rounded-3xl border border-primary/25 bg-gradient-to-br from-primary/15 via-primary/5 to-background shadow-lg lg:mx-auto lg:max-w-3xl">
+            <button type="button" onClick={onClick} className="grid w-full text-left sm:grid-cols-[minmax(220px,0.9fr)_1.1fr]">
+                {producto.imagenUrl ? <img src={producto.imagenUrl} alt={producto.nombre} className="h-56 w-full object-cover sm:h-full sm:min-h-64" /> : <div className="flex min-h-44 items-center justify-center bg-primary/10"><Utensils className="h-14 w-14 text-primary/50" /></div>}
+                <div className="flex flex-col justify-center p-6 sm:p-8">
+                    <div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-primary px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-primary-foreground">Oferta especial</span>{campana.usosRestantes != null && <span className="text-xs font-semibold text-muted-foreground">Quedan {campana.usosRestantes}</span>}</div>
+                    <p className="mt-4 text-xs font-semibold uppercase tracking-[0.16em] text-primary">{campana.nombre}</p>
+                    <h2 className="mt-1 text-2xl font-black leading-tight text-foreground sm:text-3xl">{producto.nombre}</h2>
+                    {producto.descripcion && <p className="mt-2 line-clamp-3 text-sm leading-relaxed text-muted-foreground">{producto.descripcion}</p>}
+                    <div className="mt-5 flex items-end gap-3"><span className="text-3xl font-black text-primary">${precioFinal.toFixed(0)}</span>{descuento > 0 && <><span className="pb-1 text-sm font-semibold text-muted-foreground line-through">${precioOriginal.toFixed(0)}</span><span className="mb-1 rounded-md bg-emerald-500/15 px-2 py-1 text-xs font-extrabold text-emerald-700 dark:text-emerald-400">{descuento}% OFF</span></>}</div>
+                    <div className="mt-5 flex items-center justify-between gap-3"><div className="text-xs font-medium text-muted-foreground">{campana.fechaFin && formatTimeLeft(campana.fechaFin) ? `Termina en ${formatTimeLeft(campana.fechaFin)}` : 'Disponible desde este link'}</div><span className="inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-xs font-bold text-primary-foreground">Ver producto <Plus className="h-4 w-4" /></span></div>
+                </div>
+            </button>
+        </section>
+    )
+}
 
 const ProductoCard = ({ producto, onClick, fullWidth }: { producto: any, onClick: () => void, fullWidth?: boolean }) => {
     const tieneDescuento = !!(producto.descuento && producto.descuento > 0)

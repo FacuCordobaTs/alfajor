@@ -3,7 +3,7 @@ import { useBlocker, useLocation, useNavigate, useParams, useViewTransitionState
 import { motion, AnimatePresence } from 'motion/react';
 import {
   ChevronLeft,
-  ShoppingBag,
+  ShoppingCart,
   Plus,
   Minus,
   CheckCircle2,
@@ -20,6 +20,7 @@ type Tema = { primario: string; secundario: string };
 type TiendaRopaNavigationState = {
   productoRopaTransitionId?: unknown;
   tiendaRopaScrollY?: unknown;
+  checkoutRopaAbierto?: unknown;
 };
 
 const DURACION_SALIDA_MS = 520;
@@ -63,8 +64,6 @@ export default function ProductoRopaDetalle() {
     setIsDrawerOpen,
     agregarItem,
     actualizarCantidad,
-    eliminarItem,
-    vaciarCarrito,
     totalPrendas,
   } = useCarritoRopaStore();
 
@@ -173,10 +172,14 @@ export default function ProductoRopaDetalle() {
   useEffect(() => {
     if (bloqueoAtras.state !== 'blocked' || salidaEnCursoRef.current) return;
 
-    salidaEnCursoRef.current = true;
-    void prepararSalida().then(() => {
-      bloqueoAtras.proceed();
+    const frame = window.requestAnimationFrame(() => {
+      salidaEnCursoRef.current = true;
+      void prepararSalida().then(() => {
+        bloqueoAtras.proceed();
+      });
     });
+
+    return () => window.cancelAnimationFrame(frame);
   }, [bloqueoAtras, prepararSalida]);
 
   const volverALaTienda = async () => {
@@ -291,9 +294,9 @@ export default function ProductoRopaDetalle() {
           onClick={() => setIsDrawerOpen(true)}
           disabled={ocultandoComponentes}
           className="relative w-11 h-11 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-xl border border-white/20 flex items-center justify-center text-white transition-all shadow-floating"
-          title="Ver bolsa de compras"
+          title="Ver carrito de compras"
         >
-          <ShoppingBag className="w-5 h-5" />
+          <ShoppingCart className="w-5 h-5" />
           {totalPrendasEnCarrito > 0 && (
             <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px] font-extrabold flex items-center justify-center shadow-md">
               {totalPrendasEnCarrito}
@@ -508,14 +511,16 @@ export default function ProductoRopaDetalle() {
         </motion.div>
       </main>
 
-      {/* Drawer Flotante de Bolsa de Compras */}
+      {/* Drawer Flotante del Carrito de Compras */}
       <CarritoRopaDrawer
         isOpen={isDrawerOpen}
         onClose={() => setIsDrawerOpen(false)}
+        onCheckout={() => {
+          setIsDrawerOpen(false);
+          navigate('/ropa', { state: { checkoutRopaAbierto: true } });
+        }}
         items={items}
         onActualizarCantidad={actualizarCantidad}
-        onEliminarItem={eliminarItem}
-        onVaciarCarrito={vaciarCarrito}
       />
     </div>
   );

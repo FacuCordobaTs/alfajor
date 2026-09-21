@@ -1,14 +1,17 @@
 import { useState, useMemo, useEffect, useLayoutEffect } from 'react';
 import { flushSync } from 'react-dom';
-import { motion } from 'motion/react';
+import { AnimatePresence, motion } from 'motion/react';
 import {
-  ShoppingBag,
+  ShoppingCart,
   ArrowRight,
+  ArrowLeft,
+  Check,
 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router';
 import '../styles/ropa-view-transitions.css';
 import {
   PRODUCTOS_ROPA,
+  type ItemCarritoRopa,
   type ProductoRopa,
 } from '../data/ropaMockData';
 import { useCarritoRopaStore } from '../store/carritoRopaStore';
@@ -23,10 +26,221 @@ const TIENDA_ROPA_SCROLL_KEY = 'alfajor:tienda-ropa-scroll-y';
 type TiendaRopaNavigationState = {
   productoRopaTransitionId?: unknown;
   tiendaRopaScrollY?: unknown;
+  checkoutRopaAbierto?: unknown;
 };
 
 function temaValido(tema: Tema | null): tema is Tema {
   return !!tema && /^#[0-9a-f]{6}$/i.test(tema.primario) && /^#[0-9a-f]{6}$/i.test(tema.secundario);
+}
+
+const formatearPrecio = (valor: number) => new Intl.NumberFormat('es-AR', {
+  style: 'currency',
+  currency: 'ARS',
+  maximumFractionDigits: 0,
+}).format(valor);
+
+const inputCheckout = 'h-12 w-full rounded-xl border border-border bg-transparent px-4 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-foreground';
+
+type CheckoutRopaProps = {
+  items: ItemCarritoRopa[];
+  onClose: () => void;
+};
+
+function CheckoutRopa({ items, onClose }: CheckoutRopaProps) {
+  const [metodoPago, setMetodoPago] = useState<'mercado-pago' | 'transferencia'>('mercado-pago');
+  const [confirmado, setConfirmado] = useState(false);
+  const total = items.reduce(
+    (acumulado, item) => acumulado + item.producto.precio * item.cantidad,
+    0
+  );
+
+  useEffect(() => {
+    const overflowAnterior = document.body.style.overflow;
+    const cerrarConEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', cerrarConEscape);
+
+    return () => {
+      document.body.style.overflow = overflowAnterior;
+      window.removeEventListener('keydown', cerrarConEscape);
+    };
+  }, [onClose]);
+
+  if (confirmado) {
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-[60] flex items-center justify-center bg-background px-6"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="checkout-confirmado"
+      >
+        <div className="w-full max-w-sm text-center">
+          <div className="mx-auto mb-6 flex h-12 w-12 items-center justify-center rounded-full bg-foreground text-background">
+            <Check className="h-5 w-5" />
+          </div>
+          <h2 id="checkout-confirmado" className="font-display text-2xl font-bold">
+            Pedido confirmado
+          </h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Maqueta: no se realizó ningún cobro.
+          </p>
+          <button
+            type="button"
+            onClick={onClose}
+            className="mt-8 h-12 w-full rounded-xl bg-foreground text-sm font-bold text-background transition-opacity hover:opacity-85"
+          >
+            Volver a la tienda
+          </button>
+        </div>
+      </motion.div>
+    );
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[60] overflow-y-auto bg-background text-foreground"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="checkout-titulo"
+    >
+      <header className="sticky top-0 z-10 border-b border-border bg-background/90 backdrop-blur-xl">
+        <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4 sm:px-8">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex items-center gap-2 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Volver
+          </button>
+          <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+            Checkout
+          </span>
+        </div>
+      </header>
+
+      <form
+        className="mx-auto grid max-w-5xl gap-12 px-4 py-10 sm:px-8 lg:grid-cols-[minmax(0,1fr)_340px] lg:py-16"
+        onSubmit={(event) => {
+          event.preventDefault();
+          setConfirmado(true);
+        }}
+      >
+        <div className="max-w-xl">
+          <h1 id="checkout-titulo" className="font-display text-3xl font-bold tracking-tight sm:text-4xl">
+            Finalizar compra
+          </h1>
+
+          <div className="mt-10 space-y-8">
+            <section>
+              <h2 className="mb-4 text-sm font-bold">Contacto</h2>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="sr-only" htmlFor="checkout-nombre">Nombre</label>
+                <input id="checkout-nombre" name="nombre" autoComplete="name" required placeholder="Nombre" className={inputCheckout} />
+                <label className="sr-only" htmlFor="checkout-telefono">Teléfono</label>
+                <input id="checkout-telefono" name="telefono" autoComplete="tel" required inputMode="tel" placeholder="Teléfono" className={inputCheckout} />
+                <label className="sr-only" htmlFor="checkout-email">Email</label>
+                <input id="checkout-email" name="email" autoComplete="email" required type="email" placeholder="Email" className={`${inputCheckout} sm:col-span-2`} />
+              </div>
+            </section>
+
+            <section>
+              <h2 className="mb-4 text-sm font-bold">Envío</h2>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="sr-only" htmlFor="checkout-direccion">Dirección</label>
+                <input id="checkout-direccion" name="direccion" autoComplete="street-address" required placeholder="Dirección" className={`${inputCheckout} sm:col-span-2`} />
+                <label className="sr-only" htmlFor="checkout-ciudad">Ciudad</label>
+                <input id="checkout-ciudad" name="ciudad" autoComplete="address-level2" required placeholder="Ciudad" className={inputCheckout} />
+                <label className="sr-only" htmlFor="checkout-codigo-postal">Código postal</label>
+                <input id="checkout-codigo-postal" name="codigo-postal" autoComplete="postal-code" required placeholder="Código postal" className={inputCheckout} />
+              </div>
+            </section>
+
+            <fieldset>
+              <legend className="mb-4 text-sm font-bold">Pago</legend>
+              <div className="grid grid-cols-2 gap-3">
+                {([
+                  ['mercado-pago', 'Mercado Pago'],
+                  ['transferencia', 'Transferencia'],
+                ] as const).map(([valor, etiqueta]) => (
+                  <button
+                    key={valor}
+                    type="button"
+                    aria-pressed={metodoPago === valor}
+                    onClick={() => setMetodoPago(valor)}
+                    className={`h-12 rounded-xl border text-sm font-semibold transition-colors ${
+                      metodoPago === valor
+                        ? 'border-foreground bg-foreground text-background'
+                        : 'border-border hover:border-foreground'
+                    }`}
+                  >
+                    {etiqueta}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+          </div>
+        </div>
+
+        <aside className="lg:sticky lg:top-28 lg:self-start">
+          <div className="border-y border-border py-6 lg:border lg:p-6">
+            <div className="space-y-5">
+              {items.map((item, index) => (
+                <div
+                  key={`${item.producto.id}-${item.talle}-${item.color.id}-${index}`}
+                  className="flex items-center gap-4"
+                >
+                  <div className="relative h-20 w-16 shrink-0 overflow-hidden rounded-xl bg-secondary">
+                    <img
+                      src={item.imagenSeleccionada}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                    <span className="absolute right-1 top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-zinc-950 px-1 text-[10px] font-bold text-white">
+                      {item.cantidad}
+                    </span>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-bold">{item.producto.nombre}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {item.talle} · {item.color.nombre}
+                    </p>
+                  </div>
+                  <span className="text-sm font-semibold">
+                    {formatearPrecio(item.producto.precio * item.cantidad)}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-6 flex items-center justify-between border-t border-border pt-5">
+              <span className="text-sm font-bold">Total</span>
+              <span className="font-display text-xl font-bold">{formatearPrecio(total)}</span>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            className="mt-4 h-14 w-full rounded-xl bg-foreground text-sm font-bold text-background transition-opacity hover:opacity-85"
+          >
+            Confirmar · {formatearPrecio(total)}
+          </button>
+          <p className="mt-3 text-center text-[11px] text-muted-foreground">
+            Maqueta · no procesa pagos
+          </p>
+        </aside>
+      </form>
+    </motion.div>
+  );
 }
 
 export default function TiendaRopa() {
@@ -38,6 +252,10 @@ export default function TiendaRopa() {
     return typeof locationState?.productoRopaTransitionId === 'string'
       ? locationState.productoRopaTransitionId
       : null;
+  });
+  const [checkoutAbierto, setCheckoutAbierto] = useState(() => {
+    const locationState = location.state as TiendaRopaNavigationState | null;
+    return locationState?.checkoutRopaAbierto === true;
   });
   const [scrollARestaurar] = useState<number | null>(() => {
     const locationState = location.state as TiendaRopaNavigationState | null;
@@ -74,8 +292,6 @@ export default function TiendaRopa() {
     isDrawerOpen,
     setIsDrawerOpen,
     actualizarCantidad,
-    eliminarItem,
-    vaciarCarrito,
     totalPrendas,
   } = useCarritoRopaStore();
 
@@ -118,14 +334,6 @@ export default function TiendaRopa() {
   );
 
   const totalPrendasEnCarrito = totalPrendas();
-
-  const formatearPrecio = (valor: number) => {
-    return new Intl.NumberFormat('es-AR', {
-      style: 'currency',
-      currency: 'ARS',
-      maximumFractionDigits: 0,
-    }).format(valor);
-  };
 
   const abrirProducto = async (productoId: string) => {
     const tiendaRopaScrollY = window.scrollY;
@@ -327,7 +535,7 @@ export default function TiendaRopa() {
         </div>
       </main>
 
-      {/* Navbar Flotante Inferior: ÚNICAMENTE Botón de Bolsa */}
+      {/* Navbar Flotante Inferior: ÚNICAMENTE Botón de Carrito */}
       <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-40">
         <motion.button
           initial={{ y: 30, opacity: 0 }}
@@ -337,10 +545,10 @@ export default function TiendaRopa() {
           whileTap={{ scale: 0.94 }}
           onClick={() => setIsDrawerOpen(true)}
           className="px-6 py-3 rounded-full bg-zinc-950/90 dark:bg-zinc-900/90 backdrop-blur-2xl text-white shadow-floating-lg border border-white/15 flex items-center gap-3 cursor-pointer"
-          title="Bolsa de compras"
+          title="Carrito de compras"
         >
           <div className="relative flex items-center justify-center">
-            <ShoppingBag className="w-5 h-5 text-white" />
+            <ShoppingCart className="w-5 h-5 text-white" />
             {totalPrendasEnCarrito > 0 && (
               <span className="absolute -top-2 -right-2.5 w-4.5 h-4.5 rounded-full bg-orange-500 text-white text-[9px] font-extrabold flex items-center justify-center shadow-md">
                 {totalPrendasEnCarrito}
@@ -348,20 +556,31 @@ export default function TiendaRopa() {
             )}
           </div>
           <span className="text-xs font-display font-bold tracking-wider uppercase">
-            Bolsa {totalPrendasEnCarrito > 0 ? `(${totalPrendasEnCarrito})` : ''}
+            Carrito {totalPrendasEnCarrito > 0 ? `(${totalPrendasEnCarrito})` : ''}
           </span>
         </motion.button>
       </div>
 
-      {/* Drawer Flotante de Bolsa de Compras */}
+      {/* Drawer Flotante del Carrito de Compras */}
       <CarritoRopaDrawer
         isOpen={isDrawerOpen}
         onClose={() => setIsDrawerOpen(false)}
+        onCheckout={() => {
+          setIsDrawerOpen(false);
+          setCheckoutAbierto(true);
+        }}
         items={carrito}
         onActualizarCantidad={actualizarCantidad}
-        onEliminarItem={eliminarItem}
-        onVaciarCarrito={vaciarCarrito}
       />
+
+      <AnimatePresence>
+        {checkoutAbierto && carrito.length > 0 && (
+          <CheckoutRopa
+            items={carrito}
+            onClose={() => setCheckoutAbierto(false)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

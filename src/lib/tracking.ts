@@ -2,7 +2,7 @@ const API_URL = (import.meta.env.VITE_API_URL || 'https://api.piru.app/api').rep
 export const DURACION_SESION_TRACKING_MS = 30 * 60 * 1000
 
 export type TipoEventoTracking = 'session_start' | 'product_view' | 'add_to_cart' | 'checkout_start' | 'purchase'
-export interface ContextoTracking { username: string; campaniaSlug?: string; recetaToken?: string; actualizadoAt: number }
+export interface ContextoTracking { username: string; campaniaSlug?: string; campanaId?: number; recetaToken?: string; codigoPromocional?: string; actualizadoAt: number }
 interface SesionLocal { sesionUuid: string; ultimaActividadAt: number }
 interface EventoEnCola { restauranteId: number; evento: Record<string, unknown>; intentos: number; reintentarAt: number }
 
@@ -131,6 +131,10 @@ export function guardarContextoTracking(contexto: Omit<ContextoTracking, 'actual
   guardar(sesion(), `${CONTEXT_PREFIX}${username}`, { ...contexto, username, actualizadoAt: Date.now() } satisfies ContextoTracking)
 }
 
+export function limpiarContextoTracking(username: string) {
+  try { sesion()?.removeItem(`${CONTEXT_PREFIX}${nombre(username)}`) } catch { /* best-effort */ }
+}
+
 /** Contexto de Smart Link transitorio: vive sólo durante la sesión del navegador. */
 export function obtenerContextoTracking(username: string): ContextoTracking | null {
   const contexto = leer<ContextoTracking>(sesion(), `${CONTEXT_PREFIX}${nombre(username)}`)
@@ -149,8 +153,15 @@ export function contextoParaPedidoMarketing(username: string) {
     visitorId: obtenerVisitorId(),
     sesionUuid: obtenerSesionTracking(username).sesionUuid,
     ...(contexto?.campaniaSlug ? { campaniaSlug: contexto.campaniaSlug } : {}),
+    ...(contexto?.campanaId ? { campanaId: contexto.campanaId } : {}),
     ...(contexto?.recetaToken ? { recetaToken: contexto.recetaToken } : {}),
   }
+}
+
+/** Beneficio transportado por un Smart Link. La vigencia y el monto siempre se
+ * vuelven a validar en el servidor contra el total real del checkout. */
+export function codigoPromocionalMarketing(username: string): string | null {
+  return obtenerContextoTracking(username)?.codigoPromocional?.trim().toUpperCase() || null
 }
 
 function cola() { const value = leer<EventoEnCola[]>(local(), QUEUE_KEY); return Array.isArray(value) ? value : [] }
@@ -175,7 +186,8 @@ export function registrarEventoTracking(restauranteId: number, username: string,
   // El token de receta sólo vive en el contexto transitorio. Nunca se incluye
   // en eventos: el backend persiste exclusivamente su hash en marketing_enlace.
   const metadata = { ...(extras.metadata as Record<string, unknown> | undefined), ...(contexto?.campaniaSlug ? { campaniaSlug: contexto.campaniaSlug } : {}) }
-  const evento = { eventoUuid: uuid(), sesionUuid: obtenerSesionTracking(username).sesionUuid, visitorId: obtenerVisitorId(), tipo, ocurridoAt: new Date().toISOString(), ...extras, ...(Object.keys(metadata).length ? { metadata } : {}) }
+  const touch = contexto?.campanaId ? { tipo: 'campana' as const, campanaId: contexto.campanaId } : undefined
+  const evento = { eventoUuid: uuid(), sesionUuid: obtenerSesionTracking(username).sesionUuid, visitorId: obtenerVisitorId(), tipo, ocurridoAt: new Date().toISOString(), ...extras, ...(touch ? { touch } : {}), ...(Object.keys(metadata).length ? { metadata } : {}) }
   enviarEventoInmediato(restauranteId, evento)
 }
 

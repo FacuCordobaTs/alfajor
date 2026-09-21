@@ -36,6 +36,13 @@ const normalizarDireccion = (direccion: string) => direccion
 const storageKeyDirecciones = (restauranteId: number, telefono: string) =>
   `cliente_direcciones_v1_${restauranteId}_${normalizarTelefonoDireccion(telefono)}`
 
+// Los cupones que emite el SISTEMA por destinatario —`VOLVE*` de un toque del Motor de Recompra,
+// `CRECE-*` de una micro-campaña, `GROWTH-*` de un Smart Link— no son códigos que el local haya
+// cargado a mano, y el backend ya los exime del toggle al validarlos Y al cobrarlos. El auto-aplicado
+// tiene que eximirlos igual: si no, la tienda muestra el beneficio y el checkout no lo aplica.
+const esCuponDelSistema = (codigo: string) =>
+  codigo.startsWith('VOLVE') || codigo.startsWith('CRECE-') || codigo.startsWith('GROWTH-')
+
 export const leerDireccionesCliente = (restauranteId: number, telefono: string): DireccionGuardada[] => {
   if (!restauranteId || normalizarTelefonoDireccion(telefono).length < 8) return []
   try {
@@ -157,6 +164,8 @@ interface CheckoutDeliveryGrupalProps {
   /** El local está cerrado ahora mismo. Si solo se permite pedir por estar habilitados los pedidos programados, obliga a elegir un horario (no se puede pedir "para ahora"). */
   localCerrado?: boolean
   contextoMarketing?: ReturnType<typeof contextoParaPedidoMarketing>
+  /** Cupón que trae el link de campaña: se auto-aplica al abrir el checkout. */
+  codigoPromocionalInicial?: string | null
 }
 
 export function CheckoutDeliveryGrupal({
@@ -180,6 +189,7 @@ export function CheckoutDeliveryGrupal({
   pedidoHabitual = false,
   localCerrado = false,
   contextoMarketing,
+  codigoPromocionalInicial,
 }: CheckoutDeliveryGrupalProps) {
   const [tipoPedido, setTipoPedido] = useState<'delivery' | 'takeaway'>(checkoutData?.tipoPedido || 'delivery')
   const [nombre, setNombre] = useState(checkoutData?.nombre || localStorage.getItem('cliente_nombre') || '')
@@ -214,6 +224,9 @@ export function CheckoutDeliveryGrupal({
   const [montoDescuento, setMontoDescuento] = useState(checkoutData?.montoDescuento ?? 0)
   const [validandoCodigo, setValidandoCodigo] = useState(false)
   const [codigoError, setCodigoError] = useState<string | null>(null)
+  // El cupón del link se auto-aplica una sola vez por código; sin esta marca el
+  // efecto se repetiría en cada re-render del checkout.
+  const [codigoAutomaticoProcesado, setCodigoAutomaticoProcesado] = useState<string | null>(null)
 
   const [paso, setPaso] = useState(0)
   const [editandoHabitual, setEditandoHabitual] = useState(false)
@@ -385,8 +398,8 @@ export function CheckoutDeliveryGrupal({
     sendMessage({ type: 'CANCELAR_EDICION_CHECKOUT', payload: { clienteId, clienteNombre } })
   }
 
-  const handleValidarCodigo = async () => {
-    if (!codigoInput.trim() || !restauranteId) return
+  const validarCodigo = useCallback(async (codigo: string, automatico = false) => {
+    if (!codigo.trim() || !restauranteId) return
     setValidandoCodigo(true)
     setCodigoError(null)
     try {
@@ -394,13 +407,35 @@ export function CheckoutDeliveryGrupal({
       const res = await fetch(`${url}/public/descuentos/validar`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ restauranteId, codigo: codigoInput.trim().toUpperCase(), totalCarrito: subtotalConEnvio }),
+        body: JSON.stringify({ restauranteId, codigo: codigo.trim().toUpperCase(), totalCarrito: subtotalConEnvio }),
       })
       const data = await res.json()
       if (data.success && data.data) {
-        setCodigoDescuentoId(data.data.codigoDescuentoId)
-        setMontoDescuento(parseFloat(data.data.montoDescuento))
-        toast.success(`Código aplicado: -$${parseFloat(data.data.montoDescuento).toFixed(0)}`)
+        const cuponId = data.data.codigoDescuentoId
+        const monto = parseFloat(data.data.montoDescuento)
+        setCodigoDescuentoId(cuponId)
+        setMontoDescuento(monto)
+        setCodigoInput(data.data.codigo)
+        toast.success(`${automatico ? 'Beneficio de la campaña aplicado' : 'Código aplicado'}: -$${monto.toFixed(0)}`)
+        // El checkout cerró con ese código: hay que devolverle el total ya rebajado,
+        // si no el pedido se cobra al precio de lista.
+        if (checkoutData && sendMessage) {
+          const fee = checkoutData.tipoPedido === 'delivery' ? (checkoutData.deliveryFee ?? 0) : 0
+          const itemsTot = parseFloat(checkoutData.itemsTotal || itemsTotal || '0')
+          const nuevoTotal = Math.max(0, itemsTot + fee - monto)
+          sendMessage({
+            type: 'MODIFICAR_CHECKOUT',
+            payload: {
+              clienteId,
+              updates: {
+                ...checkoutData,
+                codigoDescuentoId: cuponId,
+                montoDescuento: monto,
+                total: nuevoTotal.toFixed(2),
+              },
+            },
+          })
+        }
       } else {
         setCodigoError(data.message || 'Código no válido')
         setCodigoDescuentoId(null)
@@ -413,13 +448,42 @@ export function CheckoutDeliveryGrupal({
     } finally {
       setValidandoCodigo(false)
     }
-  }
+  }, [restauranteId, subtotalConEnvio, checkoutData, sendMessage, clienteId, itemsTotal])
+
+  const handleValidarCodigo = () => void validarCodigo(codigoInput)
+
+  useEffect(() => {
+    const codigo = codigoPromocionalInicial?.trim().toUpperCase()
+    // El toggle gatea el input MANUAL y los códigos del local; un cupón del sistema que llegó en el
+    // link se auto-aplica igual, porque es el beneficio que la campaña prometió al cliente.
+    if (!codigo || codigoAutomaticoProcesado === codigo || (codigoDescuentoId && montoDescuento > 0) || (!codigoDescuentoEnabled && !esCuponDelSistema(codigo)) || itemsTotalNum === 0) return
+    setCodigoAutomaticoProcesado(codigo)
+    setCodigoInput(codigo)
+    void validarCodigo(codigo, true)
+  }, [codigoPromocionalInicial, codigoAutomaticoProcesado, codigoDescuentoEnabled, codigoDescuentoId, montoDescuento, itemsTotalNum, validarCodigo])
 
   const quitarCodigo = () => {
     setCodigoInput('')
     setCodigoDescuentoId(null)
     setMontoDescuento(0)
     setCodigoError(null)
+    if (checkoutData && sendMessage) {
+      const fee = checkoutData.tipoPedido === 'delivery' ? (checkoutData.deliveryFee ?? 0) : 0
+      const itemsTot = parseFloat(checkoutData.itemsTotal || itemsTotal || '0')
+      const nuevoTotal = Math.max(0, itemsTot + fee)
+      sendMessage({
+        type: 'MODIFICAR_CHECKOUT',
+        payload: {
+          clienteId,
+          updates: {
+            ...checkoutData,
+            codigoDescuentoId: null,
+            montoDescuento: 0,
+            total: nuevoTotal.toFixed(2),
+          },
+        },
+      })
+    }
   }
 
   const handleGuardarEdicion = () => {
@@ -532,7 +596,12 @@ export function CheckoutDeliveryGrupal({
       return
     }
 
-    const nuevoTotal = parseFloat(itemsTotal) + (checkoutData.tipoPedido === 'delivery' ? deliveryFee : 0)
+    const fee = checkoutData.tipoPedido === 'delivery' ? deliveryFee : 0
+    const itemsTot = parseFloat(itemsTotal)
+    const descEfectivo = checkoutData.montoDescuento ?? montoDescuento
+    // El cupón del link ya está aplicado: recalcular el total sin él mostraría el
+    // precio de lista y terminaría cobrando de más.
+    const nuevoTotal = Math.max(0, itemsTot + fee - descEfectivo)
     const updates: CheckoutDeliveryData = {
       ...checkoutData,
       nombre: nombre.trim(),
@@ -545,6 +614,8 @@ export function CheckoutDeliveryGrupal({
       sucursalId: checkoutData.tipoPedido === 'delivery' ? (sucursalDelivery ?? checkoutData.sucursalId) : checkoutData.sucursalId,
       metodoPago,
       itemsTotal,
+      codigoDescuentoId: checkoutData.codigoDescuentoId ?? codigoDescuentoId ?? null,
+      montoDescuento: descEfectivo,
       total: nuevoTotal.toFixed(2),
     }
     sendMessage({ type: 'MODIFICAR_CHECKOUT', payload: { clienteId, updates } })
