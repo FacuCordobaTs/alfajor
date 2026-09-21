@@ -11,7 +11,7 @@ import { ArrowLeft, Loader2, MapPin, Store, Zap, Truck, AlertTriangle, Package, 
 import { AddressAutocomplete } from '@/components/AddressAutocomplete'
 import { AddressMapPreview } from '@/components/AddressMapPreview'
 import { MisPedidosDrawer } from '@/components/MisPedidosDrawer'
-import { configurarGtm, contextoParaPedidoMarketing, registrarEventoTrackingUnaVez } from '@/lib/tracking'
+import { configurarGtm, configurarMetaPixel, contextoParaPedidoMarketing, registrarEventoTrackingUnaVez } from '@/lib/tracking'
 
 type MetodoPublico = { id: string; label: string; automatico: boolean }
 type HorarioTurno = { diaSemana: number; horaApertura: string; horaCierre: string }
@@ -96,6 +96,7 @@ const CheckoutDelivery = () => {
                 if (data.success && data.data.restaurante) {
                     const r = data.data.restaurante
                     configurarGtm(r.gtmContainerId)
+                    configurarMetaPixel(r.metaPixelId)
                     const methods: MetodoPublico[] = Array.isArray(r.metodosPago) ? r.metodosPago : []
                     setAvailablePaymentMethods(methods)
                     setRestauranteData(r)
@@ -104,9 +105,6 @@ const CheckoutDelivery = () => {
                         if (checkoutStartRef.current !== key) {
                             checkoutStartRef.current = key
                             registrarEventoTrackingUnaVez(cart.restauranteId, username, 'session_start', 'storefront')
-                            registrarEventoTrackingUnaVez(cart.restauranteId, username, 'checkout_start', 'checkout-route', {
-                                valor: cart.items?.reduce((sum: number, item: any) => sum + (parseFloat(item.precio) * item.cantidad), 0) || 0,
-                            })
                         }
                     }
 

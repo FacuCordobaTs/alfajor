@@ -5,7 +5,7 @@ import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { toast } from 'sonner'
 import {
     Trash2, Maximize2, Minimize2, Loader2,
-    Package, Receipt, UtensilsCrossed, Utensils, Clock, Share2, User, Plus
+    Package, Receipt, UtensilsCrossed, Utensils, Clock, Share2, User, Plus, ArrowRight
 } from 'lucide-react'
 import { ProductDetailDrawer, etiquetaVarianteMedallon } from '@/components/ProductDetailDrawer'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
@@ -15,7 +15,7 @@ import {
     guardarDireccionCliente,
     sincronizarDireccionesCliente,
 } from '@/components/CheckoutDeliveryGrupal'
-import { codigoPromocionalMarketing, configurarGtm, contextoParaPedidoMarketing, guardarContextoTracking, registrarEventoTracking, registrarEventoTrackingUnaVez } from '@/lib/tracking'
+import { codigoPromocionalMarketing, configurarGtm, configurarMetaPixel, contextoParaPedidoMarketing, guardarContextoTracking, registrarEventoPixel, registrarEventoPixelUnaVez, registrarEventoTrackingUnaVez } from '@/lib/tracking'
 
 type PedidoHistorico = {
     id: number
@@ -333,6 +333,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                     setRestaurante(data.data.restaurante)
                     setProductos(data.data.productos)
                     configurarGtm(data.data.restaurante?.gtmContainerId)
+                    configurarMetaPixel(data.data.restaurante?.metaPixelId)
                     const sessionKey = `${data.data.restaurante?.id}:${username}`
                     if (data.data.restaurante?.id && sessionStartRef.current !== sessionKey) {
                         sessionStartRef.current = sessionKey
@@ -1017,6 +1018,9 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
             productoId: selectedProduct.id, nombreProducto: selectedProduct.nombre, valor: selectedProduct.precio,
             ...extrasTrackingCampana(campana),
         })
+        registrarEventoPixelUnaVez('ViewContent', `producto-${selectedProduct.id}`, {
+            productoId: selectedProduct.id, nombreProducto: selectedProduct.nombre, valor: selectedProduct.precio,
+        })
     }, [drawerOpen, restaurante?.id, selectedProduct?.id, selectedProduct?.precio, username, campana])
 
     // Lista ordenada de productos "hermanos" para poder saltar de uno a otro dentro
@@ -1084,7 +1088,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
         }
 
         setCartItems(prev => [...prev, newItem])
-        if (restaurante?.id) registrarEventoTracking(restaurante.id, username, 'add_to_cart', {
+        registrarEventoPixel('AddToCart', {
             productoId: producto.id, nombreProducto: producto.nombre, cantidad, valor: (precioFinalNumber * cantidad).toFixed(2),
         })
 
@@ -1315,27 +1319,13 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
 
                 {productoCampana && campana ? (
                     <CampanaProductoHero campana={campana} producto={productoCampana} onClick={() => abrirDetalleProducto(productoCampana)} />
-                ) : restaurante?.orderGroupEnabled !== false && (
-                    <section
-                        role="button"
-                        aria-label="Crear pedido entre amigos"
-                        className="flex items-center gap-4 px-4 py-4 rounded-2xl bg-primary/5 border border-primary/15 cursor-pointer hover:bg-primary/10 hover:border-primary/30 transition-all duration-200 active:scale-[0.98] lg:max-w-2xl lg:mx-auto lg:w-full"
-                        onClick={onArmarPedidoClick}
-                    >
-                        <AvatarStack />
-                        <div className="flex-1 min-w-0">
-                            <p className="text-sm font-bold text-foreground leading-tight">¿Piden entre varios?</p>
-                            <p className="text-[11.5px] text-muted-foreground mt-0.5 leading-snug">Compartí un link y cada uno agrega lo suyo</p>
-                        </div>
-                        <div className="flex items-center gap-1.5 shrink-0 text-[11px] font-bold text-primary-foreground bg-primary rounded-full px-3 py-2 shadow-sm">
-                            {creandoSala ? (
-                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            ) : (
-                                <Share2 className="w-3.5 h-3.5" />
-                            )}
-                            {creandoSala ? 'Creando…' : 'Crear link'}
-                        </div>
-                    </section>
+                ) : (
+                    <>
+                        <BannerTiendaRopa onClick={() => navigate('/ropa')} />
+                        {restaurante?.orderGroupEnabled !== false && (
+                            <BannerPedidoEntreAmigos creando={creandoSala} onClick={onArmarPedidoClick} />
+                        )}
+                    </>
                 )}
 
                 {restaurante?.sistemaPuntos && (
@@ -1647,12 +1637,14 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                                     disabled={!estadoAbierto.abierto && !restaurante?.permitirPedidosProgramados}
                                     onClick={() => {
                                         if (!estadoAbierto.abierto && !restaurante?.permitirPedidosProgramados) return
+                                        // Meta cuenta el inicio de checkout una vez por sesión: ir y
+                                        // volver del carrito no puede inflar el paso del embudo.
+                                        registrarEventoPixelUnaVez('InitiateCheckout', 'checkout', {
+                                            items: cartItems, valor: Number(totalPedido),
+                                        })
                                         setEsPedidoHabitual(false)
                                         setMostrarCheckoutEnCarrito(true)
                                         setExpandido(false)
-                                        if (restaurante?.id) registrarEventoTracking(restaurante.id, username, 'checkout_start', {
-                                            valor: totalPedido, metadata: { cantidadItems: cartItems.length },
-                                        })
                                     }}
                                 >
                                     {!estadoAbierto.abierto && !restaurante?.permitirPedidosProgramados ? 'Cerrado' : 'Continuar'}
@@ -1756,23 +1748,80 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
 
 // Pila de avatares con un lugar libre ("+"): el visual de "un grupo con lugar para vos".
 // Es lo que hace legible el pedido entre amigos sin leer ni una palabra.
-const AvatarStack = ({ grande }: { grande?: boolean }) => {
-    const circulo = grande ? 'w-11 h-11' : 'w-8 h-8'
-    const icono = grande ? 'w-5 h-5' : 'w-4 h-4'
+const AvatarStack = ({ grande, chico }: { grande?: boolean; chico?: boolean }) => {
+    const circulo = grande ? 'w-11 h-11' : chico ? 'w-6 h-6' : 'w-8 h-8'
+    const icono = grande ? 'w-5 h-5' : chico ? 'w-3 h-3' : 'w-4 h-4'
     return (
-        <div className={`flex shrink-0 ${grande ? '-space-x-3' : '-space-x-2.5'}`}>
+        <div className={`flex shrink-0 ${grande ? '-space-x-3' : chico ? '-space-x-2' : '-space-x-2.5'}`}>
             <div className={`${circulo} rounded-full bg-primary text-primary-foreground flex items-center justify-center ring-2 ring-background z-[2]`}>
                 <User className={icono} />
             </div>
             <div className={`${circulo} rounded-full bg-primary/25 text-primary flex items-center justify-center ring-2 ring-background z-[1]`}>
                 <User className={icono} />
             </div>
-            <div className={`${circulo} rounded-full border-2 border-dashed border-primary/40 text-primary/60 bg-background flex items-center justify-center`}>
+            <div className={`${circulo} rounded-full ${chico ? 'border' : 'border-2'} border-dashed border-primary/40 text-primary/60 bg-background flex items-center justify-center`}>
                 <Plus className={icono} />
             </div>
         </div>
     )
 }
+
+/** Banner de entrada a la tienda de ropa. Ocupa el lugar que antes tenía la
+ * tarjeta de pedido entre amigos: el merch es la otra puerta del local. */
+const IMAGEN_TIENDA_ROPA = '/ropa9.jpeg'
+const BannerTiendaRopa = ({ onClick }: { onClick: () => void }) => (
+    <button
+        type="button"
+        onClick={onClick}
+        aria-label="Ir a la tienda de ropa"
+        className="group flex w-full items-stretch overflow-hidden rounded-[24px] border border-border/50 bg-zinc-950 text-left shadow-md transition-all duration-300 hover:shadow-xl active:scale-[0.98] lg:mx-auto lg:w-full lg:max-w-2xl"
+    >
+        <div className="relative w-24 shrink-0 overflow-hidden bg-zinc-900 sm:w-32">
+            <img
+                src={IMAGEN_TIENDA_ROPA}
+                alt=""
+                className="h-full w-full object-cover object-[50%_25%] transition-transform duration-700 ease-out group-hover:scale-105"
+            />
+            <div className="absolute inset-0 bg-gradient-to-r from-zinc-950/45 via-zinc-950/35 to-zinc-950/80" />
+        </div>
+        <div className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3.5">
+            <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/50">Merch oficial</p>
+                <p className="mt-0.5 text-base font-black leading-tight text-white">Tienda de ropa</p>
+                <p className="mt-1 text-[11.5px] leading-snug text-white/65">Prendas y accesorios de Alfajor con Papas</p>
+            </div>
+            <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-white px-3 py-2 text-[11px] font-bold text-zinc-950 transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
+                Ver tienda
+                <ArrowRight className="h-3.5 w-3.5" />
+            </span>
+        </div>
+    </button>
+)
+
+/** El pedido entre amigos sigue existiendo, pero como tira fina debajo del merch:
+ * antes le robaba el primer scroll a la carta. */
+const BannerPedidoEntreAmigos = ({ creando, onClick }: { creando: boolean; onClick: () => void }) => (
+    <button
+        type="button"
+        onClick={onClick}
+        aria-label="Crear pedido entre amigos"
+        className="flex w-full items-center gap-2.5 rounded-xl border border-primary/15 bg-primary/5 px-3 py-2 text-left transition-all duration-200 hover:border-primary/30 hover:bg-primary/10 active:scale-[0.98] lg:mx-auto lg:w-full lg:max-w-2xl"
+    >
+        <AvatarStack chico />
+        <span className="min-w-0 flex-1">
+            <span className="block truncate text-[12.5px] font-bold leading-tight text-foreground">¿Piden entre varios?</span>
+            <span className="block truncate text-[10.5px] leading-snug text-muted-foreground">Compartí un link y cada uno agrega lo suyo</span>
+        </span>
+        <span className="flex shrink-0 items-center gap-1 rounded-full bg-primary px-2.5 py-1.5 text-[10.5px] font-bold text-primary-foreground">
+            {creando ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+            ) : (
+                <Share2 className="w-3 h-3" />
+            )}
+            {creando ? 'Creando…' : 'Crear link'}
+        </span>
+    </button>
+)
 
 const EmptyState = () => (
     <div className="flex flex-col items-center justify-center py-20 text-muted-foreground opacity-50">

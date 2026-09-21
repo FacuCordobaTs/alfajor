@@ -16,7 +16,7 @@ import { ThemeToggle } from '@/components/ThemeToggle'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { CheckoutDeliveryGrupal } from '@/components/CheckoutDeliveryGrupal'
 import { MisPedidosDrawer } from '@/components/MisPedidosDrawer'
-import { configurarGtm, contextoParaPedidoMarketing, registrarEventoTracking, registrarEventoTrackingUnaVez } from '@/lib/tracking'
+import { configurarGtm, configurarMetaPixel, contextoParaPedidoMarketing, registrarEventoPixel, registrarEventoPixelUnaVez, registrarEventoTrackingUnaVez } from '@/lib/tracking'
 
 type HorarioTurno = { diaSemana: number; horaApertura: string; horaCierre: string }
 
@@ -91,6 +91,15 @@ const Menu = () => {
     })
   }, [drawerOpen, esSala, restaurante?.id, restaurante?.username, selectedProduct?.id, selectedProduct?.precio, tokenTracking])
 
+  // El pixel de Meta es una capa aparte del embudo de Growth: no depende de la sala,
+  // así que también mide la carta digital cuando el local configuró su ID.
+  useEffect(() => {
+    if (!drawerOpen || !selectedProduct?.id) return
+    registrarEventoPixelUnaVez('ViewContent', `producto-${selectedProduct.id}`, {
+      productoId: selectedProduct.id, nombreProducto: selectedProduct.nombre, valor: selectedProduct.precio,
+    })
+  }, [drawerOpen, selectedProduct?.id, selectedProduct?.nombre, selectedProduct?.precio])
+
   const compartirLink = useCallback(() => {
     const mensaje = `Armemos un pedido juntos en ${restaurante?.nombre || 'el restaurante'} 🍽️`
     const url = window.location.href
@@ -140,6 +149,7 @@ const Menu = () => {
         const data = await res.json()
         if (data.success && data.data) {
           configurarGtm(data.data.restaurante?.gtmContainerId)
+          configurarMetaPixel(data.data.restaurante?.metaPixelId)
           setPermitirProgramados(!!data.data.restaurante?.permitirPedidosProgramados)
           if (Array.isArray(data.data.horarios)) {
             setHorarios(data.data.horarios)
@@ -279,7 +289,7 @@ const Menu = () => {
     }
     const precioAgregados = (agregados || []).reduce((sum: number, ag: any) => sum + parseFloat(ag.precio || '0'), 0)
     const precioUnitario = (precioBase + precioAgregados).toFixed(2)
-    if (esSala && restaurante?.id && restaurante.username) registrarEventoTracking(restaurante.id, restaurante.username, 'add_to_cart', {
+    registrarEventoPixel('AddToCart', {
       productoId: producto.id, nombreProducto: producto.nombre, cantidad, valor: (Number(precioUnitario) * cantidad).toFixed(2),
     })
     sendMessage({
@@ -842,8 +852,10 @@ const Menu = () => {
                         return
                       }
                       if (esSala) {
-                        if (restaurante?.id && restaurante.username) registrarEventoTracking(restaurante.id, restaurante.username, 'checkout_start', {
-                          valor: totalPedido, metadata: { cantidadItems: todosLosItems.length, grupal: true },
+                        // Meta cuenta el inicio de checkout una vez por sesión: ir y
+                        // volver del carrito no puede inflar el paso del embudo.
+                        registrarEventoPixelUnaVez('InitiateCheckout', 'checkout', {
+                          items: todosLosItems, valor: Number(totalPedido),
                         })
                         setMostrarCheckoutEnCarrito(true)
                         setExpandido(false)
