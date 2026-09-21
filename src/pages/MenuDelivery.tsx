@@ -5,7 +5,7 @@ import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { toast } from 'sonner'
 import {
     Trash2, Maximize2, Minimize2, Loader2,
-    Package, Receipt, UtensilsCrossed, Utensils, Clock, Share2, User, Plus, ArrowRight
+    Package, Receipt, UtensilsCrossed, Utensils, Clock, Share2, User, Plus
 } from 'lucide-react'
 import { ProductDetailDrawer, etiquetaVarianteMedallon } from '@/components/ProductDetailDrawer'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
@@ -1320,12 +1320,9 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                 {productoCampana && campana ? (
                     <CampanaProductoHero campana={campana} producto={productoCampana} onClick={() => abrirDetalleProducto(productoCampana)} />
                 ) : (
-                    <>
-                        <BannerTiendaRopa onClick={() => navigate('/ropa')} />
-                        {restaurante?.orderGroupEnabled !== false && (
-                            <BannerPedidoEntreAmigos creando={creandoSala} onClick={onArmarPedidoClick} />
-                        )}
-                    </>
+                    restaurante?.orderGroupEnabled !== false && (
+                        <BannerPedidoEntreAmigos creando={creandoSala} onClick={onArmarPedidoClick} />
+                    )
                 )}
 
                 {restaurante?.sistemaPuntos && (
@@ -1766,40 +1763,7 @@ const AvatarStack = ({ grande, chico }: { grande?: boolean; chico?: boolean }) =
     )
 }
 
-/** Banner de entrada a la tienda de ropa. Ocupa el lugar que antes tenía la
- * tarjeta de pedido entre amigos: el merch es la otra puerta del local. */
-const IMAGEN_TIENDA_ROPA = '/ropa9.jpeg'
-const BannerTiendaRopa = ({ onClick }: { onClick: () => void }) => (
-    <button
-        type="button"
-        onClick={onClick}
-        aria-label="Ir a la tienda de ropa"
-        className="group flex w-full items-stretch overflow-hidden rounded-[24px] border border-border/50 bg-zinc-950 text-left shadow-md transition-all duration-300 hover:shadow-xl active:scale-[0.98] lg:mx-auto lg:w-full lg:max-w-2xl"
-    >
-        <div className="relative w-24 shrink-0 overflow-hidden bg-zinc-900 sm:w-32">
-            <img
-                src={IMAGEN_TIENDA_ROPA}
-                alt=""
-                className="h-full w-full object-cover object-[50%_25%] transition-transform duration-700 ease-out group-hover:scale-105"
-            />
-            <div className="absolute inset-0 bg-gradient-to-r from-zinc-950/45 via-zinc-950/35 to-zinc-950/80" />
-        </div>
-        <div className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3.5">
-            <div className="min-w-0 flex-1">
-                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/50">Merch oficial</p>
-                <p className="mt-0.5 text-base font-black leading-tight text-white">Tienda de ropa</p>
-                <p className="mt-1 text-[11.5px] leading-snug text-white/65">Prendas y accesorios de Alfajor con Papas</p>
-            </div>
-            <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-white px-3 py-2 text-[11px] font-bold text-zinc-950 transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
-                Ver tienda
-                <ArrowRight className="h-3.5 w-3.5" />
-            </span>
-        </div>
-    </button>
-)
-
-/** El pedido entre amigos sigue existiendo, pero como tira fina debajo del merch:
- * antes le robaba el primer scroll a la carta. */
+/** El pedido entre amigos va como tira fina: antes le robaba el primer scroll a la carta. */
 const BannerPedidoEntreAmigos = ({ creando, onClick }: { creando: boolean; onClick: () => void }) => (
     <button
         type="button"
