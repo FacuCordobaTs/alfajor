@@ -10,11 +10,8 @@ import {
 import { ProductDetailDrawer, etiquetaVarianteMedallon } from '@/components/ProductDetailDrawer'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import {
-    CheckoutDeliveryGrupal,
-    guardarDireccionCliente,
-    sincronizarDireccionesCliente,
-} from '@/components/CheckoutDeliveryGrupal'
+import { CheckoutDeliveryGrupal } from '@/components/CheckoutDeliveryGrupal'
+import { guardarDireccionCliente, sincronizarDireccionesCliente, buscarDomicilioCliente, datosDomicilio, notasConDomicilio } from '@/lib/direccionesCliente'
 import { codigoPromocionalMarketing, configurarGtm, configurarMetaPixel, contextoParaPedidoMarketing, guardarContextoTracking, registrarEventoPixel, registrarEventoPixelUnaVez, registrarEventoTrackingUnaVez } from '@/lib/tracking'
 
 type PedidoHistorico = {
@@ -23,6 +20,7 @@ type PedidoHistorico = {
     estado: string
     nombreCliente: string | null
     direccion: string | null
+    notas?: string | null
     latitud: string | null
     longitud: string | null
     sucursalId: number | null
@@ -560,7 +558,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                             lat: dir?.lat ?? null,
                             lng: dir?.lng ?? null,
                             notas: '',
-                            tipoDomicilio: null,
+                            ...buscarDomicilioCliente(restaurante.id, data.cliente?.telefono || '', dir?.direccion || ''),
                             deliveryFee: fee,
                             zonaNombre: null,
                             itemsTotal: itemsTotalNum.toFixed(2),
@@ -755,7 +753,9 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                     lat: pedido.tipo === 'delivery' ? lat : null,
                     lng: pedido.tipo === 'delivery' ? lng : null,
                     notas: '',
-                    tipoDomicilio: null,
+                    ...(buscarDomicilioCliente(restaurante.id, telefono, pedido.direccion || '').tipoDomicilio
+                        ? buscarDomicilioCliente(restaurante.id, telefono, pedido.direccion || '')
+                        : datosDomicilio({ notas: pedido.notas || '' })),
                     deliveryFee,
                     zonaNombre,
                     itemsTotal: itemsTotal.toFixed(2),
@@ -815,7 +815,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                 restauranteId: restaurante.id,
                 nombreCliente: data.nombre,
                 telefono: data.telefono,
-                notas: data.notas || '',
+                notas: data.tipoPedido === 'delivery' ? notasConDomicilio(data.notas || '', datosDomicilio(data)) : (data.notas || ''),
                 items: cartItems.map((i: any) => ({
                     productoId: i.productoId,
                     varianteId: i.varianteId,
@@ -863,6 +863,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                         data.direccion || '',
                         data.lat ?? null,
                         data.lng ?? null,
+                        datosDomicilio(data),
                     )
                 }
                 localStorage.removeItem(`deliveryCart_${username}`)

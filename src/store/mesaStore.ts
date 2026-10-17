@@ -42,6 +42,8 @@ export interface CheckoutDeliveryData {
   horarioProgramado?: string
   sucursalId?: number | null
   tipoDomicilio?: 'casa' | 'departamento' | null
+  piso?: string
+  numeroDepartamento?: string
   visitorId?: string
   sesionUuid?: string
   campaniaSlug?: string

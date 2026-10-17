@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
@@ -11,30 +11,13 @@ import { etiquetaVarianteMedallon } from '@/components/ProductDetailDrawer'
 import type { CheckoutDeliveryData, CheckoutEditSemaphore } from '@/store/mesaStore'
 import type { contextoParaPedidoMarketing } from '@/lib/tracking'
 
+import { leerDireccionesCliente, guardarDireccionCliente, sincronizarDireccionesCliente, normalizarDireccion, normalizarTelefonoDireccion,
+  buscarDomicilioCliente, datosDomicilio, notasSinDomicilio, notasConDomicilio, type DireccionGuardada } from '@/lib/direccionesCliente'
+
 type MetodoPublico = { id: string; label: string; automatico: boolean }
 type FranjaHorario = { id: number; nombre: string; horaInicio: string; horaFin: string }
 
 type PasoCheckout = 'tipo' | 'datos' | 'ubicacion' | 'domicilio' | 'extras'
-
-type DireccionGuardada = {
-  direccion: string
-  lat: number | null
-  lng: number | null
-  usadaEn: number
-}
-
-const MAX_DIRECCIONES_GUARDADAS = 6
-
-const normalizarTelefonoDireccion = (telefono: string) => telefono.replace(/\D/g, '')
-const normalizarDireccion = (direccion: string) => direccion
-  .normalize('NFD')
-  .replace(/[\u0300-\u036f]/g, '')
-  .replace(/\s+/g, ' ')
-  .trim()
-  .toLowerCase()
-
-const storageKeyDirecciones = (restauranteId: number, telefono: string) =>
-  `cliente_direcciones_v1_${restauranteId}_${normalizarTelefonoDireccion(telefono)}`
 
 // Los cupones que emite el SISTEMA por destinatario —`VOLVE*` de un toque del Motor de Recompra,
 // `CRECE-*` de una micro-campaña, `GROWTH-*` de un Smart Link— no son códigos que el local haya
@@ -42,86 +25,6 @@ const storageKeyDirecciones = (restauranteId: number, telefono: string) =>
 // tiene que eximirlos igual: si no, la tienda muestra el beneficio y el checkout no lo aplica.
 const esCuponDelSistema = (codigo: string) =>
   codigo.startsWith('VOLVE') || codigo.startsWith('CRECE-') || codigo.startsWith('GROWTH-')
-
-export const leerDireccionesCliente = (restauranteId: number, telefono: string): DireccionGuardada[] => {
-  if (!restauranteId || normalizarTelefonoDireccion(telefono).length < 8) return []
-  try {
-    const guardadas = JSON.parse(localStorage.getItem(storageKeyDirecciones(restauranteId, telefono)) || '[]')
-    if (!Array.isArray(guardadas)) return []
-    return guardadas
-      .filter((item): item is DireccionGuardada => !!item && typeof item.direccion === 'string' && !!item.direccion.trim())
-      .slice(0, MAX_DIRECCIONES_GUARDADAS)
-  } catch {
-    return []
-  }
-}
-
-const guardarDireccionesCliente = (
-  restauranteId: number,
-  telefono: string,
-  nuevas: DireccionGuardada[],
-): DireccionGuardada[] => {
-  if (!restauranteId || normalizarTelefonoDireccion(telefono).length < 8) return []
-
-  const combinadas = new Map<string, DireccionGuardada>()
-  for (const item of [...leerDireccionesCliente(restauranteId, telefono), ...nuevas]) {
-    const direccion = item.direccion.trim()
-    const clave = normalizarDireccion(direccion)
-    if (!clave) continue
-    const anterior = combinadas.get(clave)
-    const candidata = {
-      direccion,
-      lat: Number.isFinite(item.lat) ? item.lat : null,
-      lng: Number.isFinite(item.lng) ? item.lng : null,
-      usadaEn: Number.isFinite(item.usadaEn) ? item.usadaEn : Date.now(),
-    }
-    combinadas.set(clave, anterior ? {
-      direccion: candidata.usadaEn >= anterior.usadaEn ? candidata.direccion : anterior.direccion,
-      lat: candidata.lat ?? anterior.lat,
-      lng: candidata.lng ?? anterior.lng,
-      usadaEn: Math.max(anterior.usadaEn, candidata.usadaEn),
-    } : candidata)
-  }
-
-  const resultado = [...combinadas.values()]
-    .sort((a, b) => b.usadaEn - a.usadaEn)
-    .slice(0, MAX_DIRECCIONES_GUARDADAS)
-  try {
-    localStorage.setItem(storageKeyDirecciones(restauranteId, telefono), JSON.stringify(resultado))
-  } catch { /* localStorage puede estar bloqueado */ }
-  return resultado
-}
-
-export const guardarDireccionCliente = (
-  restauranteId: number,
-  telefono: string,
-  direccion: string,
-  lat: number | null,
-  lng: number | null,
-) => guardarDireccionesCliente(restauranteId, telefono, [{ direccion, lat, lng, usadaEn: Date.now() }])
-
-export const sincronizarDireccionesCliente = async (restauranteId: number, telefono: string) => {
-  const telefonoNormalizado = normalizarTelefonoDireccion(telefono)
-  if (!restauranteId || telefonoNormalizado.length < 8) return leerDireccionesCliente(restauranteId, telefono)
-
-  const url = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
-  const response = await fetch(`${url}/public/restaurante/${restauranteId}/mis-pedidos/${encodeURIComponent(telefonoNormalizado)}`)
-  if (!response.ok) return leerDireccionesCliente(restauranteId, telefonoNormalizado)
-  const result = await response.json()
-  const pedidos = Array.isArray(result.data) ? result.data : []
-  return guardarDireccionesCliente(restauranteId, telefonoNormalizado, pedidos.flatMap((pedido: any) => {
-    if (pedido?.tipo !== 'delivery' || typeof pedido.direccion !== 'string' || !pedido.direccion.trim()) return []
-    const lat = pedido.latitud == null || pedido.latitud === '' ? null : Number(pedido.latitud)
-    const lng = pedido.longitud == null || pedido.longitud === '' ? null : Number(pedido.longitud)
-    const usadaEn = new Date(pedido.createdAt || 0).getTime()
-    return [{
-      direccion: pedido.direccion,
-      lat: lat !== null && Number.isFinite(lat) ? lat : null,
-      lng: lng !== null && Number.isFinite(lng) ? lng : null,
-      usadaEn: Number.isFinite(usadaEn) ? usadaEn : 0,
-    }]
-  }))
-}
 
 interface CheckoutDeliveryGrupalProps {
   restauranteId: number
@@ -197,10 +100,12 @@ export function CheckoutDeliveryGrupal({
   const [direccion, setDireccion] = useState(checkoutData?.direccion || '')
   const [lat, setLat] = useState<number | null>(checkoutData?.lat ?? null)
   const [lng, setLng] = useState<number | null>(checkoutData?.lng ?? null)
-  const [notas, setNotas] = useState(checkoutData?.notas || '')
-  const [tipoDomicilio, setTipoDomicilio] = useState<'casa' | 'departamento' | null>(checkoutData?.tipoDomicilio ?? null)
-  const [piso, setPiso] = useState('')
-  const [numeroDepartamento, setNumeroDepartamento] = useState('')
+  const domicilioInicial = datosDomicilio(checkoutData || {})
+  const domicilioGuardado = domicilioInicial.tipoDomicilio ? domicilioInicial : buscarDomicilioCliente(restauranteId, telefono, direccion)
+  const [notas, setNotas] = useState(notasSinDomicilio(checkoutData?.notas))
+  const [tipoDomicilio, setTipoDomicilio] = useState<'casa' | 'departamento' | null>(domicilioGuardado.tipoDomicilio ?? null)
+  const [piso, setPiso] = useState(domicilioGuardado.piso || '')
+  const [numeroDepartamento, setNumeroDepartamento] = useState(domicilioGuardado.numeroDepartamento || '')
   const [programarPedido, setProgramarPedido] = useState(!!(checkoutData?.horarioProgramado))
   const [horarioProgramado, setHorarioProgramado] = useState(checkoutData?.horarioProgramado || '')
   const [metodoPago, setMetodoPago] = useState<string | null>(checkoutData?.metodoPago ?? null)
@@ -318,6 +223,16 @@ export function CheckoutDeliveryGrupal({
   }, [restauranteId, telefono])
 
   useEffect(() => {
+    if (tipoDomicilio !== null) return
+    const guardada = direccionesGuardadas.find(item => normalizarDireccion(item.direccion) === normalizarDireccion(direccion))
+    const domicilio = datosDomicilio(guardada || {})
+    if (!domicilio.tipoDomicilio) return
+    setTipoDomicilio(domicilio.tipoDomicilio)
+    setPiso(domicilio.piso || '')
+    setNumeroDepartamento(domicilio.numeroDepartamento || '')
+  }, [direccionesGuardadas, direccion, tipoDomicilio])
+
+  useEffect(() => {
     if (!checkoutData) return
     setTipoPedido(checkoutData.tipoPedido)
     setNombre(checkoutData.nombre)
@@ -325,7 +240,7 @@ export function CheckoutDeliveryGrupal({
     setDireccion(checkoutData.direccion)
     setLat(checkoutData.lat)
     setLng(checkoutData.lng)
-    setNotas(checkoutData.notas)
+    setNotas(notasSinDomicilio(checkoutData.notas))
     setZonaDeliveryFee(checkoutData.deliveryFee)
     setZonaNombre(checkoutData.zonaNombre)
     setCodigoDescuentoId(checkoutData.codigoDescuentoId ?? null)
@@ -335,9 +250,13 @@ export function CheckoutDeliveryGrupal({
       setProgramarPedido(true)
       setHorarioProgramado(checkoutData.horarioProgramado)
     }
-    if (checkoutData.tipoDomicilio) setTipoDomicilio(checkoutData.tipoDomicilio)
+    const propios = datosDomicilio(checkoutData)
+    const domicilio = propios.tipoDomicilio ? propios : buscarDomicilioCliente(restauranteId, checkoutData.telefono, checkoutData.direccion)
+    setTipoDomicilio(domicilio.tipoDomicilio ?? null)
+    setPiso(domicilio.piso || '')
+    setNumeroDepartamento(domicilio.numeroDepartamento || '')
     if (checkoutData.sucursalId) setSucursalSeleccionada(checkoutData.sucursalId)
-  }, [checkoutData?.nombre, checkoutData?.telefono, checkoutData?.direccion, checkoutData?.tipoPedido, checkoutData?.notas, checkoutData?.deliveryFee, checkoutData?.zonaNombre, checkoutData?.codigoDescuentoId, checkoutData?.montoDescuento, checkoutData?.metodoPago, checkoutData?.horarioProgramado, checkoutData?.tipoDomicilio, checkoutData?.sucursalId])
+  }, [checkoutData?.nombre, checkoutData?.telefono, checkoutData?.direccion, checkoutData?.tipoPedido, checkoutData?.notas, checkoutData?.deliveryFee, checkoutData?.zonaNombre, checkoutData?.codigoDescuentoId, checkoutData?.montoDescuento, checkoutData?.metodoPago, checkoutData?.horarioProgramado, checkoutData?.tipoDomicilio, checkoutData?.piso, checkoutData?.numeroDepartamento, checkoutData?.sucursalId])
 
   useEffect(() => {
     if (lat === null || lng === null || !restauranteId) {
@@ -378,7 +297,17 @@ export function CheckoutDeliveryGrupal({
     checkZona()
   }, [lat, lng, restauranteId])
 
+  // AddressAutocomplete conserva el callback inicial: leer siempre la identidad y dirección actuales.
+  const direccionActualRef = useRef({ restauranteId, telefono, direccion })
+  direccionActualRef.current = { restauranteId, telefono, direccion }
   const handleAddressChange = useCallback((address: string, newLat: number | null, newLng: number | null) => {
+    const { restauranteId, telefono, direccion } = direccionActualRef.current
+    if (normalizarDireccion(address) !== normalizarDireccion(direccion) || (newLat !== null && newLng !== null)) {
+      const domicilio = buscarDomicilioCliente(restauranteId, telefono, address)
+      setTipoDomicilio(domicilio.tipoDomicilio ?? null)
+      setPiso(domicilio.piso || '')
+      setNumeroDepartamento(domicilio.numeroDepartamento || '')
+    }
     setDireccion(address)
     setLat(newLat)
     setLng(newLng)
@@ -522,9 +451,7 @@ export function CheckoutDeliveryGrupal({
     }
 
     const notasLimpias = notas.replace(/[^\x20-\x7E\xA0-\xFF\n]/g, '').trim()
-    const notasFinal = (tipoPedido === 'delivery' && tipoDomicilio === 'departamento')
-      ? (notasLimpias ? `Piso ${piso.trim()} Dpto ${numeroDepartamento.trim()}\n${notasLimpias}` : `Piso ${piso.trim()} Dpto ${numeroDepartamento.trim()}`)
-      : notasLimpias
+    const notasFinal = notasConDomicilio(notasLimpias, tipoPedido === 'delivery' ? { tipoDomicilio, piso, numeroDepartamento } : {})
 
     const sucursalId = tipoPedido === 'delivery'
       ? (sucursalDelivery ?? null)
@@ -538,7 +465,7 @@ export function CheckoutDeliveryGrupal({
       lat: tipoPedido === 'delivery' ? lat : null,
       lng: tipoPedido === 'delivery' ? lng : null,
       notas: notasFinal,
-      tipoDomicilio: tipoPedido === 'delivery' ? tipoDomicilio : null,
+      ...datosDomicilio(tipoPedido === 'delivery' ? { tipoDomicilio, piso, numeroDepartamento } : {}),
       deliveryFee,
       zonaNombre,
       itemsTotal,
@@ -557,6 +484,7 @@ export function CheckoutDeliveryGrupal({
 
     localStorage.setItem('cliente_nombre', nombre.trim())
     localStorage.setItem('cliente_telefono', telefono.trim())
+    if (tipoPedido === 'delivery') guardarDireccionCliente(restauranteId, telefono, direccion, lat, lng, { tipoDomicilio, piso, numeroDepartamento })
   }
 
   const handleConfirmarPedido = () => {
@@ -572,7 +500,22 @@ export function CheckoutDeliveryGrupal({
       toast.error('Falta la dirección de entrega')
       return
     }
+    if (pedidoHabitual && checkoutData.tipoPedido === 'delivery') {
+      if (!validarDomicilio()) return
+      const domicilio = datosDomicilio({ tipoDomicilio, piso, numeroDepartamento })
+      const updates = { ...checkoutData, ...domicilio, notas: notasConDomicilio(notas, domicilio) }
+      guardarDireccionCliente(restauranteId, updates.telefono, updates.direccion, updates.lat, updates.lng, domicilio)
+      sendMessage({ type: 'MODIFICAR_CHECKOUT', payload: { clienteId, updates } })
+    }
     onConfirmarClick()
+  }
+
+  const validarDomicilio = () => {
+    if (!tipoDomicilio) { toast.error('Indicá si es casa o departamento'); return false }
+    if (tipoDomicilio === 'departamento' && (!piso.trim() || !numeroDepartamento.trim())) {
+      toast.error('Ingresá el piso y el número de departamento'); return false
+    }
+    return true
   }
 
   const guardarCambiosHabituales = () => {
@@ -582,6 +525,7 @@ export function CheckoutDeliveryGrupal({
       return
     }
     if (checkoutData.tipoPedido === 'delivery') {
+      if (!validarDomicilio()) return
       if (!direccion.trim() || lat === null || lng === null) {
         toast.error('Selecciona una dirección válida')
         return
@@ -604,6 +548,8 @@ export function CheckoutDeliveryGrupal({
     const nuevoTotal = Math.max(0, itemsTot + fee - descEfectivo)
     const updates: CheckoutDeliveryData = {
       ...checkoutData,
+      ...datosDomicilio(checkoutData.tipoPedido === 'delivery' ? { tipoDomicilio, piso, numeroDepartamento } : {}),
+      notas: notasConDomicilio(notas, checkoutData.tipoPedido === 'delivery' ? { tipoDomicilio, piso, numeroDepartamento } : {}),
       nombre: nombre.trim(),
       telefono: telefono.trim(),
       direccion: checkoutData.tipoPedido === 'delivery' ? direccion.trim() : '',
@@ -622,6 +568,7 @@ export function CheckoutDeliveryGrupal({
     localStorage.setItem('cliente_nombre', updates.nombre)
     localStorage.setItem('cliente_telefono', updates.telefono)
     if (updates.tipoPedido === 'delivery') {
+      guardarDireccionCliente(restauranteId, updates.telefono, updates.direccion, updates.lat, updates.lng, updates)
       localStorage.setItem('cliente_direccion', updates.direccion)
       if (updates.lat != null) localStorage.setItem('cliente_lat', String(updates.lat))
       if (updates.lng != null) localStorage.setItem('cliente_lng', String(updates.lng))
@@ -1143,6 +1090,12 @@ export function CheckoutDeliveryGrupal({
         })}
       </div>
 
+      {checkoutData?.tipoPedido === 'delivery' && (editandoHabitual || !datosDomicilio(checkoutData).tipoDomicilio || (checkoutData.tipoDomicilio === 'departamento' && (!checkoutData.piso || !checkoutData.numeroDepartamento))) && (
+        <div className="px-4 space-y-2">
+          <p className="text-sm font-semibold">¿Casa o departamento?</p>
+          {secDomicilio}
+        </div>
+      )}
       <div className="mx-4 rounded-2xl bg-background/40 py-3.5">
         {editandoHabitual ? (
           <div className="space-y-3.5 animate-in fade-in duration-200">
@@ -1201,6 +1154,9 @@ export function CheckoutDeliveryGrupal({
                 <MapPin className="w-4 h-4 text-primary mt-0.5 shrink-0" />
                 <div className="min-w-0">
                   <p className="text-sm font-semibold leading-snug">{checkoutData.direccion}</p>
+                  {checkoutData.tipoDomicilio === 'departamento' && checkoutData.piso && checkoutData.numeroDepartamento && (
+                    <p className="text-xs text-muted-foreground mt-1">Piso {checkoutData.piso} · Depto {checkoutData.numeroDepartamento}</p>
+                  )}
                   {(checkoutData.deliveryFee ?? 0) > 0 && (
                     <p className="text-xs text-muted-foreground mt-1">Envío ${checkoutData.deliveryFee.toFixed(0)}{checkoutData.zonaNombre ? ` · ${checkoutData.zonaNombre}` : ''}</p>
                   )}
