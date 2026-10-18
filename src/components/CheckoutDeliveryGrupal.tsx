@@ -10,6 +10,7 @@ import { AddressMapPreview } from '@/components/AddressMapPreview'
 import { etiquetaVarianteMedallon } from '@/components/ProductDetailDrawer'
 import type { CheckoutDeliveryData, CheckoutEditSemaphore } from '@/store/mesaStore'
 import type { contextoParaPedidoMarketing } from '@/lib/tracking'
+import { formatPrecio } from '@/lib/formatPrecio'
 
 import { leerDireccionesCliente, guardarDireccionCliente, sincronizarDireccionesCliente, normalizarDireccion, normalizarTelefonoDireccion,
   buscarDomicilioCliente, datosDomicilio, notasSinDomicilio, notasConDomicilio, type DireccionGuardada } from '@/lib/direccionesCliente'
@@ -1260,23 +1261,23 @@ export function CheckoutDeliveryGrupal({
     <div className="bg-secondary/40 rounded-2xl px-4 py-4 space-y-2.5">
       <div className="flex justify-between text-sm">
         <span className="text-muted-foreground">Subtotal · {totalItems} items</span>
-        <span className="font-semibold">${itemsTotal}</span>
+        <span className="font-semibold">${formatPrecio(itemsTotal)}</span>
       </div>
       {checkoutData?.tipoPedido === 'delivery' && (checkoutData.deliveryFee ?? 0) > 0 && (
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">Delivery</span>
-          <span className="font-semibold">${checkoutData.deliveryFee.toFixed(2)}</span>
+          <span className="font-semibold">${formatPrecio(checkoutData.deliveryFee)}</span>
         </div>
       )}
       {(checkoutData?.montoDescuento ?? montoDescuento) > 0 && (
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">Descuento</span>
-          <span className="font-semibold">-${(checkoutData?.montoDescuento ?? montoDescuento).toFixed(2)}</span>
+          <span className="font-semibold">-${formatPrecio(checkoutData?.montoDescuento ?? montoDescuento)}</span>
         </div>
       )}
       <div className="flex justify-between font-bold text-base pt-2.5">
         <span>Total</span>
-        <span>${checkoutData?.total || total.toFixed(2)}</span>
+        <span>${formatPrecio(checkoutData?.total || total)}</span>
       </div>
     </div>
   )
@@ -1413,7 +1414,7 @@ export function CheckoutDeliveryGrupal({
       <div className={`${pedidoHabitual ? 'px-9' : 'px-5'} pb-5 pt-4 bg-background space-y-3 lg:w-full lg:max-w-md lg:mx-auto ${compacto ? 'sticky bottom-0 z-10' : 'shrink-0'}`}>
         <div className="flex justify-between items-baseline">
           <span className="text-sm text-muted-foreground">Total</span>
-          <span className="text-2xl font-black tracking-tight">${checkoutData?.total || total.toFixed(2)}</span>
+          <span className="text-2xl font-black tracking-tight">${formatPrecio(checkoutData?.total || total)}</span>
         </div>
         {footerButton}
         {pedidoHabitual && checkoutData && !estoyEditando && (

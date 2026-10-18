@@ -5,7 +5,8 @@ import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { toast } from 'sonner'
 import {
     Trash2, Maximize2, Minimize2, Loader2,
-    Package, Receipt, UtensilsCrossed, Utensils, Clock, Share2, User, Plus
+    Package, Receipt, UtensilsCrossed, Utensils, Clock, Share2, User, Plus,
+    BadgePercent, Users, Sparkles, Check
 } from 'lucide-react'
 import { ProductDetailDrawer, etiquetaVarianteMedallon } from '@/components/ProductDetailDrawer'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
@@ -13,6 +14,7 @@ import { Input } from '@/components/ui/input'
 import { CheckoutDeliveryGrupal } from '@/components/CheckoutDeliveryGrupal'
 import { guardarDireccionCliente, sincronizarDireccionesCliente, buscarDomicilioCliente, datosDomicilio, notasConDomicilio } from '@/lib/direccionesCliente'
 import { codigoPromocionalMarketing, configurarGtm, configurarMetaPixel, contextoParaPedidoMarketing, guardarContextoTracking, registrarEventoPixel, registrarEventoPixelUnaVez, registrarEventoTrackingUnaVez } from '@/lib/tracking'
+import { formatPrecio } from '@/lib/formatPrecio'
 
 type PedidoHistorico = {
     id: number
@@ -184,6 +186,25 @@ const extrasTrackingCampana = (campana: CampanaPublica | null, metadata: Record<
     } : {}),
 })
 
+/** El aviso de descuento de la parte alta de la carta: una línea, un título y la cifra que se
+ * aplica de verdad. El del 20% o más es la oferta exclusiva de 48 horas; el resto, el de recompra. */
+type AvisoDescuento = { titulo: string; detalle: string }
+
+const avisoDescuento = (porcentaje: number, exclusivo = false): AvisoDescuento => exclusivo
+    ? { titulo: 'Oferta exclusiva', detalle: `${porcentaje}% OFF por 48 horas, aplicado a tu pedido` }
+    : { titulo: '¡Te extrañamos!', detalle: `${porcentaje}% OFF aplicado a tu pedido` }
+
+// Los accesos de arriba de la carta (pedido en grupo, puntos): una píldora lisa, sin borde ni sombra.
+// El color de la marca queda en el ícono; el texto es el de la tienda, que lee bien en cualquier tema.
+const ACCESO_RAPIDO = 'inline-flex h-11 max-w-full items-center gap-2 rounded-full bg-secondary px-4 text-[13px] font-semibold text-foreground transition-[background-color,transform] duration-200 hover:bg-secondary/70 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60'
+
+// Riel horizontal sin barra de scroll (`scrollbar-hide` no existe en este Tailwind).
+const RIEL_SIN_BARRA = '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
+
+// La grilla de la carta, la misma en "Todas" y en una categoría: una columna en el celular y una
+// más cada vez que la pantalla se ensancha. Sin rieles ni scroll horizontal en ningún ancho.
+const GRILLA_PRODUCTOS = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 px-1'
+
 const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) => {
     const navigate = useNavigate()
     const username = 'alfajor'
@@ -191,11 +212,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
     const productoAplicadoRef = useRef(false)
     const repAplicadoRef = useRef(false)
     const tkAplicadoRef = useRef<string | null>(null)
-    const [bannerGrowth, setBannerGrowth] = useState<{
-        texto: string
-        porcentaje: number
-        expiraAt: number | null
-    } | null>(null)
+    const [bannerGrowth, setBannerGrowth] = useState<AvisoDescuento | null>(null)
     const [descuentoGrowthCodigo, setDescuentoGrowthCodigo] = useState<string | null>(null)
 
     const [carritoAbierto, setCarritoAbierto] = useState(false)
@@ -205,6 +222,8 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
     const [cartAnimation, setCartAnimation] = useState(false)
     const [scrollDir, setScrollDir] = useState<'up' | 'down' | null>(null)
     const scrollTimerRef = useRef<number | null>(null)
+    // La sección "Canje de puntos": el acceso de puntos de arriba lleva hasta ahí.
+    const canjeRef = useRef<HTMLElement | null>(null)
 
     // El botón "Ver Pedido" reacciona a la dirección del scroll (efecto contra-scroll):
     // mientras scrollés hacia arriba baja un poco, mientras scrollés hacia abajo sube un
@@ -502,11 +521,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                 if (data.descuento?.activo && data.descuento?.porcentaje > 0) {
                     const pct = data.descuento.porcentaje
                     const exp = data.descuento.expiraAt ? new Date(data.descuento.expiraAt).toISOString() : null
-                    const texto = pct >= 20
-                        ? '⏳ Oportunidad Exclusiva: 20% OFF por 48 horas aplicado a tu pedido'
-                        : `¡Te extrañamos! Tenés un ${pct}% OFF aplicado a tu pedido 🎁`
-
-                    setBannerGrowth({ texto, porcentaje: pct, expiraAt: data.descuento.expiraAt })
+                    setBannerGrowth(avisoDescuento(pct, pct >= 20))
                     if (data.descuento.codigoCupon) {
                         setDescuentoGrowthCodigo(data.descuento.codigoCupon)
                     }
@@ -622,11 +637,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
 
         if (campana.tipo === 'reactivacion' || campana.slug === 'reactivacion') {
             const pct = campana.descuentoPorcentaje > 0 ? campana.descuentoPorcentaje : 10
-            setBannerGrowth({
-                texto: `¡Te extrañamos! Tenés un ${pct}% OFF aplicado a tu pedido 🎁`,
-                porcentaje: pct,
-                expiraAt: null,
-            })
+            setBannerGrowth(avisoDescuento(pct))
             setProductos(prev => prev.map((prod: any) => {
                 const descActual = Number(prod.descuento || 0)
                 return {
@@ -988,9 +999,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
         return ordenCategoria(a) - ordenCategoria(b) || a.localeCompare(b)
     }
     const categoriasBase = Array.from(new Set<string>(productos.map(p => p.categoria).filter(Boolean))).sort(compararCategorias)
-    const tieneProductosCanje = productos.some(p => p.puntosNecesarios > 0)
     const categorias = ['All', ...categoriasBase]
-    if (restaurante?.sistemaPuntos && tieneProductosCanje) categorias.push('Canje Puntos')
 
     const productosPorCategoria = productos.reduce((acc, producto) => {
         const categoria = producto.categoria || 'Sin categoría'
@@ -1007,6 +1016,8 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
 
     const categoriasOrdenadas = Object.keys(productosPorCategoria).sort(compararCategorias)
     const productoCampana = campana?.productoId != null ? productos.find((producto) => producto.id === campana.productoId) ?? null : null
+    // La landing de una campaña con producto va en lugar del pedido en grupo: la oferta antes que la carta.
+    const mostrarPedidoGrupal = !(productoCampana && campana) && restaurante?.orderGroupEnabled !== false
 
     const abrirDetalleProducto = (producto: any) => {
         setSelectedProduct(producto)
@@ -1031,9 +1042,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
         ? []
         : selectedCategory === 'All'
             ? categoriasOrdenadas.flatMap(c => productosPorCategoria[c] || [])
-            : selectedCategory === 'Canje Puntos'
-                ? []
-                : productosFiltrados
+            : productosFiltrados
 
     const agregarAlPedido = (producto: any, cantidad: number = 1, ingredientesExcluidos?: number[], agregados?: any[], varianteSeleccionada?: any, varianteSecundariaSeleccionada?: any) => {
         let ingExNombres: string[] = []
@@ -1112,6 +1121,32 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
     const itemsTotalCheckout = tieneCodigoCampana ? subtotalBaseOriginal : totalPedido
     const puntosEnCarrito = () => cartItems.reduce((sum, item) => sum + (item.esCanjePuntos ? item.puntosNecesarios * item.cantidad : 0), 0)
     const puntosGanadosCarrito = () => cartItems.reduce((sum, item) => sum + (!item.esCanjePuntos && item.puntosGanados ? item.puntosGanados * item.cantidad : 0), 0)
+
+    const productosCanje = productos.filter(p => Number(p.puntosNecesarios) > 0)
+    const tieneOpcionesCanje = productosCanje.length > 0
+    // Lo que puede gastar ahora, y lo que va a tener con este pedido (menos los canjes, más lo que
+    // suma al cobrarse).
+    const puntosDisponibles = puntosCliente === null
+        ? null
+        : Math.max(0, puntosCliente - puntosEnCarrito())
+    const puntosConPedido = puntosCliente === null
+        ? null
+        : Math.max(0, puntosCliente - puntosEnCarrito() + puntosGanadosCarrito())
+
+    // El acceso de puntos de arriba: sin identificar abre la consulta; identificado lleva a los
+    // canjes de producto y, si el local no tiene, cuenta cómo se suman.
+    const verPuntos = () => {
+        if (puntosCliente === null) {
+            setModalPuntosOpen(true)
+            return
+        }
+        if (tieneOpcionesCanje && canjeRef.current) {
+            const sinMovimiento = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+            canjeRef.current.scrollIntoView({ behavior: sinMovimiento ? 'auto' : 'smooth', block: 'start' })
+            return
+        }
+        toast.info('Sumás puntos con cada pedido')
+    }
 
     const alturaCarrito = (() => {
         const n = cartItems.length
@@ -1227,7 +1262,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
     }
 
     return (
-        <div className="min-h-screen pb-32 bg-background font-sans selection:bg-primary/20">
+        <div className="menu-delivery min-h-screen pb-32 bg-background selection:bg-primary/20">
             {themeStyles}
 
             {/* PÍLDORA INSTAGRAM: aparece deslizándose desde arriba cuando el logo queda fuera de
@@ -1278,102 +1313,128 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                 </div>
             )}
 
-            <div className="max-w-2xl lg:max-w-5xl xl:max-w-6xl mx-auto px-5 pt-4 space-y-6">
-                {bannerGrowth && (
-                    <div className="rounded-2xl bg-gradient-to-r from-emerald-500/15 via-emerald-500/10 to-transparent border border-emerald-500/30 p-4 shadow-sm flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
-                        <div className="flex items-center gap-3 min-w-0">
-                            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-black text-sm">
-                                {bannerGrowth.porcentaje}%
-                            </span>
-                            <div className="min-w-0">
-                                <p className="text-sm font-bold text-foreground leading-snug">
-                                    {bannerGrowth.texto}
-                                </p>
-                                <p className="text-xs text-muted-foreground mt-0.5">
-                                    Se descontará automáticamente al confirmar tu compra
-                                </p>
-                            </div>
-                        </div>
-                        <span className="rounded-full bg-emerald-600 px-3 py-1 text-[11px] font-bold text-white shrink-0 shadow-sm">
-                            Aplicado
-                        </span>
-                    </div>
-                )}
-                <section className="space-y-4">
-                    <div ref={logoRef} className="flex items-center justify-center gap-4">
+            <div className="max-w-2xl lg:max-w-5xl xl:max-w-6xl mx-auto px-5 pt-4 space-y-5">
+                {/* Lo primero que se ve es la marca y, si lo hay, el descuento; lo demás, chico: la carta
+                    tiene que entrar en la primera pantalla. */}
+                <header className="flex flex-col items-center gap-3.5">
+                    <div ref={logoRef} className="flex items-center justify-center">
                         {restaurante.imagenUrl && (
                             <img
                                 src={restaurante.imagenUrl}
                                 alt="logo"
-                                className={`w-48 h-48 rounded-md object-cover ${restaurante.imagenLightUrl ? 'hidden dark:block' : ''}`}
+                                className={`size-32 rounded-3xl object-cover ${restaurante.imagenLightUrl ? 'hidden dark:block' : ''}`}
                             />
                         )}
                         {restaurante.imagenLightUrl && (
                             <img
                                 src={restaurante.imagenLightUrl}
                                 alt="logo"
-                                className="w-48 h-48 rounded-md object-cover block dark:hidden"
+                                className="size-32 rounded-3xl object-cover block dark:hidden"
                             />
                         )}
                     </div>
-                </section>
+                    {bannerGrowth && (
+                        <p className="animate-in fade-in duration-300 inline-flex max-w-full items-center gap-2 rounded-2xl bg-emerald-500/10 px-3.5 py-2 text-[13px] leading-snug text-emerald-900 dark:bg-emerald-400/10 dark:text-emerald-100">
+                            <BadgePercent className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
+                            <span>
+                                <strong className="font-bold">{bannerGrowth.titulo}</strong> {bannerGrowth.detalle}
+                            </span>
+                        </p>
+                    )}
+                </header>
 
-                {productoCampana && campana ? (
+                {productoCampana && campana && (
                     <CampanaProductoHero campana={campana} producto={productoCampana} onClick={() => abrirDetalleProducto(productoCampana)} />
-                ) : (
-                    restaurante?.orderGroupEnabled !== false && (
-                        <BannerPedidoEntreAmigos creando={creandoSala} onClick={onArmarPedidoClick} />
-                    )
                 )}
 
-                {restaurante?.sistemaPuntos && (
-                    <section className="bg-primary/10 border border-primary/20 p-4 rounded-xl flex items-center justify-between shadow-sm lg:max-w-2xl lg:mx-auto lg:w-full">
-                        <div className="flex flex-col">
-                            <div className="flex items-center gap-2 mb-1">
-                                <span className="bg-primary text-primary-foreground text-xs px-2 py-0.5 rounded-full font-bold">PUNTOS</span>
-                                {puntosCliente !== null && (
-                                    <span className="font-semibold text-foreground text-sm">
-                                        {puntosCliente - puntosEnCarrito() + puntosGanadosCarrito()} pts
-                                    </span>
+                {(mostrarPedidoGrupal || restaurante?.sistemaPuntos) && (
+                    <div className="flex flex-wrap items-center justify-center gap-2">
+                        {mostrarPedidoGrupal && (
+                            <button type="button" onClick={onArmarPedidoClick} aria-busy={creandoSala} className={ACCESO_RAPIDO}>
+                                {creandoSala
+                                    ? <Loader2 className="size-4 shrink-0 animate-spin" />
+                                    : <Users className="size-4 shrink-0 text-primary" />}
+                                <span className="truncate">{creandoSala ? 'Creando link…' : 'Pedir entre varios'}</span>
+                            </button>
+                        )}
+                        {restaurante?.sistemaPuntos && (
+                            <button
+                                type="button"
+                                onClick={verPuntos}
+                                aria-label={puntosConPedido === null ? undefined : `Tus puntos: ${puntosConPedido.toLocaleString('es-AR')} pts`}
+                                className={ACCESO_RAPIDO}
+                            >
+                                {loadingPuntos
+                                    ? <Loader2 className="size-4 shrink-0 animate-spin" />
+                                    : <Sparkles className="size-4 shrink-0 text-primary" />}
+                                {puntosConPedido === null ? 'Ver mis puntos' : (
+                                    <span className="tabular-nums">{puntosConPedido.toLocaleString('es-AR')} pts</span>
                                 )}
-                            </div>
-                            <p className="text-xs text-muted-foreground max-w-[200px]">
-                                {puntosCliente === null ? 'Identifícate para ver tus puntos disponibles y canjear.' : 'Puntos acumulados. Canjea por productos.'}
-                            </p>
-                        </div>
-                        <div>
-                            {puntosCliente === null ? (
-                                <Button size="sm" onClick={() => setModalPuntosOpen(true)} className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm font-semibold rounded-lg text-xs">
-                                    Identifícate
-                                </Button>
+                            </button>
+                        )}
+                    </div>
+                )}
+
+                {restaurante?.sistemaPuntos && tieneOpcionesCanje && (
+                    <section ref={canjeRef} aria-label="Canje de puntos" className="scroll-mt-20 space-y-3">
+                        <div className="flex items-baseline justify-between gap-3 px-1">
+                            <h2 className="flex items-center gap-1.5 text-[15px] font-bold text-foreground">
+                                <Sparkles className="size-4 text-primary" />
+                                Canje de puntos
+                            </h2>
+                            {puntosDisponibles !== null ? (
+                                <span className="text-xs text-muted-foreground">
+                                    Disponibles: <strong className="font-bold tabular-nums text-foreground">{puntosDisponibles.toLocaleString('es-AR')} pts</strong>
+                                </span>
                             ) : (
-                                <Button disabled variant="outline" size="sm" className="bg-background/80 border-primary/30 text-xs font-semibold text-primary/80">
-                                    Activo
-                                </Button>
+                                <button
+                                    type="button"
+                                    onClick={() => setModalPuntosOpen(true)}
+                                    className="text-xs font-semibold text-foreground underline underline-offset-4 decoration-foreground/30 hover:decoration-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 rounded-sm"
+                                >
+                                    Identificate para canjear
+                                </button>
                             )}
+                        </div>
+
+                        <div className={`-mx-5 flex snap-x scroll-px-5 gap-3 overflow-x-auto px-5 py-1 lg:mx-0 lg:grid lg:grid-cols-2 lg:overflow-visible lg:px-0 xl:grid-cols-3 ${RIEL_SIN_BARRA}`}>
+                            {productosCanje.map((producto: any) => {
+                                const enCarrito = cartItems.find(it => it.productoId === producto.id && it.esCanjePuntos)
+                                return (
+                                    <ProductoCanjeCard
+                                        key={producto.id}
+                                        producto={producto}
+                                        cantidadEnCarrito={enCarrito?.cantidad}
+                                        onClick={() => abrirDetalleProducto({ ...producto, intentandoCanjear: true })}
+                                    />
+                                )
+                            })}
                         </div>
                     </section>
                 )}
 
                 {categorias.length > 1 && (
-                    <section className="space-y-3 pt-2">
-                        <h2 className="text-lg font-bold text-foreground px-1">Categorías</h2>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 px-1">
-                            {categorias.map((category) => (
-                                <Button
-                                    key={category}
-                                    onClick={() => setSelectedCategory(category || 'All')}
-                                    variant={selectedCategory === category ? "default" : "secondary"}
-                                    className={`rounded-lg px-5 h-10 text-xs font-medium transition-all ${selectedCategory === category
-                                        ? "shadow-md"
-                                        : "bg-secondary/50 hover:bg-secondary border border-transparent"
-                                        }`}
-                                >
-                                    <span className="truncate">{category === 'All' ? 'Todas' : category}</span>
-                                </Button>
-                            ))}
+                    <nav aria-label="Categorías" className="-mx-5">
+                        <div className={`flex snap-x scroll-px-5 gap-2 overflow-x-auto px-5 py-1 lg:flex-wrap lg:justify-center lg:overflow-visible ${RIEL_SIN_BARRA}`}>
+                            {categorias.map((category) => {
+                                const activa = selectedCategory === category
+                                return (
+                                    <button
+                                        key={category}
+                                        type="button"
+                                        onClick={() => setSelectedCategory(category || 'All')}
+                                        aria-pressed={activa}
+                                        className={`h-10 shrink-0 snap-start whitespace-nowrap rounded-full px-4 text-[13px] font-semibold transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 ${activa
+                                            ? 'bg-primary text-primary-foreground'
+                                            : 'bg-secondary text-secondary-foreground hover:bg-secondary/70'
+                                            }`}
+                                    >
+                                        {category === 'All' ? 'Todas' : category}
+                                    </button>
+                                )
+                            })}
                         </div>
-                    </section>
+                    </nav>
                 )}
 
                 <section className="space-y-8 min-h-[50vh]">
@@ -1388,7 +1449,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                                         <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider px-1">
                                             {categoriaNombre}
                                         </h3>
-                                        <div className="flex gap-4 overflow-x-auto pb-3 ml-2 scrollbar-hide snap-x snap-mandatory lg:grid lg:grid-cols-3 xl:grid-cols-4 lg:gap-5 lg:ml-0 lg:pb-0 lg:overflow-visible lg:snap-none">
+                                        <div className={GRILLA_PRODUCTOS}>
                                             {productosDeCategoria.map((producto: any) => (
                                                 <ProductoCard
                                                     key={producto.id}
@@ -1396,7 +1457,6 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                                                     onClick={() => abrirDetalleProducto(producto)}
                                                 />
                                             ))}
-                                            <div className="min-w-1 shrink-0 lg:hidden" />
                                         </div>
                                     </div>
                                 )
@@ -1404,34 +1464,18 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                         ) : (
                             <EmptyState />
                         )
-                    ) : selectedCategory === 'Canje Puntos' ? (
-                        <div className="space-y-4">
-                            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider px-1">
-                                Productos a Canjear
-                            </h3>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 px-1">
-                                {productos.filter(p => p.puntosNecesarios > 0).map((producto: any) => (
-                                    <ProductoCanjeCard
-                                        key={producto.id}
-                                        producto={producto}
-                                        onClick={() => abrirDetalleProducto({ ...producto, intentandoCanjear: true })}
-                                    />
-                                ))}
-                            </div>
-                        </div>
                     ) : (
                         productosFiltrados.length > 0 ? (
                             <div className="space-y-4">
                                 <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider px-1">
                                     {selectedCategory}
                                 </h3>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 px-1">
+                                <div className={GRILLA_PRODUCTOS}>
                                     {productosFiltrados.map((producto: any) => (
                                         <ProductoCard
                                             key={producto.id}
                                             producto={producto}
                                             onClick={() => abrirDetalleProducto(producto)}
-                                            fullWidth
                                         />
                                     ))}
                                 </div>
@@ -1468,7 +1512,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                     </div>
                     <div className="relative z-10 h-4 w-px bg-current opacity-20"></div>
                     <span className="relative z-10 font-bold text-base font-mono">
-                        ${totalPedido}
+                        ${formatPrecio(totalPedido)}
                     </span>
                 </button>
             </div>
@@ -1610,9 +1654,9 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                                                     </div>
                                                     <div className="shrink-0 text-right tabular-nums">
                                                         {item.descuento > 0 && (
-                                                            <p className="text-[10px] text-muted-foreground line-through">${(parseFloat(item.precioOriginal) * item.cantidad).toFixed(2)}</p>
+                                                            <p className="text-[10px] text-muted-foreground line-through">${formatPrecio(parseFloat(item.precioOriginal) * item.cantidad)}</p>
                                                         )}
-                                                        <p className="text-lg font-black leading-5 tracking-tight text-foreground">${(precio * item.cantidad).toFixed(2)}</p>
+                                                        <p className="text-lg font-black leading-5 tracking-tight text-foreground">${formatPrecio(precio * item.cantidad)}</p>
                                                     </div>
                                                 </div>
                                                 <div className="mt-2 flex justify-end">
@@ -1628,7 +1672,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                             <div className="shrink-0 p-4 border-t border-border bg-background">
                                 <div className="flex justify-between items-center mb-3">
                                     <span className="text-muted-foreground text-sm">Total a pagar</span>
-                                    <span className="text-2xl font-black tracking-tight">${totalPedido}</span>
+                                    <span className="text-2xl font-black tracking-tight">${formatPrecio(totalPedido)}</span>
                                 </div>
                                 <Button
                                     className="w-full h-12 rounded-xl font-bold text-base shadow-md"
@@ -1746,47 +1790,23 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
 
 // Pila de avatares con un lugar libre ("+"): el visual de "un grupo con lugar para vos".
 // Es lo que hace legible el pedido entre amigos sin leer ni una palabra.
-const AvatarStack = ({ grande, chico }: { grande?: boolean; chico?: boolean }) => {
-    const circulo = grande ? 'w-11 h-11' : chico ? 'w-6 h-6' : 'w-8 h-8'
-    const icono = grande ? 'w-5 h-5' : chico ? 'w-3 h-3' : 'w-4 h-4'
+const AvatarStack = ({ grande }: { grande?: boolean }) => {
+    const circulo = grande ? 'w-11 h-11' : 'w-8 h-8'
+    const icono = grande ? 'w-5 h-5' : 'w-4 h-4'
     return (
-        <div className={`flex shrink-0 ${grande ? '-space-x-3' : chico ? '-space-x-2' : '-space-x-2.5'}`}>
+        <div className={`flex shrink-0 ${grande ? '-space-x-3' : '-space-x-2.5'}`}>
             <div className={`${circulo} rounded-full bg-primary text-primary-foreground flex items-center justify-center ring-2 ring-background z-[2]`}>
                 <User className={icono} />
             </div>
             <div className={`${circulo} rounded-full bg-primary/25 text-primary flex items-center justify-center ring-2 ring-background z-[1]`}>
                 <User className={icono} />
             </div>
-            <div className={`${circulo} rounded-full ${chico ? 'border' : 'border-2'} border-dashed border-primary/40 text-primary/60 bg-background flex items-center justify-center`}>
+            <div className={`${circulo} rounded-full border-2 border-dashed border-primary/40 text-primary/60 bg-background flex items-center justify-center`}>
                 <Plus className={icono} />
             </div>
         </div>
     )
 }
-
-/** El pedido entre amigos va como tira fina: antes le robaba el primer scroll a la carta. */
-const BannerPedidoEntreAmigos = ({ creando, onClick }: { creando: boolean; onClick: () => void }) => (
-    <button
-        type="button"
-        onClick={onClick}
-        aria-label="Crear pedido entre amigos"
-        className="flex w-full items-center gap-2.5 rounded-xl border border-primary/15 bg-primary/5 px-3 py-2 text-left transition-all duration-200 hover:border-primary/30 hover:bg-primary/10 active:scale-[0.98] lg:mx-auto lg:w-full lg:max-w-2xl"
-    >
-        <AvatarStack chico />
-        <span className="min-w-0 flex-1">
-            <span className="block truncate text-[12.5px] font-bold leading-tight text-foreground">¿Piden entre varios?</span>
-            <span className="block truncate text-[10.5px] leading-snug text-muted-foreground">Compartí un link y cada uno agrega lo suyo</span>
-        </span>
-        <span className="flex shrink-0 items-center gap-1 rounded-full bg-primary px-2.5 py-1.5 text-[10.5px] font-bold text-primary-foreground">
-            {creando ? (
-                <Loader2 className="w-3 h-3 animate-spin" />
-            ) : (
-                <Share2 className="w-3 h-3" />
-            )}
-            {creando ? 'Creando…' : 'Crear link'}
-        </span>
-    </button>
-)
 
 const EmptyState = () => (
     <div className="flex flex-col items-center justify-center py-20 text-muted-foreground opacity-50">
@@ -1818,18 +1838,20 @@ const CampanaProductoHero = ({ campana, producto, onClick }: { campana: CampanaP
     )
 }
 
-const ProductoCard = ({ producto, onClick, fullWidth }: { producto: any, onClick: () => void, fullWidth?: boolean }) => {
+const ProductoCard = ({ producto, onClick }: { producto: any, onClick: () => void }) => {
     const tieneDescuento = !!(producto.descuento && producto.descuento > 0)
     const precioOriginal = parseFloat(producto.precio)
     const precioFinal = tieneDescuento ? precioOriginal * (1 - producto.descuento / 100) : precioOriginal
+    const nombreLength = String(producto.nombre ?? '').trim().length
+    const nombreClass = nombreLength > 70 ? 'text-lg' : nombreLength > 48 ? 'text-[19px]' : nombreLength > 30 ? 'text-xl' : 'text-[22px]'
 
     // Diseño sólido (único): el glassmorphism quedó discontinuado.
     return (
         <div
-            className={`group relative flex flex-col ${fullWidth ? 'w-full' : 'w-48 shrink-0 lg:w-full'} h-[260px] rounded-[24px] bg-card border border-border/50 shadow-md hover:shadow-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] overflow-hidden ${!fullWidth ? 'snap-start' : ''}`}
+            className="group relative flex min-h-[260px] flex-col w-full rounded-[24px] bg-card border border-border/50 shadow-md hover:shadow-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] overflow-hidden"
             onClick={onClick}
         >
-            <div className="w-full h-[130px] shrink-0 bg-zinc-900 relative">
+            <div className="w-full aspect-[3/2] shrink-0 bg-zinc-900 relative">
                 {producto.imagenUrl ? (
                     <img
                         src={producto.imagenUrl}
@@ -1852,18 +1874,18 @@ const ProductoCard = ({ producto, onClick, fullWidth }: { producto: any, onClick
 
             <div className="p-3.5 flex flex-col flex-1 bg-card">
                 <div className="flex-1">
-                    <h3 className="font-bold text-[14px] line-clamp-2 text-foreground leading-tight">
+                    <h3 className={`break-words font-bold leading-tight text-foreground [overflow-wrap:anywhere] ${nombreClass}`}>
                         {producto.nombre}
                     </h3>
                     {producto.descripcion && (
-                        <p className="mt-1 text-xs text-muted-foreground line-clamp-2 leading-snug font-medium">
+                        <p className="mt-1 text-sm text-muted-foreground break-words leading-snug font-medium">
                             {producto.descripcion}
                         </p>
                     )}
                 </div>
 
-                <div className="flex items-baseline gap-1.5 mt-2">
-                    <span className={`font-black text-[17px] ${tieneDescuento ? 'text-emerald-600 dark:text-emerald-400' : 'text-primary'}`}>
+                <div className="flex flex-wrap items-baseline justify-end gap-1.5 mt-2 text-right">
+                    <span className={`font-black text-[22px] ${tieneDescuento ? 'text-emerald-600 dark:text-emerald-400' : 'text-primary'}`}>
                         ${precioFinal.toFixed(0)}
                     </span>
                     {tieneDescuento && (
@@ -1885,26 +1907,51 @@ const ProductoCard = ({ producto, onClick, fullWidth }: { producto: any, onClick
 
 export default MenuDelivery
 
-const ProductoCanjeCard = ({ producto, onClick }: { producto: any, onClick: () => void }) => (
-    <div
-        className="group relative w-full h-24 rounded-2xl overflow-hidden cursor-pointer shadow-sm border border-primary/20 hover:border-primary/50 bg-card hover:bg-secondary/50 transition-all duration-300 flex items-center p-3 gap-4"
+const ProductoCanjeCard = ({
+    producto,
+    cantidadEnCarrito,
+    onClick,
+}: {
+    producto: any
+    cantidadEnCarrito?: number
+    onClick: () => void
+}) => (
+    // Una fila corta, sin borde ni sombra, para que los canjes entren en un riel de una sola altura
+    // y no empujen la carta: la ficha completa (descripción, extras) está en el detalle del producto.
+    <button
+        type="button"
         onClick={onClick}
+        aria-label={`${producto.nombre}, ${producto.puntosNecesarios} puntos${cantidadEnCarrito ? `, en tu pedido (${cantidadEnCarrito})` : ', canjear'}`}
+        className={`group flex w-64 shrink-0 snap-start items-center gap-3 rounded-2xl p-2 pr-3 text-left transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 lg:w-full ${
+            cantidadEnCarrito ? 'bg-primary/10 ring-1 ring-primary/40' : 'bg-secondary hover:bg-secondary/70'
+        }`}
     >
-        <div className="w-16 h-16 shrink-0 rounded-xl overflow-hidden bg-zinc-900 border border-border/50">
+        <span className="size-14 shrink-0 overflow-hidden rounded-xl bg-muted">
             {producto.imagenUrl ? (
-                <img src={producto.imagenUrl} alt={producto.nombre} className="w-full h-full object-cover" />
+                <img src={producto.imagenUrl} alt="" className="size-full object-cover" />
             ) : (
-                <div className="w-full h-full flex items-center justify-center bg-linear-to-br from-zinc-800 to-zinc-900"><Utensils className="w-6 h-6 text-primary" /></div>
+                <span className="grid size-full place-items-center">
+                    <Utensils className="size-5 text-primary" />
+                </span>
             )}
-        </div>
-        <div className="flex-1 min-w-0 flex flex-col justify-center">
-            <h3 className="font-semibold text-sm text-foreground truncate">{producto.nombre}</h3>
-            <p className="text-xs text-muted-foreground line-clamp-1">{producto.descripcion || 'Canje de puntos'}</p>
-        </div>
-        <div className="flex flex-col items-end justify-center px-2">
-            <span className="text-[10px] font-bold text-primary mb-0.5">COSTO</span>
-            <span className="font-extrabold text-primary text-lg leading-none">{producto.puntosNecesarios}</span>
-            <span className="text-[10px] font-medium text-primary mt-0.5">pts</span>
-        </div>
-    </div>
+        </span>
+        <span className="min-w-0 flex-1">
+            <span className="line-clamp-2 text-[13px] font-semibold leading-tight text-foreground [overflow-wrap:anywhere]">
+                {producto.nombre}
+            </span>
+            <span className="mt-1 block text-xs font-bold tabular-nums text-foreground/70">
+                {producto.puntosNecesarios} pts
+            </span>
+        </span>
+        {cantidadEnCarrito ? (
+            <span className="flex shrink-0 items-center gap-1 rounded-full bg-primary px-2.5 py-1 text-[11px] font-bold text-primary-foreground">
+                <Check className="size-3 stroke-[3]" />
+                {cantidadEnCarrito}
+            </span>
+        ) : (
+            <span className="shrink-0 rounded-full bg-background px-3 py-1.5 text-[11px] font-bold text-foreground transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
+                Canjear
+            </span>
+        )}
+    </button>
 )

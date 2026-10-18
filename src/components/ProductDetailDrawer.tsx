@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react'
-import { Drawer, DrawerContent } from '@/components/ui/drawer'
-import { motion, AnimatePresence, type PanInfo } from 'motion/react'
+import { useState, useEffect, useLayoutEffect, useRef, type ReactNode } from 'react'
+import { Drawer, DrawerContent, DrawerTitle } from '@/components/ui/drawer'
+import { motion, AnimatePresence, useIsPresent, type PanInfo } from 'motion/react'
 import { Check, ChevronLeft, ChevronRight, Clock } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { formatPrecio } from '@/lib/formatPrecio'
 
 interface Ingrediente {
   id: number
@@ -68,32 +69,65 @@ function formatTimeLeft(fechaFin: string | Date | null): string | null {
   return `${days}d`
 }
 
-/** Altura fija de la imagen (px). Ahora es idéntica en ambas etapas. */
+/** "Cebolla" → "cebolla" para que "Sin cebolla" se lea como frase; las siglas ("BBQ") quedan como están. */
+function enMinuscula(texto: string): string {
+  return /^\p{Lu}\p{Ll}/u.test(texto) ? texto.charAt(0).toLowerCase() + texto.slice(1) : texto
+}
+
+/** Espacio que no corta línea (sin escribir el carácter invisible en el código). */
+const NBSP = String.fromCharCode(0xa0)
+
+/** Un nombre no se parte entre líneas: el resumen de lo elegido sólo corta entre elementos. */
+function sinCortes(texto: string): string {
+  return texto.replace(/ /g, NBSP)
+}
+
+/** Mide la altura natural de su contenido y la informa (también cuando cambia), para que el drawer
+ *  se ajuste a lo que hay en vez de a una estimación. Un hijo que ya está saliendo de un
+ *  `AnimatePresence` deja de informar, así no pisa la medida del que entra. */
+function Medido({ onAltura, className, children }: { onAltura: (alto: number) => void; className?: string; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const presente = useIsPresent()
+
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el || !presente) return
+    const medir = () => onAltura(Math.ceil(el.getBoundingClientRect().height))
+    medir()
+    const observador = new ResizeObserver(medir)
+    observador.observe(el)
+    return () => observador.disconnect()
+  }, [onAltura, presente])
+
+  return <div ref={ref} className={className}>{children}</div>
+}
+
+/** Altura fija de la imagen (px). Ahora es idéntica en todas las etapas. */
 const IMG_H = 220
+/** Cuánto sube la hoja inferior sobre la imagen (el `-mt-5` de la hoja). */
+const SOLAPA = 20
 const SPRING = { type: 'spring' as const, stiffness: 320, damping: 34 }
+/** Sin animar: la primera medición al abrir tiene que quedar exacta, no crecer desde cero. */
+const SIN_ANIMAR = { duration: 0 }
 /** Transición del crossfade deslizante entre el contenido de las dos etapas. */
 const SLIDE = { type: 'tween' as const, duration: 0.34, ease: [0.22, 1, 0.36, 1] as const }
+/** Lo que dura el cruce entre etapas (SLIDE + margen, y cubre el umbral de doble toque de los
+ *  sistemas): en ese lapso la hoja ignora toques (ver `cruzando`). */
+const CRUCE_MS = 400
 /** Transición del deslizamiento horizontal al pasar de un producto a otro. */
 const NAV_SLIDE = { type: 'tween' as const, duration: 0.42, ease: [0.32, 0.72, 0, 1] as const }
 
-// Altura base etapa 1: imagen + descripción + botón, sin variantes
-const STAGE1_BASE_H = 390
-// Cada fila (variante / ingrediente / extra) (py-3.5 + texto + gap)
+// Cada fila de la lista de variantes (py-3.5 + texto + gap). Sólo dimensiona el tope de esa lista:
+// el alto del drawer sale de medir el contenido (`Medido`), no de constantes.
 const ROW_H = 58
-// Label "Elegí una opción" / "Ingredientes" / "Extras" + space
-const LABEL_H = 44
 // Máximo de variantes visibles antes de scroll
 const MAX_VISIBLE_VARIANTS = 3
-// Base etapa 2: imagen + padding de la hoja + botón agregar
-const STAGE2_BASE_H = IMG_H + 168
 
 // ── Variante SIN IMAGEN: diseño plano (sin foto ni hoja superpuesta) ──
 // Espeja el card text-only de MenuDelivery: nombre/precio en texto foreground, todo al ras.
-// Alto del header de texto (badges + nombre + precio) que reemplaza a la imagen.
-const FLAT_HEADER_H = 120
-// Bases equivalentes a las de arriba pero descontando la imagen y sumando el header de texto.
-const FLAT_STAGE1_BASE_H = STAGE1_BASE_H - IMG_H + FLAT_HEADER_H
-const FLAT_STAGE2_BASE_H = STAGE2_BASE_H - IMG_H + FLAT_HEADER_H
+// Aire sobre el header de texto (pt-9) y lo que ocupa el botón volver cuando aparece (h-9 + mb-3).
+const PLANO_PT = 36
+const VOLVER_PLANO_H = 48
 
 // Al navegar entre productos, la tarjeta entrante llega desde el lado del gesto y la
 // saliente se va con un leve parallax. `dir` = +1 (siguiente) / -1 (anterior).
@@ -135,9 +169,24 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
   const [showCounter, setShowCounter] = useState(false)
   // Dirección del último salto entre productos (alimenta la animación de deslizamiento).
   const [navDir, setNavDir] = useState(0)
+  // Alturas naturales de cada pieza, medidas con `Medido`: el drawer las suma en vez de estimarlas.
+  const [contenidoH, setContenidoH] = useState(0)
+  const [resumenH, setResumenH] = useState(0)
+  const [pieH, setPieH] = useState(0)
+  const [cabeceraPlanaH, setCabeceraPlanaH] = useState(0)
+  // La altura sólo se anima con resorte pasada la primera medición al abrir; antes se fija de golpe.
+  const [animar, setAnimar] = useState(false)
+  // Última altura con producto: al cerrar, el padre lo suelta antes de que termine de bajar la hoja.
+  const [alturaVigente, setAlturaVigente] = useState(0)
+  // Mientras cruzan las etapas (CRUCE_MS) la hoja —etapa y pie— ignora toques: elegir una variante
+  // cambia de etapa y un segundo toque en el mismo lugar caería sobre la etapa nueva (activaría un
+  // ingrediente o un extra) o sobre el botón de agregar del pie.
+  const [cruzando, setCruzando] = useState(false)
+  const cruceTimer = useRef<number | undefined>(undefined)
+  const productId = product?.id
 
   useEffect(() => {
-    if (open && product) {
+    if (open && productId !== undefined) {
       setStage('primary')
       setIngredientesExcluidos([])
       setAgregadosSeleccionados([])
@@ -148,7 +197,18 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
       setAddCount(0)
       setShowCounter(false)
     }
-  }, [open, product?.id])
+  }, [open, productId])
+
+  useEffect(() => {
+    if (!open) return
+    const id = window.setTimeout(() => setAnimar(true), 120)
+    return () => {
+      window.clearTimeout(id)
+      setAnimar(false)
+    }
+  }, [open])
+
+  useEffect(() => () => window.clearTimeout(cruceTimer.current), [])
 
   const tieneIngredientes = !!(product?.ingredientes && product.ingredientes.length > 0)
   const todosLosAgregados = [
@@ -191,6 +251,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
     ...(tieneAgregadosSecundarios ? ['extrasSecondary' as const] : []),
   ]
   const stageIndex = stages.indexOf(stage)
+  const hayEtapaSiguiente = stageIndex < stages.length - 1
   const isExtrasStage = stage === 'extrasPrimary' || stage === 'extrasSecondary'
   const currentExtras = stage === 'extrasSecondary' ? agregadosSecundarios : agregadosPrimarios
   const currentExtrasTitle = stage === 'extrasSecondary'
@@ -261,17 +322,45 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
   const total = (precioUnitConDescuento + precioAgregados) * quantity
   const totalTachado = (precioBase + precioAgregados) * quantity
 
+  // ── Avance entre etapas ──
+  // En una etapa con lista de variantes (o de medallones) no hay botón "Continuar": elegir una pasa sola
+  // a la etapa siguiente. Queda el botón (y se elige sin avanzar) si ya se agregó una vez —ahí es
+  // "Agregar otro igual"— o si no hay etapa siguiente —ahí es "Agregar".
+  const esEtapaVariantes = (stage === 'primary' && (tieneVariantes || tieneSelectorMedallon)) || stage === 'secondary'
+  const avanzaAlElegir = esEtapaVariantes && addCount === 0 && hayEtapaSiguiente
+  const hayBotonPrincipal = !avanzaAlElegir
+  const hayPie = hayBotonPrincipal || puedeNavegar
+
+  const irAEtapa = (destino: CustomizationStage) => {
+    setStage(destino)
+    setCruzando(true)
+    window.clearTimeout(cruceTimer.current)
+    cruceTimer.current = window.setTimeout(() => setCruzando(false), CRUCE_MS)
+  }
+
+  const elegirVariante = (variante: Variante) => {
+    if (stage === 'primary') setVarianteSeleccionada(variante)
+    else setVarianteSecundariaSeleccionada(variante)
+    if (avanzaAlElegir) irAEtapa(stages[stageIndex + 1])
+  }
+
+  const elegirMedallon = (id: MedallonSelection) => {
+    setMedallonSeleccionado(id)
+    // Si además hay variantes, la que cierra la etapa es la variante.
+    if (avanzaAlElegir && !tieneVariantes) irAEtapa(stages[stageIndex + 1])
+  }
+
   const handleContinue = () => {
     if (variantBloqueada) return
     if (addCount > 0 || stageIndex >= stages.length - 1) {
       handleAdd()
     } else {
-      setStage(stages[stageIndex + 1])
+      irAEtapa(stages[stageIndex + 1])
     }
   }
 
   const handleBack = () => {
-    if (stageIndex > 0) setStage(stages[stageIndex - 1])
+    if (stageIndex > 0) irAEtapa(stages[stageIndex - 1])
   }
 
   const handleAdd = () => {
@@ -297,56 +386,53 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
 
   const handlePrimary = handleContinue
 
+  // ── Resumen de lo elegido ──
+  // Ocupa, desde la segunda etapa, el lugar de la descripción: medallones, variantes, extras (+) y los
+  // ingredientes que se sacan, en texto chico.
+  const ingredientesQuitados = (product?.ingredientes ?? [])
+    .filter(ing => ingredientesExcluidos.includes(ing.id))
+    .map(ing => sinCortes(enMinuscula(ing.nombre)))
+  const partesResumen = [
+    ...(tieneSelectorMedallon ? [sinCortes(opcionesMedallon.find(o => o.id === medallonSeleccionado)?.nombre ?? 'Simple')] : []),
+    ...(varianteSeleccionada ? [sinCortes(varianteSeleccionada.nombre)] : []),
+    ...(varianteSecundariaSeleccionada ? [sinCortes(varianteSecundariaSeleccionada.nombre)] : []),
+    ...agregadosSeleccionados.map(ag => sinCortes(`+${ag.nombre}`)),
+    ...(ingredientesQuitados.length > 0 ? [`Sin${NBSP}${ingredientesQuitados.join(', ')}`] : []),
+  ]
+  const resumen = partesResumen.join(`${NBSP}· `)
+  const mostrarResumen = stage !== 'primary' && resumen !== ''
+
   const timeLeft = tieneDescuento ? formatTimeLeft(product?.descuentoFechaFin ?? null) : null
+  // Misma escala que el nombre de las fichas de producto de MenuDelivery (`ProductoCard`).
+  const nombreLength = product?.nombre.trim().length ?? 0
+  const nombreClass = nombreLength > 70 ? 'text-lg' : nombreLength > 48 ? 'text-[19px]' : nombreLength > 30 ? 'text-xl' : 'text-[22px]'
+  const nombreLargo = nombreLength > 30
 
-  // ── Cálculo de altura dinámica del drawer ──
-  const variantCount = product?.variantes?.length ?? 0
-  const medallonVariantCount = tieneSelectorMedallon
-    ? 1 + Number(!!extraDobleMedallon) + Number(!!extraTripleMedallon)
-    : 0
-  const secondaryVariantCount = product?.variantesSecundarias?.length ?? 0
-  const vh = typeof window !== 'undefined' ? window.innerHeight : 800
-
-  const stage1Base = sinImagen ? FLAT_STAGE1_BASE_H : STAGE1_BASE_H
-  const stage2Base = sinImagen ? FLAT_STAGE2_BASE_H : STAGE2_BASE_H
-
-  // Etapa 1: mínimo equivalente a 1 variante visible, crece hasta 3, techo en 85vh
-  const stage1Height = Math.min(
-    Math.max(
-      stage1Base + LABEL_H + ROW_H,
-      stage1Base
-        + (tieneVariantes ? LABEL_H + Math.min(variantCount, MAX_VISIBLE_VARIANTS) * ROW_H : 0)
-        + (tieneSelectorMedallon ? LABEL_H + Math.min(medallonVariantCount, MAX_VISIBLE_VARIANTS) * ROW_H : 0)
-    ),
-    Math.round(vh * 0.85)
-  )
-
-  // Etapa 2: crece para mostrar ingredientes + extras, con techo en 90vh (scroll interno)
-  const extrasRows = (stage === 'extrasPrimary' && tieneIngredientes ? product!.ingredientes!.length : 0) + currentExtras.length
-  const extrasLabels = (stage === 'extrasPrimary' && tieneIngredientes ? 1 : 0) + (currentExtras.length > 0 ? 1 : 0)
-  const stage2Height = Math.min(
-    stage2Base + extrasLabels * LABEL_H + extrasRows * ROW_H,
-    Math.round(vh * 0.9)
-  )
-
-  const secondaryHeight = Math.min(
-    stage1Base + LABEL_H + Math.max(1, Math.min(secondaryVariantCount, MAX_VISIBLE_VARIANTS)) * ROW_H,
-    Math.round(vh * 0.85)
-  )
-  const drawerHeight = isExtrasStage ? stage2Height : stage === 'secondary' ? secondaryHeight : stage1Height
+  // ── Altura del drawer ──
+  // Suma de lo que realmente hay: cabecera + resumen + contenido de la etapa + pie. Crece con la
+  // información hasta el 100% de la pantalla (el techo es el `max-h` de DrawerContent); pasado eso,
+  // el contenido de la etapa scrollea.
+  const cabeceraH = sinImagen
+    ? PLANO_PT + (stage !== 'primary' ? VOLVER_PLANO_H : 0) + cabeceraPlanaH
+    : IMG_H - SOLAPA
+  const alturaTotal = cabeceraH + (mostrarResumen ? resumenH : 0) + contenidoH + (hayPie ? pieH : 0)
+  if (product && !Object.is(alturaVigente, alturaTotal)) setAlturaVigente(alturaTotal)
+  const resorte = animar ? SPRING : SIN_ANIMAR
 
   const rowBtn = 'flex items-center justify-between rounded-2xl px-4 py-3.5 text-left transition-colors'
-  // Flechas de navegación que flanquean el botón principal — mismo alto/redondeo que el
-  // botón, en tono secundario para no competir con la acción primaria.
-  const navFlankBtn = 'flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-secondary text-foreground transition-all active:scale-[0.98] disabled:opacity-35 disabled:active:scale-100'
+  // Flechas de navegación que flanquean el botón principal: chicas y en tono secundario para no
+  // competir con la acción primaria. El `after:` agranda el área de toque (44 px) sin agrandar el círculo.
+  const navFlankBtn = 'relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary text-foreground transition-all after:absolute after:-inset-1.5 active:scale-90 disabled:opacity-35 disabled:active:scale-100'
 
   return (
     <Drawer open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DrawerContent className="overflow-hidden border-none bg-background p-0 outline-none [&>div:first-child]:hidden lg:mx-auto lg:max-w-md lg:rounded-t-[28px]">
+      <DrawerContent aria-describedby={undefined} className="overflow-hidden border-none bg-background p-0 outline-none [&>div:first-child]:hidden data-[vaul-drawer-direction=bottom]:max-h-dvh lg:mx-auto lg:max-w-md lg:rounded-t-[28px]">
+        <DrawerTitle className="sr-only">{product?.nombre ?? 'Producto'}</DrawerTitle>
         <motion.div
           className="relative overflow-hidden bg-background"
-          animate={{ height: drawerHeight }}
-          transition={SPRING}
+          initial={false}
+          animate={{ height: alturaVigente }}
+          transition={resorte}
         >
           {product ? (
             <>
@@ -431,11 +517,13 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                   {/* ─────────── COLUMNA DE CONTENIDO ─────────── */}
                   <div className="absolute inset-0 z-10 flex flex-col">
                     {/* Header: sobre la imagen (con foto) o de texto al ras (sin foto). Es también el
-                        área de swipe (arrastrá de lado a lado para cambiar de producto). */}
+                        área de swipe (arrastrá de lado a lado para cambiar de producto).
+                        `menu-delivery` le da la tipografía de las fichas de producto de MenuDelivery:
+                        el drawer se monta en un portal, fuera de ese contenedor, y sin esto caería a
+                        la fuente del sistema. */}
                     <motion.div
                       className={cn(
-                        'relative shrink-0 select-none',
-                        sinImagen && 'px-6 pt-9',
+                        'menu-delivery relative shrink-0 select-none',
                         puedeNavegar && 'cursor-grab touch-pan-y active:cursor-grabbing'
                       )}
                       style={sinImagen ? undefined : { height: IMG_H }}
@@ -447,52 +535,62 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                       onDragEnd={onHeaderDragEnd}
                     >
                       {sinImagen ? (
-                        <>
-                          {/* Botón volver del diseño plano — al ras, no sobre foto */}
-                          <AnimatePresence>
-                            {stage !== 'primary' && (
-                              <motion.button
-                                key="back-flat"
-                                type="button"
-                                onClick={handleBack}
-                                initial={{ opacity: 0, scale: 0.8 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                exit={{ opacity: 0, scale: 0.8 }}
-                                transition={{ duration: 0.2 }}
-                                className="mb-3 flex h-9 w-9 items-center justify-center rounded-full bg-secondary text-foreground transition-colors active:bg-secondary/70"
-                              >
-                                <ChevronLeft className="h-5 w-5" />
-                              </motion.button>
-                            )}
-                          </AnimatePresence>
-                          <div className="mb-2 flex flex-wrap items-center gap-2">
-                            {tieneDescuento && (
-                              <span className="rounded-full bg-emerald-500 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
-                                {product.descuento}% OFF
-                              </span>
-                            )}
-                            {timeLeft && (
-                              <span className="flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
-                                <Clock className="h-3 w-3" /> Vence en {timeLeft}
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-end justify-between gap-4">
-                            <h3 className="text-[26px] font-bold leading-tight tracking-tight text-foreground">
-                              {product.nombre}
-                            </h3>
-                            <div className="shrink-0 text-right">
-                              {tieneDescuento && (
-                                <p className="text-sm font-medium text-muted-foreground line-through">
-                                  ${totalTachado.toFixed(2)}
-                                </p>
+                        <div className="px-6 pt-9">
+                          {/* Botón volver del diseño plano — al ras, no sobre foto. Su hueco crece con
+                              el mismo resorte que la altura del drawer para que el contenido no salte. */}
+                          <motion.div
+                            className="overflow-hidden"
+                            initial={false}
+                            animate={{ height: stage !== 'primary' ? VOLVER_PLANO_H : 0 }}
+                            transition={resorte}
+                          >
+                            <AnimatePresence>
+                              {stage !== 'primary' && (
+                                <motion.button
+                                  key="back-flat"
+                                  type="button"
+                                  onClick={handleBack}
+                                  initial={{ opacity: 0, scale: 0.8 }}
+                                  animate={{ opacity: 1, scale: 1 }}
+                                  exit={{ opacity: 0, scale: 0.8 }}
+                                  transition={{ duration: 0.2 }}
+                                  className="mb-3 flex h-9 w-9 items-center justify-center rounded-full bg-secondary text-foreground transition-colors active:bg-secondary/70"
+                                >
+                                  <ChevronLeft className="h-5 w-5" />
+                                </motion.button>
                               )}
-                              <p className="text-2xl font-bold text-primary">
-                                ${total.toFixed(2)}
-                              </p>
+                            </AnimatePresence>
+                          </motion.div>
+                          <Medido onAltura={setCabeceraPlanaH}>
+                            <div className="mb-2 flex flex-wrap items-center gap-2">
+                              {tieneDescuento && (
+                                <span className="rounded-full bg-emerald-500 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
+                                  {product.descuento}% OFF
+                                </span>
+                              )}
+                              {timeLeft && (
+                                <span className="flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                                  <Clock className="h-3 w-3" /> Vence en {timeLeft}
+                                </span>
+                              )}
                             </div>
-                          </div>
-                        </>
+                            <div className={cn('flex gap-3', nombreLargo ? 'flex-col items-stretch gap-1' : 'items-end justify-between')}>
+                              <h3 className={cn('min-w-0 flex-1 break-words font-bold leading-tight text-foreground [overflow-wrap:anywhere]', nombreClass)}>
+                                {product.nombre}
+                              </h3>
+                              <div className={cn('shrink-0 text-right', nombreLargo && 'self-end')}>
+                                {tieneDescuento && (
+                                  <p className="text-[11px] font-semibold text-muted-foreground line-through opacity-70">
+                                    ${formatPrecio(totalTachado)}
+                                  </p>
+                                )}
+                                <p className={cn('text-[22px] font-black', tieneDescuento ? 'text-emerald-600 dark:text-emerald-400' : 'text-primary')}>
+                                  ${formatPrecio(total)}
+                                </p>
+                              </div>
+                            </div>
+                          </Medido>
+                        </div>
                       ) : (
                         <div className="absolute inset-x-0 bottom-0 px-6 pb-8">
                           <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -507,18 +605,18 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                               </span>
                             )}
                           </div>
-                          <div className="flex items-end justify-between gap-4">
-                            <h3 className="text-[28px] font-bold leading-tight tracking-tight text-white drop-shadow-sm">
+                          <div className={cn('flex gap-3', nombreLargo ? 'flex-col items-stretch gap-1' : 'items-end justify-between')}>
+                            <h3 className={cn('min-w-0 flex-1 break-words font-bold leading-tight text-white drop-shadow-sm [overflow-wrap:anywhere]', nombreClass)}>
                               {product.nombre}
                             </h3>
-                            <div className="shrink-0 text-right">
+                            <div className={cn('shrink-0 text-right', nombreLargo && 'self-end')}>
                               {tieneDescuento && (
-                                <p className="text-sm font-medium text-white/60 line-through">
-                                  ${totalTachado.toFixed(2)}
+                                <p className="text-[11px] font-semibold text-white/70 line-through">
+                                  ${formatPrecio(totalTachado)}
                                 </p>
                               )}
-                              <p className="text-2xl font-bold text-white drop-shadow-sm">
-                                ${total.toFixed(2)}
+                              <p className="text-[22px] font-black text-white drop-shadow-sm">
+                                ${formatPrecio(total)}
                               </p>
                             </div>
                           </div>
@@ -532,8 +630,26 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                       'relative flex min-h-0 flex-1 flex-col bg-background',
                       !sinImagen && '-mt-5 rounded-t-[28px]'
                     )}>
+                      {/* Resumen de lo elegido — desde la segunda etapa ocupa el lugar de la
+                          descripción. Su alto sigue el mismo resorte que el del drawer: crece hacia
+                          arriba y las filas de abajo se quedan donde está el dedo. */}
+                      <motion.div
+                        className="shrink-0 overflow-hidden"
+                        initial={false}
+                        animate={{ height: mostrarResumen ? resumenH : 0, opacity: mostrarResumen ? 1 : 0 }}
+                        transition={resorte}
+                      >
+                        {mostrarResumen && (
+                          <Medido onAltura={setResumenH}>
+                            <p className="px-6 pt-6 text-[13px] leading-snug text-muted-foreground [overflow-wrap:anywhere]">
+                              {resumen}
+                            </p>
+                          </Medido>
+                        )}
+                      </motion.div>
+
                       {/* Área animada — misma posición y misma lógica de scroll en ambas etapas */}
-                      <div className="relative min-h-0 flex-1">
+                      <div className={cn('relative min-h-0 flex-1', cruzando && 'pointer-events-none')}>
                         <AnimatePresence initial={false}>
                           {!isExtrasStage ? (
                             <motion.div
@@ -544,84 +660,88 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                               transition={SLIDE}
                               className="absolute inset-0 flex flex-col"
                             >
-                              <div className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain px-6 pb-4 pt-6">
-                                {stage === 'primary' && <p className="text-[15px] leading-relaxed text-foreground/70">
-                                  {product.descripcion || 'Sin descripción.'}
-                                </p>}
-
-                                {stage === 'primary' && tieneSelectorMedallon && (
-                                  <div className="space-y-1">
-                                    <p className="px-1 pb-1 text-[13px] font-medium text-muted-foreground">
-                                      {tieneVariantes ? 'Elegí la cantidad de medallones' : (product.tituloVariantesPrimarias || 'Elegí una opción')}
+                              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+                                <Medido onAltura={setContenidoH} className={cn('space-y-6 px-6 pt-6', hayPie ? 'pb-4' : 'pb-8')}>
+                                  {stage === 'primary' && (
+                                    <p className="text-[15px] leading-relaxed text-foreground/70">
+                                      {product.descripcion || 'Sin descripción.'}
                                     </p>
-                                    <div
-                                      className="flex flex-col gap-0.5 overflow-y-auto overscroll-contain"
-                                      style={{ maxHeight: MAX_VISIBLE_VARIANTS * ROW_H }}
-                                    >
-                                      {opcionesMedallon.map((opcion) => {
-                                        const sel = medallonSeleccionado === opcion.id
-                                        const precioOpcion = parseFloat(String(product.precio || 0))
-                                          + parseFloat(opcion.agregado?.precio || '0')
-                                        return (
-                                          <button
-                                            key={opcion.id}
-                                            type="button"
-                                            onClick={() => setMedallonSeleccionado(opcion.id)}
-                                            className={cn(rowBtn, sel ? 'bg-primary/10' : 'bg-secondary/50')}
-                                          >
-                                            <span className={cn('text-[15px]', sel ? 'font-semibold text-primary' : 'text-foreground')}>
-                                              {opcion.nombre}
-                                            </span>
-                                            <span className="flex items-center gap-2">
-                                              <span className={cn('text-[15px]', sel ? 'font-semibold text-primary' : 'text-muted-foreground')}>
-                                                ${precioOpcion.toFixed(2)}
-                                              </span>
-                                              {sel && <Check className="h-[18px] w-[18px] text-primary" />}
-                                            </span>
-                                          </button>
-                                        )
-                                      })}
-                                    </div>
-                                  </div>
-                                )}
+                                  )}
 
-                                {((stage === 'primary' && tieneVariantes) || (stage === 'secondary' && tieneVariantesSecundarias)) && (
-                                  <div className="space-y-1">
-                                    <p className="px-1 pb-1 text-[13px] font-medium text-muted-foreground">
-                                      {stage === 'primary'
-                                        ? (product.tituloVariantesPrimarias || 'Elegí una opción')
-                                        : (product.tituloVariantesSecundarias || 'Elegí también una segunda opción')}
-                                    </p>
-                                    <div
-                                      className="flex flex-col gap-0.5 overflow-y-auto overscroll-contain"
-                                      style={{ maxHeight: MAX_VISIBLE_VARIANTS * ROW_H }}
-                                    >
-                                      {(stage === 'primary' ? product.variantes! : product.variantesSecundarias!).map((v) => {
-                                        const sel = (stage === 'primary' ? varianteSeleccionada : varianteSecundariaSeleccionada)?.id === v.id
-                                        return (
-                                          <button
-                                            key={v.id}
-                                            type="button"
-                                            onClick={() => stage === 'primary' ? setVarianteSeleccionada(v) : setVarianteSecundariaSeleccionada(v)}
-                                            className={cn(rowBtn, sel ? 'bg-primary/10' : 'bg-secondary/50')}
-                                          >
-                                            <span className={cn('text-[15px]', sel ? 'font-semibold text-primary' : 'text-foreground')}>
-                                              {v.nombre}
-                                            </span>
-                                            <span className="flex items-center gap-2">
-                                              <span className={cn('text-[15px]', sel ? 'font-semibold text-primary' : 'text-muted-foreground')}>
-                                                {stage === 'secondary'
-                                                  ? (parseFloat(v.precio) > 0 ? `+$${parseFloat(v.precio).toFixed(2)}` : 'Sin adicional')
-                                                  : `$${parseFloat(v.precio).toFixed(2)}`}
+                                  {stage === 'primary' && tieneSelectorMedallon && (
+                                    <div className="space-y-1">
+                                      <p className="px-1 pb-1 text-[13px] font-medium text-muted-foreground">
+                                        {tieneVariantes ? 'Elegí la cantidad de medallones' : (product.tituloVariantesPrimarias || 'Elegí una opción')}
+                                      </p>
+                                      <div
+                                        className="flex flex-col gap-0.5 overflow-y-auto overscroll-contain"
+                                        style={{ maxHeight: MAX_VISIBLE_VARIANTS * ROW_H }}
+                                      >
+                                        {opcionesMedallon.map((opcion) => {
+                                          const sel = medallonSeleccionado === opcion.id
+                                          const precioOpcion = parseFloat(String(product.precio || 0))
+                                            + parseFloat(opcion.agregado?.precio || '0')
+                                          return (
+                                            <button
+                                              key={opcion.id}
+                                              type="button"
+                                              onClick={() => elegirMedallon(opcion.id)}
+                                              className={cn(rowBtn, sel ? 'bg-primary/10' : 'bg-secondary/50')}
+                                            >
+                                              <span className={cn('text-[15px]', sel ? 'font-semibold text-primary' : 'text-foreground')}>
+                                                {opcion.nombre}
                                               </span>
-                                              {sel && <Check className="h-[18px] w-[18px] text-primary" />}
-                                            </span>
-                                          </button>
-                                        )
-                                      })}
+                                              <span className="flex items-center gap-2">
+                                                <span className={cn('text-[15px]', sel ? 'font-semibold text-primary' : 'text-muted-foreground')}>
+                                                  ${formatPrecio(precioOpcion)}
+                                                </span>
+                                                {sel && <Check className="h-[18px] w-[18px] text-primary" />}
+                                              </span>
+                                            </button>
+                                          )
+                                        })}
+                                      </div>
                                     </div>
-                                  </div>
-                                )}
+                                  )}
+
+                                  {((stage === 'primary' && tieneVariantes) || (stage === 'secondary' && tieneVariantesSecundarias)) && (
+                                    <div className="space-y-1">
+                                      <p className="px-1 pb-1 text-[13px] font-medium text-muted-foreground">
+                                        {stage === 'primary'
+                                          ? (product.tituloVariantesPrimarias || 'Elegí una opción')
+                                          : (product.tituloVariantesSecundarias || 'Elegí también una segunda opción')}
+                                      </p>
+                                      <div
+                                        className="flex flex-col gap-0.5 overflow-y-auto overscroll-contain"
+                                        style={{ maxHeight: MAX_VISIBLE_VARIANTS * ROW_H }}
+                                      >
+                                        {(stage === 'primary' ? product.variantes! : product.variantesSecundarias!).map((v) => {
+                                          const sel = (stage === 'primary' ? varianteSeleccionada : varianteSecundariaSeleccionada)?.id === v.id
+                                          return (
+                                            <button
+                                              key={v.id}
+                                              type="button"
+                                              onClick={() => elegirVariante(v)}
+                                              className={cn(rowBtn, sel ? 'bg-primary/10' : 'bg-secondary/50')}
+                                            >
+                                              <span className={cn('text-[15px]', sel ? 'font-semibold text-primary' : 'text-foreground')}>
+                                                {v.nombre}
+                                              </span>
+                                              <span className="flex items-center gap-2">
+                                                <span className={cn('text-[15px]', sel ? 'font-semibold text-primary' : 'text-muted-foreground')}>
+                                                  {stage === 'secondary'
+                                                    ? (parseFloat(v.precio) > 0 ? `+$${formatPrecio(parseFloat(v.precio))}` : 'Sin adicional')
+                                                    : `$${formatPrecio(parseFloat(v.precio))}`}
+                                                </span>
+                                                {sel && <Check className="h-[18px] w-[18px] text-primary" />}
+                                              </span>
+                                            </button>
+                                          )
+                                        })}
+                                      </div>
+                                    </div>
+                                  )}
+                                </Medido>
                               </div>
                             </motion.div>
                           ) : (
@@ -633,186 +753,183 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                               transition={SLIDE}
                               className="absolute inset-0 flex flex-col"
                             >
-                              <div className="min-h-0 flex-1 space-y-7 overflow-y-auto overscroll-contain px-6 pb-4 pt-6">
-                                {stage === 'extrasPrimary' && tieneIngredientes && (
-                                  <div className="space-y-1">
-                                    <p className="px-1 pb-1 text-lg font-bold text-foreground">
-                                      Ingredientes
-                                    </p>
-                                    <div className="flex flex-col gap-0.5">
-                                      {product.ingredientes!.map((ing) => {
-                                        const incluido = !ingredientesExcluidos.includes(ing.id)
-                                        return (
-                                          <button
-                                            key={ing.id}
-                                            type="button"
-                                            onClick={() => toggleIngrediente(ing.id)}
-                                            className={cn(rowBtn, incluido ? 'bg-secondary/60' : 'bg-secondary/30')}
-                                          >
-                                            <span
-                                              className={cn(
-                                                'text-[15px]',
-                                                incluido ? 'text-foreground' : 'text-muted-foreground line-through'
-                                              )}
+                              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+                                <Medido onAltura={setContenidoH} className={cn('space-y-7 px-6 pt-6', hayPie ? 'pb-4' : 'pb-8')}>
+                                  {stage === 'extrasPrimary' && tieneIngredientes && (
+                                    <div className="space-y-1">
+                                      <p className="px-1 pb-1 text-lg font-bold text-foreground">
+                                        Ingredientes
+                                      </p>
+                                      <div className="flex flex-col gap-0.5">
+                                        {product.ingredientes!.map((ing) => {
+                                          const incluido = !ingredientesExcluidos.includes(ing.id)
+                                          return (
+                                            <button
+                                              key={ing.id}
+                                              type="button"
+                                              onClick={() => toggleIngrediente(ing.id)}
+                                              className={cn(rowBtn, incluido ? 'bg-secondary/60' : 'bg-secondary/30')}
                                             >
-                                              {ing.nombre}
-                                            </span>
-                                            {incluido && <Check className="h-[18px] w-[18px] text-foreground/70" />}
-                                          </button>
-                                        )
-                                      })}
-                                    </div>
-                                  </div>
-                                )}
-
-                                {currentExtras.length > 0 && (
-                                  <div className="space-y-1">
-                                    <p className="px-1 pb-1 text-lg font-bold text-foreground">
-                                      {currentExtrasTitle}
-                                    </p>
-                                    <div className="flex flex-col gap-0.5">
-                                      {currentExtras.map((ag) => {
-                                        const sel = !!agregadosSeleccionados.find(a => a.id === ag.id)
-                                        return (
-                                          <button
-                                            key={ag.id}
-                                            type="button"
-                                            onClick={() => toggleAgregado(ag)}
-                                            className={cn(rowBtn, sel ? 'bg-primary/10' : 'bg-secondary/50')}
-                                          >
-                                            <span className={cn('text-[15px]', sel ? 'font-semibold text-primary' : 'text-foreground')}>
-                                              {ag.nombre}
-                                            </span>
-                                            <span className="flex items-center gap-2">
-                                              <span className={cn('text-[15px]', sel ? 'font-semibold text-primary' : 'text-muted-foreground')}>
-                                                +${parseFloat(ag.precio).toFixed(2)}
+                                              <span
+                                                className={cn(
+                                                  'text-[15px]',
+                                                  incluido ? 'text-foreground' : 'text-muted-foreground line-through'
+                                                )}
+                                              >
+                                                {ing.nombre}
                                               </span>
-                                              {sel && <Check className="h-[18px] w-[18px] text-primary" />}
-                                            </span>
-                                          </button>
-                                        )
-                                      })}
+                                              {incluido && <Check className="h-[18px] w-[18px] text-foreground/70" />}
+                                            </button>
+                                          )
+                                        })}
+                                      </div>
                                     </div>
-                                  </div>
-                                )}
+                                  )}
+
+                                  {isExtrasStage && currentExtras.length > 0 && (
+                                    <div className="space-y-1">
+                                      <p className="px-1 pb-1 text-lg font-bold text-foreground">
+                                        {currentExtrasTitle}
+                                      </p>
+                                      <div className="flex flex-col gap-0.5">
+                                        {currentExtras.map((ag) => {
+                                          const sel = !!agregadosSeleccionados.find(a => a.id === ag.id)
+                                          return (
+                                            <button
+                                              key={ag.id}
+                                              type="button"
+                                              onClick={() => toggleAgregado(ag)}
+                                              className={cn(rowBtn, sel ? 'bg-primary/10' : 'bg-secondary/50')}
+                                            >
+                                              <span className={cn('text-[15px]', sel ? 'font-semibold text-primary' : 'text-foreground')}>
+                                                {ag.nombre}
+                                              </span>
+                                              <span className="flex items-center gap-2">
+                                                <span className={cn('text-[15px]', sel ? 'font-semibold text-primary' : 'text-muted-foreground')}>
+                                                  +${formatPrecio(parseFloat(ag.precio))}
+                                                </span>
+                                                {sel && <Check className="h-[18px] w-[18px] text-primary" />}
+                                              </span>
+                                            </button>
+                                          )
+                                        })}
+                                      </div>
+                                    </div>
+                                  )}
+                                </Medido>
                               </div>
                             </motion.div>
                           )}
                         </AnimatePresence>
                       </div>
 
-                      {/* Botón principal — muta entre Continuar y Agregar.
-                          Cuando se puede navegar entre productos, lo flanquean flechas anterior/siguiente. */}
-                      <div className="shrink-0 space-y-2 px-6 pb-7 pt-2">
-                       <div className="flex items-stretch gap-2">
-                        {puedeNavegar && (
-                          <button
-                            type="button"
-                            onClick={() => irA(-1)}
-                            disabled={!hasPrev}
-                            aria-label="Producto anterior"
-                            className={navFlankBtn}
-                          >
-                            <ChevronLeft className="h-5 w-5" />
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={handlePrimary}
-                          disabled={!isExtrasStage && variantBloqueada}
-                          className={cn(
-                            'relative h-14 min-w-0 flex-1 overflow-hidden rounded-2xl text-[17px] font-semibold transition-all duration-300 active:scale-[0.98]',
-                            addCount > 0
-                              ? 'bg-emerald-500 text-white'
-                              : !isExtrasStage && variantBloqueada
-                                ? 'bg-foreground/10 text-muted-foreground'
-                                : 'bg-primary text-primary-foreground'
-                          )}
-                        >
-                          <AnimatePresence mode="wait">
-                            {showCounter ? (
-                              <motion.span
-                                key={`x${addCount}`}
-                                initial={{ scale: 0.4, opacity: 0 }}
-                                animate={{ scale: 1.1, opacity: 1 }}
-                                exit={{ scale: 1.5, opacity: 0 }}
-                                transition={{ duration: 0.25 }}
-                                className="absolute inset-0 flex items-center justify-center text-2xl font-black"
+                      {/* Pie — botón principal (muta entre Continuar y Agregar) y, cuando se puede
+                          navegar entre productos, las flechas anterior/siguiente que lo flanquean.
+                          En una etapa de variantes que avanza sola no hay botón: quedan sólo las
+                          flechas, y si tampoco hay a dónde navegar, no hay pie. */}
+                      {hayPie && (
+                        <Medido onAltura={setPieH} className={cn('shrink-0 space-y-2 px-6 pb-7 pt-2', cruzando && 'pointer-events-none')}>
+                          <div className={cn('flex items-center gap-2', !hayBotonPrincipal && 'justify-between')}>
+                            {puedeNavegar && (
+                              <button
+                                type="button"
+                                onClick={() => irA(-1)}
+                                disabled={!hasPrev}
+                                aria-label="Producto anterior"
+                                className={navFlankBtn}
                               >
-                                x{addCount}
-                              </motion.span>
-                            ) : addCount > 0 ? (
-                              <motion.span
-                                key="repeat"
-                                initial={{ opacity: 0, y: 8 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: -8 }}
-                                transition={{ duration: 0.2 }}
-                                className="absolute inset-0 flex items-center justify-center gap-2"
-                              >
-                                <Check className="h-5 w-5" /> Agregar otro igual
-                              </motion.span>
-                            ) : !isExtrasStage && variantBloqueada ? (
-                              <motion.span
-                                key="blocked"
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
-                                transition={{ duration: 0.2 }}
-                                className="absolute inset-0 flex items-center justify-center"
-                              >
-                                Continuar
-                              </motion.span>
-                            ) : stageIndex < stages.length - 1 ? (
-                              <motion.span
-                                key="continue"
-                                initial={{ opacity: 0, y: 8 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: -8 }}
-                                transition={{ duration: 0.2 }}
-                                className="absolute inset-0 flex items-center justify-center"
-                              >
-                                Continuar
-                              </motion.span>
-                            ) : (
-                              <motion.span
-                                key="add"
-                                initial={{ opacity: 0, y: 8 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: -8 }}
-                                transition={{ duration: 0.2 }}
-                                className="absolute inset-0 flex items-center justify-center"
-                              >
-                                Agregar · ${total.toFixed(2)}
-                              </motion.span>
+                                <ChevronLeft className="h-4 w-4" />
+                              </button>
                             )}
-                          </AnimatePresence>
-                        </button>
-                        {puedeNavegar && (
-                          <button
-                            type="button"
-                            onClick={() => irA(1)}
-                            disabled={!hasNext}
-                            aria-label="Producto siguiente"
-                            className={navFlankBtn}
-                          >
-                            <ChevronRight className="h-5 w-5" />
-                          </button>
-                        )}
-                       </div>
-                        {addCount > 0 && (
-                          <motion.button
-                            type="button"
-                            onClick={onClose}
-                            initial={{ opacity: 0, y: 8 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.25 }}
-                            className="h-14 w-full rounded-2xl bg-secondary text-[17px] font-semibold text-foreground transition-all duration-300 active:scale-[0.98]"
-                          >
-                            Cerrar
-                          </motion.button>
-                        )}
-                      </div>
+                            {hayBotonPrincipal && (
+                              <button
+                                type="button"
+                                onClick={handlePrimary}
+                                disabled={!isExtrasStage && variantBloqueada}
+                                className={cn(
+                                  'relative h-14 min-w-0 flex-1 overflow-hidden rounded-2xl text-[17px] font-semibold transition-all duration-300 active:scale-[0.98]',
+                                  addCount > 0
+                                    ? 'bg-emerald-500 text-white'
+                                    : !isExtrasStage && variantBloqueada
+                                      ? 'bg-foreground/10 text-muted-foreground'
+                                      : 'bg-primary text-primary-foreground'
+                                )}
+                              >
+                                <AnimatePresence mode="wait">
+                                  {showCounter ? (
+                                    <motion.span
+                                      key={`x${addCount}`}
+                                      initial={{ scale: 0.4, opacity: 0 }}
+                                      animate={{ scale: 1.1, opacity: 1 }}
+                                      exit={{ scale: 1.5, opacity: 0 }}
+                                      transition={{ duration: 0.25 }}
+                                      className="absolute inset-0 flex items-center justify-center text-2xl font-black"
+                                    >
+                                      x{addCount}
+                                    </motion.span>
+                                  ) : addCount > 0 ? (
+                                    <motion.span
+                                      key="repeat"
+                                      initial={{ opacity: 0, y: 8 }}
+                                      animate={{ opacity: 1, y: 0 }}
+                                      exit={{ opacity: 0, y: -8 }}
+                                      transition={{ duration: 0.2 }}
+                                      className="absolute inset-0 flex items-center justify-center gap-2"
+                                    >
+                                      <Check className="h-5 w-5" /> Agregar otro igual
+                                    </motion.span>
+                                  ) : hayEtapaSiguiente ? (
+                                    <motion.span
+                                      key="continue"
+                                      initial={{ opacity: 0, y: 8 }}
+                                      animate={{ opacity: 1, y: 0 }}
+                                      exit={{ opacity: 0, y: -8 }}
+                                      transition={{ duration: 0.2 }}
+                                      className="absolute inset-0 flex items-center justify-center"
+                                    >
+                                      Continuar
+                                    </motion.span>
+                                  ) : (
+                                    <motion.span
+                                      key="add"
+                                      initial={{ opacity: 0, y: 8 }}
+                                      animate={{ opacity: 1, y: 0 }}
+                                      exit={{ opacity: 0, y: -8 }}
+                                      transition={{ duration: 0.2 }}
+                                      className="absolute inset-0 flex items-center justify-center"
+                                    >
+                                      {variantBloqueada ? 'Agregar' : `Agregar · $${formatPrecio(total)}`}
+                                    </motion.span>
+                                  )}
+                                </AnimatePresence>
+                              </button>
+                            )}
+                            {puedeNavegar && (
+                              <button
+                                type="button"
+                                onClick={() => irA(1)}
+                                disabled={!hasNext}
+                                aria-label="Producto siguiente"
+                                className={navFlankBtn}
+                              >
+                                <ChevronRight className="h-4 w-4" />
+                              </button>
+                            )}
+                          </div>
+                          {addCount > 0 && (
+                            <motion.button
+                              type="button"
+                              onClick={onClose}
+                              initial={{ opacity: 0, y: 8 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ duration: 0.25 }}
+                              className="h-14 w-full rounded-2xl bg-secondary text-[17px] font-semibold text-foreground transition-all duration-300 active:scale-[0.98]"
+                            >
+                              Cerrar
+                            </motion.button>
+                          )}
+                        </Medido>
+                      )}
                     </div>
                   </div>
                 </motion.div>
