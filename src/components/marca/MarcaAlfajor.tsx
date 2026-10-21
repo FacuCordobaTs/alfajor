@@ -45,7 +45,7 @@ export function BotonTicket({ children, onClick, icono }: { children: ReactNode;
             onClick={onClick}
             className="group inline-flex h-14 items-stretch overflow-hidden rounded-lg bg-[#eb623a] text-[#083821] shadow-[0_14px_30px_-14px_rgba(0,0,0,0.8)] transition-transform duration-150 hover:-rotate-1 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2eee2]"
         >
-            <span className="font-alfajor flex items-center px-5 pt-0.5 text-[22px] uppercase leading-none">{children}</span>
+            <span className="font-alfajor flex items-center px-5 pt-0.5 text-[17px] uppercase leading-none">{children}</span>
             <span className="flex w-14 items-center justify-center border-l-2 border-dashed border-[#083821]/35 [&_svg]:size-5">
                 {icono ?? <ArrowDown className="transition-transform group-hover:translate-y-0.5" />}
             </span>
@@ -142,7 +142,7 @@ export function Cinta({ palabras }: { palabras: string[] }) {
     return (
         <div className="relative z-10 -mt-2 -rotate-2 py-3">
             <div className="-mx-4 overflow-hidden bg-[#eb623a] py-3 text-[#083821] shadow-[0_10px_24px_-10px_rgba(0,0,0,0.45)]">
-                <div className="alfajor-marquesina font-alfajor flex w-max text-[26px] uppercase leading-none">
+                <div className="alfajor-marquesina font-alfajor flex w-max text-[20px] uppercase leading-none">
                     {grupo(false)}
                     {grupo(true)}
                 </div>
@@ -154,9 +154,9 @@ export function Cinta({ palabras }: { palabras: string[] }) {
 export function TituloSeccion({ indice, titulo, detalle }: { indice: number; titulo: string; detalle?: string }) {
     return (
         <div className="flex items-end gap-3 border-b-2 border-foreground/85 px-1 pb-2.5">
-            <span className="font-alfajor mb-1 shrink-0 -rotate-6 rounded-md bg-[#eb623a] px-1.5 py-1 text-base leading-none text-[#083821] tabular-nums">{String(indice).padStart(2, '0')}</span>
-            <h2 className="font-alfajor min-w-0 flex-1 break-words text-[34px] uppercase leading-[0.86] text-foreground sm:text-[44px]">{titulo}</h2>
-            {detalle && <span className="shrink-0 pb-1 text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">{detalle}</span>}
+            <span className="font-barlow mb-1 shrink-0 -rotate-6 rounded-md bg-[#eb623a] px-1.5 py-1 text-lg leading-none text-[#083821] tabular-nums">{String(indice).padStart(2, '0')}</span>
+            <h2 className="font-alfajor min-w-0 flex-1 break-words text-[24px] uppercase leading-[0.95] text-foreground sm:text-[32px]">{titulo}</h2>
+            {detalle && <span className="shrink-0 pb-1 text-[11px] font-normal uppercase tracking-[0.14em] text-muted-foreground">{detalle}</span>}
         </div>
     )
 }
@@ -174,7 +174,7 @@ export function NavCategorias({ categorias, activa, onChange }: { categorias: st
                             type="button"
                             onClick={() => onChange(c)}
                             aria-pressed={sel}
-                            className={`h-10 shrink-0 snap-start whitespace-nowrap rounded-full border-2 px-4 text-[13px] font-extrabold uppercase tracking-wide transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 active:scale-95 ${sel
+                            className={`font-alfajor h-10 shrink-0 snap-start whitespace-nowrap rounded-full border-2 px-4 text-[13px] uppercase tracking-wide transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 active:scale-95 ${sel
                                 ? 'border-foreground bg-foreground text-background'
                                 : 'border-foreground/20 text-foreground hover:border-foreground/60'
                                 }`}
@@ -205,9 +205,9 @@ export function BotonPedido({ cantidad, total, visible, onClick, pulso = false, 
                 tabIndex={visible ? 0 : -1}
                 className={`group flex h-14 w-full max-w-sm items-center gap-2 rounded-2xl bg-[#083821] pl-5 pr-2 text-[#f2eee2] shadow-[0_18px_40px_-14px_rgba(0,0,0,0.6)] transition-transform duration-300 active:scale-[0.97] dark:bg-[#f2eee2] dark:text-[#083821] ${visible ? 'pointer-events-auto' : ''} ${pulso ? 'scale-105' : ''} ${className}`}
             >
-                <span className="text-[15px] font-bold">Ver mi pedido</span>
+                <span className="font-alfajor text-[15px]">Ver mi pedido</span>
                 <span className="text-[13px] tabular-nums opacity-60">· {cantidad} {cantidad === 1 ? 'producto' : 'productos'}</span>
-                <span className="ml-auto flex h-10 items-center gap-1.5 rounded-xl bg-[#eb623a] px-3.5 text-[15px] font-black tabular-nums text-[#083821]">
+                <span className="ml-auto flex h-10 items-center gap-1.5 rounded-xl bg-[#eb623a] px-3.5 text-[15px] font-bold tabular-nums text-[#083821]">
                     ${total}
                     <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
                 </span>
@@ -234,15 +234,12 @@ export function FooterMarca({ horarios, direccion, onPedir }: { horarios: Turno[
                 <div className="relative mx-auto grid max-w-2xl gap-12 px-5 pt-12 lg:max-w-5xl lg:grid-cols-[1.2fr_1fr_1fr] xl:max-w-6xl">
                     <div>
                         <img src="/logo.webp" alt="Alfajor" className="h-20 w-auto -rotate-3" />
-                        <p className="mt-5 max-w-xs text-[15px] leading-relaxed text-[#f2eee2]/70">
-                            Alfajores salados a la plancha, con papas y bien calentitos. Desde Santa Fe, para tu mesa.
-                        </p>
                         <div className="mt-6 flex flex-wrap gap-2">
                             {onPedir && (
                                 <button
                                     type="button"
                                     onClick={onPedir}
-                                    className="inline-flex h-11 items-center gap-2 rounded-lg bg-[#eb623a] px-5 text-sm font-extrabold uppercase tracking-wide text-[#083821] transition-transform active:scale-95"
+                                    className="font-alfajor inline-flex h-11 items-center gap-2 rounded-lg bg-[#eb623a] px-5 text-sm uppercase tracking-wide text-[#083821] transition-transform active:scale-95"
                                 >
                                     Hacer mi pedido <ArrowUp className="size-4" />
                                 </button>
@@ -251,7 +248,7 @@ export function FooterMarca({ horarios, direccion, onPedir }: { horarios: Turno[
                                 href={INSTAGRAM_URL}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-flex h-11 items-center gap-2 rounded-lg border-2 border-[#f2eee2]/25 px-4 text-sm font-bold transition-colors hover:border-[#f2eee2]/60"
+                                className="font-alfajor inline-flex h-11 items-center gap-2 rounded-lg border-2 border-[#f2eee2]/25 px-4 text-sm transition-colors hover:border-[#f2eee2]/60"
                             >
                                 <Instagram className="size-4" /> @alfajorconpapas
                             </a>
@@ -261,7 +258,7 @@ export function FooterMarca({ horarios, direccion, onPedir }: { horarios: Turno[
                     <div>
                         <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#eb623a]">Dónde estamos</p>
                         <a href={mapa} target="_blank" rel="noopener noreferrer" className="group mt-3 block">
-                            <span className="font-alfajor block text-[40px] uppercase leading-[0.86] transition-colors group-hover:text-[#eb623a]">
+                            <span className="font-barlow block text-[46px] uppercase leading-[0.9] transition-colors group-hover:text-[#eb623a]">
                                 {calle}
                                 <br />
                                 Santa Fe
@@ -295,11 +292,7 @@ export function FooterMarca({ horarios, direccion, onPedir }: { horarios: Turno[
                     )}
                 </div>
 
-                <p aria-hidden className="font-alfajor relative mt-16 select-none whitespace-nowrap text-center text-[23vw] uppercase leading-[0.8] text-transparent [-webkit-text-stroke:1.5px_rgba(234,231,224,0.3)] lg:text-[15rem]">
-                    Alfajor
-                </p>
-
-                <div className="relative mx-auto mt-8 flex max-w-2xl flex-wrap justify-between gap-2 px-5 text-xs text-[#f2eee2]/45 lg:max-w-5xl xl:max-w-6xl">
+                <div className="relative mx-auto mt-14 flex max-w-2xl flex-wrap justify-between gap-2 px-5 text-xs text-[#f2eee2]/45 lg:max-w-5xl xl:max-w-6xl">
                     <span>© {new Date().getFullYear()} Alfajor · Santa Fe</span>
                     <span>Pedidos online con Piru</span>
                 </div>

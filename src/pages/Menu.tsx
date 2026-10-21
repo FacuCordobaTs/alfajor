@@ -565,14 +565,14 @@ const Menu = () => {
   }
 
   return (
-    <div className="min-h-screen overflow-x-clip bg-background font-sans selection:bg-primary/20">
+    <div className="menu-delivery min-h-screen overflow-x-clip bg-background selection:bg-primary/20">
       {themeStyles}
 
       {localCerrado && (
         <div className={puedeProgramar ? "bg-[#eb623a] text-[#083821]" : "bg-[#f2eee2] text-[#083821]"}>
           <div className="max-w-2xl lg:max-w-5xl xl:max-w-6xl mx-auto px-5 py-2.5 flex items-center justify-center gap-2">
             <Clock className="w-4 h-4 shrink-0" />
-            <p className="text-sm font-bold text-center">
+            <p className="text-sm text-center">
               {puedeProgramar
                 ? 'Estamos cerrados. Podés programar tu pedido para después'
                 : `Estamos cerrados${estadoAbierto.proximaApertura ? `. Abrimos ${estadoAbierto.proximaApertura}` : ''}`
@@ -595,7 +595,7 @@ const Menu = () => {
         </span>
         <button
           onClick={() => setMisPedidosOpen(true)}
-          className="flex h-9 items-center gap-1.5 rounded-full border border-[#f2eee2]/25 px-3.5 text-xs font-bold text-[#f2eee2] transition-colors hover:border-[#f2eee2]/60"
+          className="flex h-9 items-center gap-1.5 rounded-full border border-[#f2eee2]/25 px-3.5 text-xs font-alfajor text-[#f2eee2] transition-colors hover:border-[#f2eee2]/60"
         >
           <Package className="w-3.5 h-3.5" />
           Mis pedidos
@@ -614,11 +614,11 @@ const Menu = () => {
               <EstadoLocal abierto={estadoAbierto.abierto} texto={textoEstado(horarios, estadoAbierto)} />
             </div>
 
-            <p className="font-alfajor mt-6 text-3xl uppercase leading-none text-[#f2eee2]/70">Hola,</p>
-            <h1 className="font-alfajor mt-1 break-words text-[64px] uppercase leading-[0.84] text-[#eb623a] [overflow-wrap:anywhere] sm:text-[84px] lg:text-[96px]">
+            <p className="font-alfajor mt-6 text-2xl uppercase leading-none text-[#f2eee2]/70">Hola,</p>
+            <h1 className="font-alfajor mt-1 break-words text-[42px] uppercase leading-[0.95] text-[#eb623a] [overflow-wrap:anywhere] sm:text-[60px] lg:text-[72px]">
               {clienteNombre}.
             </h1>
-            <p className="font-alfajor mt-3 text-[30px] uppercase leading-[0.9] sm:text-[40px]">
+            <p className="font-alfajor mt-3 text-[22px] uppercase leading-[1.05] sm:text-[30px]">
               Armen el pedido{' '}
               <span className="inline-block -rotate-2 bg-[#eb623a] px-2 pt-1 text-[#083821]">juntos.</span>
             </p>
@@ -829,11 +829,11 @@ const Menu = () => {
               <div className="shrink-0 p-4 border-t-2 border-dashed border-border bg-background">
                 <div className="flex justify-between items-center mb-3">
                   <span className="text-muted-foreground text-sm">Total a pagar</span>
-                  <span className="font-alfajor text-[32px] leading-none tabular-nums">${parseFloat(totalPedido).toFixed(0)}</span>
+                  <span className="text-[28px] font-bold leading-none tabular-nums">${parseFloat(totalPedido).toFixed(0)}</span>
                 </div>
                 {!restaurante?.soloCartaDigital ? (
                   <Button
-                    className={`w-full h-13 rounded-2xl font-bold text-base shadow-md ${checkoutCerrado ? 'bg-muted text-muted-foreground cursor-not-allowed' : ''}`}
+                    className={`font-alfajor w-full h-13 rounded-2xl text-base shadow-md ${checkoutCerrado ? 'bg-muted text-muted-foreground cursor-not-allowed' : ''}`}
                     onClick={() => {
                       if (checkoutCerrado) {
                         toast.error('El restaurante está cerrado en este momento')
@@ -1131,11 +1131,11 @@ const ProductoCard = ({ producto, onClick, fullWidth }: { producto: any, onClick
       </div>
       <div className="p-3.5 flex flex-col flex-1 bg-card">
         <div className="flex-1">
-          <h3 className="font-bold text-[14px] line-clamp-2 text-foreground leading-tight">{producto.nombre}</h3>
+          <h3 className="font-alfajor text-[14px] line-clamp-2 text-foreground leading-tight">{producto.nombre}</h3>
           {producto.descripcion && <p className="mt-1 text-xs text-muted-foreground line-clamp-2 leading-snug font-medium">{producto.descripcion}</p>}
         </div>
         <div className="flex items-baseline gap-1.5 mt-2">
-          <span className={`font-black text-[17px] ${tieneDescuento ? 'text-emerald-600 dark:text-emerald-400' : 'text-primary'}`}>${precioFinal.toFixed(0)}</span>
+          <span className={`font-bold text-[17px] ${tieneDescuento ? 'text-emerald-600 dark:text-emerald-400' : 'text-primary'}`}>${precioFinal.toFixed(0)}</span>
           {tieneDescuento && <span className="text-[11px] font-semibold text-muted-foreground line-through opacity-70">${precioOriginal.toFixed(0)}</span>}
         </div>
       </div>

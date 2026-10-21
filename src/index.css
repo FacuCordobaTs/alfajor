@@ -2,16 +2,50 @@
 @import "tw-animate-css";
 
 .menu-delivery {
-  font-family: 'Bricolage Grotesque', ui-sans-serif, system-ui, sans-serif;
+  font-family: 'Neue Haas Display', ui-sans-serif, system-ui, sans-serif;
 }
 
-/* Identidad de Alfajor (components/marca): Bricolage condensada y negra para titulares. */
-.font-alfajor {
-  font-family: 'Bricolage Grotesque', ui-sans-serif, system-ui, sans-serif;
+/* Tipografías de la marca Alfajor (public/fonts):
+   - Eastman: títulos, textos grandes, botones, la cinta y el nombre de cada producto (.font-alfajor).
+     No trae números (la versión de prueba tiene marcas "trial" en los dígitos): el unicode-range los
+     deja afuera y el navegador los dibuja con la siguiente fuente de la lista, Barlow Condensed.
+   - Barlow Condensed: los números de sección y la dirección (.font-barlow).
+   - Neue Haas Display: todo el texto corrido; Roman (400) para descripciones y textos chicos,
+     Bold (700) para los precios. Es la fuente base de .menu-delivery. */
+@font-face {
+  font-family: 'Eastman';
+  src: url('/fonts/EastmanRomanTrial-Heavy.otf') format('opentype');
   font-weight: 800;
-  font-stretch: 75%;
-  font-variation-settings: 'wdth' 75, 'opsz' 96;
+  font-display: swap;
+  unicode-range: U+0000-002F, U+003A-10FFFF;
+}
+@font-face {
+  font-family: 'Barlow Condensed';
+  src: url('/fonts/BarlowCondensed-Black.ttf') format('truetype');
+  font-weight: 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Neue Haas Display';
+  src: url('/fonts/NeueHaasDisplay-Roman.ttf') format('truetype');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Neue Haas Display';
+  src: url('/fonts/NeueHaasDisplay-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-display: swap;
+}
+
+.font-alfajor {
+  font-family: 'Eastman', 'Barlow Condensed', ui-sans-serif, system-ui, sans-serif;
+  font-weight: 800;
   letter-spacing: -0.01em;
+}
+.font-barlow {
+  font-family: 'Barlow Condensed', ui-sans-serif, system-ui, sans-serif;
+  font-weight: 900;
 }
 
 @keyframes alfajor-marquesina { to { transform: translateX(-50%); } }

@@ -1287,13 +1287,13 @@ export function CheckoutDeliveryGrupal({
   let footerButton: React.ReactNode
   if (pedidoHabitual && editandoHabitual) {
     footerButton = (
-      <Button className="w-full h-13 rounded-2xl font-bold text-base" onClick={guardarCambiosHabituales} disabled={isCheckingZona || fueraDeZona}>
+      <Button className="font-alfajor w-full h-13 rounded-2xl text-base" onClick={guardarCambiosHabituales} disabled={isCheckingZona || fueraDeZona}>
         Guardar cambios
       </Button>
     )
   } else if (alguienEditando) {
     footerButton = (
-      <Button disabled className="w-full h-13 rounded-2xl font-bold text-base">
+      <Button disabled className="font-alfajor w-full h-13 rounded-2xl text-base">
         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
         {editSemaphore?.clienteNombre} está editando...
       </Button>
@@ -1302,7 +1302,7 @@ export function CheckoutDeliveryGrupal({
     const esUltimo = modo === 'pasos' ? paso === pasos.length - 1 : true
     footerButton = (
       <Button
-        className="w-full h-13 rounded-2xl font-bold text-base"
+        className="font-alfajor w-full h-13 rounded-2xl text-base"
         onClick={modo === 'pasos' ? handleSiguiente : handleGuardarEdicion}
         disabled={accionDisabled}
       >
@@ -1312,7 +1312,7 @@ export function CheckoutDeliveryGrupal({
   } else if (checkoutData) {
     footerButton = datosCompletos ? (
       <Button
-        className={`w-full h-13 rounded-2xl font-bold text-base ${
+        className={`font-alfajor w-full h-13 rounded-2xl text-base ${
           pedidoHabitual && checkoutData.metodoPago?.startsWith('mercadopago')
             ? 'bg-[#009EE3] text-white hover:bg-[#008DCC]'
             : ''
@@ -1326,7 +1326,7 @@ export function CheckoutDeliveryGrupal({
     )
   } else {
     footerButton = (
-      <Button className="w-full h-13 rounded-2xl font-bold text-base" onClick={handleIniciarEdicion}>
+      <Button className="font-alfajor w-full h-13 rounded-2xl text-base" onClick={handleIniciarEdicion}>
         <Pencil className="w-4 h-4 mr-2" />
         Completar datos de envío
       </Button>
@@ -1356,7 +1356,7 @@ export function CheckoutDeliveryGrupal({
                 />
               ))}
             </div>
-            <span className="font-alfajor text-base leading-none text-muted-foreground shrink-0 tabular-nums">{paso + 1}/{pasos.length}</span>
+            <span className="font-barlow text-base leading-none text-muted-foreground shrink-0 tabular-nums">{paso + 1}/{pasos.length}</span>
           </>
         ) : (
           <span className="text-sm font-bold">
@@ -1414,7 +1414,7 @@ export function CheckoutDeliveryGrupal({
       <div className={`${pedidoHabitual ? 'px-9' : 'px-5'} pb-5 pt-4 bg-background space-y-3 lg:w-full lg:max-w-md lg:mx-auto ${compacto ? 'sticky bottom-0 z-10' : 'shrink-0'}`}>
         <div className="flex justify-between items-baseline">
           <span className="text-sm text-muted-foreground">Total</span>
-          <span className="font-alfajor text-[32px] leading-none tabular-nums">${formatPrecio(checkoutData?.total || total)}</span>
+          <span className="text-[28px] font-bold leading-none tabular-nums">${formatPrecio(checkoutData?.total || total)}</span>
         </div>
         {footerButton}
         {pedidoHabitual && checkoutData && !estoyEditando && (

@@ -405,7 +405,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
   const timeLeft = tieneDescuento ? formatTimeLeft(product?.descuentoFechaFin ?? null) : null
   // El nombre va con la letra de titulares de la marca (condensada): un punto más grande que en la ficha.
   const nombreLength = product?.nombre.trim().length ?? 0
-  const nombreClass = nombreLength > 70 ? 'text-[22px]' : nombreLength > 48 ? 'text-2xl' : nombreLength > 30 ? 'text-[26px]' : 'text-[30px]'
+  const nombreClass = nombreLength > 70 ? 'text-lg' : nombreLength > 48 ? 'text-xl' : nombreLength > 30 ? 'text-[22px]' : 'text-2xl'
   const nombreLargo = nombreLength > 30
 
   // ── Altura del drawer ──
@@ -426,7 +426,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
 
   return (
     <Drawer open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DrawerContent aria-describedby={undefined} className="overflow-hidden border-none bg-background p-0 outline-none [&>div:first-child]:hidden data-[vaul-drawer-direction=bottom]:max-h-dvh lg:mx-auto lg:max-w-md lg:rounded-t-[28px]">
+      <DrawerContent aria-describedby={undefined} className="menu-delivery overflow-hidden border-none bg-background p-0 outline-none [&>div:first-child]:hidden data-[vaul-drawer-direction=bottom]:max-h-dvh lg:mx-auto lg:max-w-md lg:rounded-t-[28px]">
         <DrawerTitle className="sr-only">{product?.nombre ?? 'Producto'}</DrawerTitle>
         <motion.div
           className="relative overflow-hidden bg-background"
@@ -584,7 +584,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                                     ${formatPrecio(totalTachado)}
                                   </p>
                                 )}
-                                <p className={cn('font-alfajor text-[28px] leading-none tabular-nums', tieneDescuento ? 'text-emerald-600 dark:text-emerald-400' : 'text-primary')}>
+                                <p className={cn('text-[26px] font-bold leading-none tabular-nums', tieneDescuento ? 'text-emerald-600 dark:text-emerald-400' : 'text-primary')}>
                                   ${formatPrecio(total)}
                                 </p>
                               </div>
@@ -615,7 +615,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                                   ${formatPrecio(totalTachado)}
                                 </p>
                               )}
-                              <p className="font-alfajor text-[28px] leading-none tabular-nums text-[#eb623a] drop-shadow-sm">
+                              <p className="text-[26px] font-bold leading-none tabular-nums text-[#eb623a] drop-shadow-sm">
                                 ${formatPrecio(total)}
                               </p>
                             </div>
@@ -847,7 +847,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                                 onClick={handlePrimary}
                                 disabled={!isExtrasStage && variantBloqueada}
                                 className={cn(
-                                  'relative h-14 min-w-0 flex-1 overflow-hidden rounded-2xl text-[17px] font-semibold transition-all duration-300 active:scale-[0.98]',
+                                  'font-alfajor relative h-14 min-w-0 flex-1 overflow-hidden rounded-2xl text-[17px] transition-all duration-300 active:scale-[0.98]',
                                   addCount > 0
                                     ? 'bg-[#eb623a] text-[#083821]'
                                     : !isExtrasStage && variantBloqueada
@@ -923,7 +923,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                               initial={{ opacity: 0, y: 8 }}
                               animate={{ opacity: 1, y: 0 }}
                               transition={{ duration: 0.25 }}
-                              className="h-14 w-full rounded-2xl bg-secondary text-[17px] font-semibold text-foreground transition-all duration-300 active:scale-[0.98]"
+                              className="font-alfajor h-14 w-full rounded-2xl bg-secondary text-[17px] text-foreground transition-all duration-300 active:scale-[0.98]"
                             >
                               Cerrar
                             </motion.button>

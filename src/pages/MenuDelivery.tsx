@@ -197,7 +197,7 @@ const avisoDescuento = (porcentaje: number, exclusivo = false): AvisoDescuento =
     : { titulo: '¡Te extrañamos!', detalle: `${porcentaje}% OFF aplicado a tu pedido` }
 
 // Los accesos secundarios del hero (pedido en grupo, puntos): texto subrayado en naranja, sin caja.
-const ACCESO_HERO = 'inline-flex max-w-full items-center gap-2 py-1 text-[15px] font-bold text-[#f2eee2] underline decoration-[#eb623a] decoration-2 underline-offset-[6px] transition-colors hover:text-[#eb623a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#eb623a] rounded-sm'
+const ACCESO_HERO = 'font-alfajor inline-flex max-w-full items-center gap-2 py-1 text-[15px] text-[#f2eee2] underline decoration-[#eb623a] decoration-2 underline-offset-[6px] transition-colors hover:text-[#eb623a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#eb623a] rounded-sm'
 
 // Riel horizontal sin barra de scroll (`scrollbar-hide` no existe en este Tailwind).
 const RIEL_SIN_BARRA = '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
@@ -1284,7 +1284,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                 <div className={restaurante?.permitirPedidosProgramados ? "bg-[#eb623a] text-[#083821]" : "bg-[#f2eee2] text-[#083821]"}>
                     <div className="max-w-2xl lg:max-w-5xl xl:max-w-6xl mx-auto px-5 py-2.5 flex items-center justify-center gap-2">
                         <Clock className="w-4 h-4 shrink-0" />
-                        <p className="text-sm font-bold text-center">
+                        <p className="text-sm text-center">
                             {restaurante?.permitirPedidosProgramados
                                 ? 'Arma tu pedido y programa el horario al que quieres recibirlo.'
                                 : `Estamos cerrados${estadoAbierto.proximaApertura ? `. Abrimos ${estadoAbierto.proximaApertura}` : ''}`
@@ -1303,7 +1303,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                 <Puntillado />
                 <div className="relative mx-auto grid max-w-2xl items-center gap-10 px-5 pb-44 pt-4 sm:pb-56 lg:max-w-5xl lg:grid-cols-[1.1fr_1fr] lg:pb-20 lg:pt-8 xl:max-w-6xl">
                     <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
-                        <h1 className="font-alfajor mt-2 text-[64px] uppercase leading-[0.88] sm:text-[86px] lg:text-[104px]">
+                        <h1 className="font-alfajor mt-2 text-[42px] uppercase leading-[0.95] sm:text-[64px] lg:text-[78px]">
                             El alfajor
                             <br />
                             que no es
@@ -1314,12 +1314,9 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                             </span>
                         </h1>
                         <p className="mt-5">
-                            <span className="font-alfajor inline-block origin-left -rotate-2 bg-[#eb623a] px-2.5 pb-1 pt-1.5 text-[26px] uppercase leading-none text-[#083821] sm:text-[34px]">
+                            <span className="font-alfajor inline-block origin-left -rotate-2 bg-[#eb623a] px-2.5 pb-1 pt-1.5 text-[17px] uppercase leading-tight text-[#083821] sm:text-[24px]">
                                 Es salado. Y se come con papas.
                             </span>
-                        </p>
-                        <p className="mt-6 max-w-md text-base leading-relaxed text-[#f2eee2]/75">
-                            Pedís desde acá, sale de la plancha cuando llega tu comanda y te lo llevamos antes de que se enfríe. Así de simple.
                         </p>
 
                         {bannerGrowth && (
@@ -1648,10 +1645,10 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                             <div className="shrink-0 p-4 border-t-2 border-dashed border-border bg-background">
                                 <div className="flex justify-between items-center mb-3">
                                     <span className="text-muted-foreground text-sm">Total a pagar</span>
-                                    <span className="font-alfajor text-[32px] leading-none tabular-nums">${formatPrecio(totalPedido)}</span>
+                                    <span className="text-[28px] font-bold leading-none tabular-nums">${formatPrecio(totalPedido)}</span>
                                 </div>
                                 <Button
-                                    className="w-full h-13 rounded-2xl font-bold text-base shadow-md"
+                                    className="font-alfajor w-full h-13 rounded-2xl text-base shadow-md"
                                     disabled={checkoutCerrado}
                                     onClick={() => {
                                         if (checkoutCerrado) return
@@ -1819,7 +1816,8 @@ const ProductoCard = ({ producto, onClick }: { producto: any, onClick: () => voi
     const precioOriginal = parseFloat(producto.precio)
     const precioFinal = tieneDescuento ? precioOriginal * (1 - producto.descuento / 100) : precioOriginal
     const nombreLength = String(producto.nombre ?? '').trim().length
-    const nombreClass = nombreLength > 70 ? 'text-lg' : nombreLength > 48 ? 'text-[19px]' : nombreLength > 30 ? 'text-xl' : 'text-[22px]'
+    // El nombre va en Eastman, que es ancha: un punto más chica que la letra anterior.
+    const nombreClass = nombreLength > 70 ? 'text-base' : nombreLength > 48 ? 'text-[17px]' : nombreLength > 30 ? 'text-lg' : 'text-xl'
 
     // Diseño sólido (único): el glassmorphism quedó discontinuado.
     return (
@@ -1850,7 +1848,7 @@ const ProductoCard = ({ producto, onClick }: { producto: any, onClick: () => voi
 
             <div className="p-3.5 flex flex-col flex-1 bg-card">
                 <div className="flex-1">
-                    <h3 className={`break-words font-bold leading-tight text-foreground [overflow-wrap:anywhere] ${nombreClass}`}>
+                    <h3 className={`font-alfajor break-words leading-tight text-foreground [overflow-wrap:anywhere] ${nombreClass}`}>
                         {producto.nombre}
                     </h3>
                     {producto.descripcion && (
@@ -1861,7 +1859,7 @@ const ProductoCard = ({ producto, onClick }: { producto: any, onClick: () => voi
                 </div>
 
                 <div className="flex flex-wrap items-baseline justify-end gap-1.5 mt-2 text-right">
-                    <span className={`font-black text-[22px] ${tieneDescuento ? 'text-emerald-600 dark:text-emerald-400' : 'text-primary'}`}>
+                    <span className={`font-bold text-[22px] ${tieneDescuento ? 'text-emerald-600 dark:text-emerald-400' : 'text-primary'}`}>
                         ${precioFinal.toFixed(0)}
                     </span>
                     {tieneDescuento && (
