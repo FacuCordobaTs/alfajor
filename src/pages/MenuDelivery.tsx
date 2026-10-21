@@ -8,8 +8,8 @@ import {
     Package, UtensilsCrossed, Utensils, Clock, Share2, User, Plus,
     BadgePercent, Users, Sparkles, Check, ArrowRight
 } from 'lucide-react'
-import { BotonPedido, BotonTicket, Cinta, EstadoLocal, FooterMarca, HeaderMarca, NavCategorias, FotoPolaroid, Puntillado, Tachado, TituloSeccion, Toldo } from '@/components/marca/MarcaAlfajor'
-import { nombreCorto, sabores, textoEstado } from '@/lib/marcaAlfajor'
+import { BotonPedido, BotonTicket, Cinta, EstadoLocal, FooterMarca, HeaderMarca, NavCategorias, AlfajorEnElToldo, Puntillado, Tachado, TituloSeccion, Toldo } from '@/components/marca/MarcaAlfajor'
+import { sabores, textoEstado } from '@/lib/marcaAlfajor'
 import { ProductDetailDrawer, etiquetaVarianteMedallon } from '@/components/ProductDetailDrawer'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -1013,8 +1013,10 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
         abrirProductoDrawer()
     }
 
-    // El hero muestra el primer producto con foto de la primera categoría; la cinta, sus sabores.
-    const productoHero = (productosPorCategoria[categoriasOrdenadas[0]] || []).find((p: any) => p.imagenUrl) ?? productosVenta.find(p => p.imagenUrl) ?? null
+    // El alfajor que se apoya en la cinta del hero es el Cheese (la foto recortada /cheese-hero.webp):
+    // tocarlo abre ese producto. La cinta muestra los sabores de la primera categoría.
+    const productoCheese = productosVenta.find(p => /cheese/i.test(p.nombre) && /con papas/i.test(p.nombre))
+        ?? productosVenta.find(p => /cheese/i.test(p.nombre)) ?? null
     const palabrasCinta = sabores((productosPorCategoria[categoriasOrdenadas[0]] || []).map((p: any) => String(p.nombre)))
 
     const irACarta = () => {
@@ -1300,7 +1302,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
             {/* HERO: el toldo verde del local, el titular y la comanda con la polaroid. */}
             <section className="relative bg-[#0b3821] text-[#eae7e0] dark:bg-[#072616]">
                 <Puntillado />
-                <div className="relative mx-auto grid max-w-2xl items-center gap-10 px-5 pb-14 pt-4 lg:max-w-5xl lg:grid-cols-[1.1fr_1fr] lg:pb-16 lg:pt-8 xl:max-w-6xl">
+                <div className="relative mx-auto grid max-w-2xl items-center gap-10 px-5 pb-44 pt-4 sm:pb-56 lg:max-w-5xl lg:grid-cols-[1.1fr_1fr] lg:pb-20 lg:pt-8 xl:max-w-6xl">
                     <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
                         <h1 className="font-alfajor mt-2 text-[64px] uppercase leading-[0.88] sm:text-[86px] lg:text-[104px]">
                             El alfajor
@@ -1358,13 +1360,14 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                         </div>
                     </div>
 
-                    {productoHero && (
-                        <FotoPolaroid
-                            imagenUrl={productoHero.imagenUrl}
-                            nombre={nombreCorto(productoHero.nombre)}
-                            precio={`$${formatPrecio(productoHero.descuento > 0 ? Number(productoHero.precio) * (1 - productoHero.descuento / 100) : productoHero.precio)}`}
-                            onClick={() => abrirDetalleProducto(productoHero)}
-                            className="animate-in fade-in zoom-in-95 duration-700"
+                    {productoCheese && (
+                        <AlfajorEnElToldo
+                            src="/cheese-hero.webp"
+                            srcSet="/cheese-hero-1200.webp 1200w, /cheese-hero.webp 1743w"
+                            sizes="(min-width: 1024px) 57vw, (min-width: 640px) 62vw, 88vw"
+                            nombre={sabores([productoCheese.nombre])[0]}
+                            onClick={() => abrirDetalleProducto(productoCheese)}
+                            className="right-[-10%] bottom-[-62px] w-[88%] sm:right-[-4%] sm:w-[62%] lg:right-[-4%] lg:bottom-[-78px] lg:w-[57%]"
                           />
                     )}
                 </div>

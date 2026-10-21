@@ -36,11 +36,6 @@ export function textoEstado(horarios: Turno[], estado: { abierto: boolean; proxi
     return cierre ? `Abierto · hasta las ${cierre}` : 'Abierto ahora'
 }
 
-/** El nombre sin la marca: "Alfajor Cheese Con Papas" → "Cheese Con Papas". */
-export function nombreCorto(nombre: string): string {
-    return nombre.replace(/^alfajor(es)?\s+/i, '').trim() || nombre
-}
-
 /** Los sabores para la cinta: "Alfajor Cheese Con Papas" → "Cheese". */
 export function sabores(nombres: string[]): string[] {
     const limpios = Array.from(new Set(nombres

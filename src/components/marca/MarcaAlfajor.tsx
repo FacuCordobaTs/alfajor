@@ -1,9 +1,9 @@
 import { Fragment, type ReactNode } from 'react'
-import { ArrowDown, ArrowRight, ArrowUp, Instagram, MapPin, Utensils } from 'lucide-react'
+import { ArrowDown, ArrowRight, ArrowUp, Instagram, MapPin } from 'lucide-react'
 import { DIAS, INSTAGRAM_URL, SEMANA, hhmm, minutos, type Turno } from '@/lib/marcaAlfajor'
 
 // Piezas de la identidad de Alfajor que comparten la carta (MenuDelivery) y el pedido en grupo (Menu):
-// el logo sobre el verde, el "toldo" festoneado, la cinta de sabores, la polaroid del hero, los títulos
+// el logo sobre el verde, el "toldo" festoneado, la cinta de sabores, el alfajor que se apoya en ella, los títulos
 // de sección, las categorías, el botón del pedido y el footer. Nada queda fijo arriba al scrollear.
 // Paleta fija: verde #0b3821, crema #eae7e0, papel #fbf8f1, amarillo cheddar #f6b73c y verde pepino
 // #c5d86d. Lo que va dentro de la carta sigue usando las variables del tema.
@@ -86,37 +86,35 @@ export const Tachado = () => (
     </svg>
 )
 
-/** El hero de producto: la foto del alfajor como una polaroid pegada con cinta. Abre el producto. */
-export function FotoPolaroid({ imagenUrl, nombre, precio, onClick, className = '' }: {
-    imagenUrl?: string | null
+/** El alfajor recortado (sin fondo) que sale del bloque verde y queda detrás de la cinta de sabores.
+ * Va con `absolute` dentro del contenedor del hero: la página le da tamaño y lugar con `className`.
+ * Queda por encima del toldo y por debajo de la cinta (z-[5] contra su z-10). */
+export function AlfajorEnElToldo({ src, srcSet, sizes, nombre, onClick, className = '' }: {
+    src: string
+    srcSet?: string
+    sizes?: string
     nombre: string
-    precio?: string
     onClick?: () => void
     className?: string
 }) {
     return (
-        <div className={`relative mx-auto w-full max-w-[360px] pt-4 sm:max-w-[420px] lg:max-w-[460px] ${className}`}>
-            <button
-                type="button"
-                onClick={onClick}
-                disabled={!onClick}
-                aria-label={onClick ? `Ver ${nombre}` : undefined}
-                className="group relative block w-full -rotate-[4deg] bg-[#fbf8f1] p-3.5 pb-16 text-left shadow-[0_30px_60px_-22px_rgba(0,0,0,0.8)] transition-transform duration-300 enabled:hover:-rotate-[2deg] enabled:active:scale-[0.98]"
-            >
-                <span aria-hidden className="absolute -top-3.5 left-1/2 z-10 h-7 w-28 -translate-x-1/2 rotate-[3deg] bg-[#c5d86d]/85 shadow-sm" />
-                <span className="block aspect-[4/3] overflow-hidden bg-[#eae7e0]">
-                    {imagenUrl ? (
-                        <img src={imagenUrl} alt={nombre} className="size-full object-cover transition-transform duration-700 group-hover:scale-105" />
-                    ) : (
-                        <span className="grid size-full place-items-center"><Utensils className="size-12 text-[#0b3821]" /></span>
-                    )}
-                </span>
-                <span className="absolute inset-x-4 bottom-4 flex items-end justify-between gap-3 text-[#0b3821]">
-                    <span className="font-alfajor min-w-0 truncate text-[26px] uppercase leading-none">{nombre}</span>
-                    {precio && <span className="shrink-0 text-sm font-bold tabular-nums text-[#0b3821]/65">{precio}</span>}
-                </span>
-            </button>
-        </div>
+        <button
+            type="button"
+            onClick={onClick}
+            disabled={!onClick}
+            aria-label={onClick ? `Ver ${nombre}` : undefined}
+            className={`group absolute z-[5] animate-in fade-in slide-in-from-bottom-8 duration-700 ${className}`}
+        >
+            <img
+                src={src}
+                srcSet={srcSet}
+                sizes={sizes}
+                alt={nombre}
+                draggable={false}
+                decoding="async"
+                className="w-full -rotate-[4deg] select-none drop-shadow-[0_26px_22px_rgba(0,0,0,0.55)] transition-transform duration-500 group-enabled:group-hover:-translate-y-1.5 group-enabled:group-hover:-rotate-[2deg]"
+            />
+        </button>
     )
 }
 

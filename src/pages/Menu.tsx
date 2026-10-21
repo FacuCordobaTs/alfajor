@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { Button } from '@/components/ui/button'
-import { BotonPedido, BotonTicket, Cinta, FotoPolaroid, EstadoLocal, FooterMarca, HeaderMarca, NavCategorias, Puntillado, TituloSeccion, Toldo } from '@/components/marca/MarcaAlfajor'
-import { nombreCorto, sabores, textoEstado } from '@/lib/marcaAlfajor'
+import { BotonPedido, BotonTicket, Cinta, AlfajorEnElToldo, EstadoLocal, FooterMarca, HeaderMarca, NavCategorias, Puntillado, TituloSeccion, Toldo } from '@/components/marca/MarcaAlfajor'
+import { sabores, textoEstado } from '@/lib/marcaAlfajor'
 import { Badge } from '@/components/ui/badge'
 import { useMesaStore } from '@/store/mesaStore'
 import { useClienteWebSocket } from '@/hooks/useClienteWebSocket'
@@ -286,7 +286,9 @@ const Menu = () => {
     }
   }
 
-  const productoHero = (productosPorCategoria[categoriasOrdenadas[0]] || []).find(p => p.imagenUrl) ?? productos.find(p => p.imagenUrl) ?? null
+  // El alfajor recortado del hero es el Cheese: tocarlo abre ese producto.
+  const productoCheese = productos.find(p => /cheese/i.test(p.nombre) && /con papas/i.test(p.nombre))
+    ?? productos.find(p => /cheese/i.test(p.nombre)) ?? null
   const palabrasCinta = sabores((productosPorCategoria[categoriasOrdenadas[0]] || []).map(p => String(p.nombre)))
 
   // Lista ordenada de productos "hermanos" para saltar de uno a otro dentro del drawer
@@ -603,7 +605,7 @@ const Menu = () => {
       {/* --- HERO DE LA SALA: quién arma el pedido y con quién --- */}
       <section className="relative bg-[#0b3821] text-[#eae7e0] dark:bg-[#072616]">
         <Puntillado />
-        <div className="relative mx-auto grid max-w-2xl items-center gap-10 px-5 pb-14 pt-4 lg:max-w-5xl lg:grid-cols-[1.15fr_1fr] lg:pb-16 lg:pt-8 xl:max-w-6xl">
+        <div className="relative mx-auto grid max-w-2xl items-center gap-10 px-5 pb-44 pt-4 sm:pb-56 lg:max-w-5xl lg:grid-cols-[1.15fr_1fr] lg:pb-20 lg:pt-8 xl:max-w-6xl">
           <div className="min-w-0 animate-in fade-in slide-in-from-bottom-4 duration-700">
             <div className="flex flex-wrap items-center gap-2">
               <span className="rounded-full bg-[#f6b73c] px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#0b3821]">
@@ -658,13 +660,14 @@ const Menu = () => {
             )}
           </div>
 
-          {productoHero && (
-            <FotoPolaroid
-              imagenUrl={productoHero.imagenUrl}
-              nombre={nombreCorto(productoHero.nombre)}
-              precio={`$${parseFloat(String(productoHero.precio)).toFixed(0)}`}
-              onClick={() => abrirDetalleProducto(productoHero)}
-              className="hidden animate-in fade-in zoom-in-95 duration-700 lg:block"
+          {productoCheese && (
+            <AlfajorEnElToldo
+              src="/cheese-hero.webp"
+              srcSet="/cheese-hero-1200.webp 1200w, /cheese-hero.webp 1743w"
+              sizes="(min-width: 1024px) 57vw, (min-width: 640px) 62vw, 88vw"
+              nombre={sabores([productoCheese.nombre])[0]}
+              onClick={() => abrirDetalleProducto(productoCheese)}
+              className="right-[-10%] bottom-[-62px] w-[88%] sm:right-[-4%] sm:w-[62%] lg:right-[-4%] lg:bottom-[-78px] lg:w-[57%]"
             />
           )}
         </div>
