@@ -615,7 +615,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                                   ${formatPrecio(totalTachado)}
                                 </p>
                               )}
-                              <p className="font-alfajor text-[28px] leading-none tabular-nums text-[#f6b73c] drop-shadow-sm">
+                              <p className="font-alfajor text-[28px] leading-none tabular-nums text-[#eb623a] drop-shadow-sm">
                                 ${formatPrecio(total)}
                               </p>
                             </div>
@@ -849,7 +849,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                                 className={cn(
                                   'relative h-14 min-w-0 flex-1 overflow-hidden rounded-2xl text-[17px] font-semibold transition-all duration-300 active:scale-[0.98]',
                                   addCount > 0
-                                    ? 'bg-[#f6b73c] text-[#0b3821]'
+                                    ? 'bg-[#eb623a] text-[#083821]'
                                     : !isExtrasStage && variantBloqueada
                                       ? 'bg-foreground/10 text-muted-foreground'
                                       : 'bg-primary text-primary-foreground'

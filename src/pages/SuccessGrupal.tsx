@@ -282,8 +282,8 @@ const SuccessGrupal = () => {
   const isDispatched = pedidoEstado === 'dispatched' || pedidoEstado === 'archived'
 
   // Colores hardcodeados para single tenant
-  const primario = '#0a331d'
-  const secundario = '#eae7e0'
+  const primario = '#083821'
+  const secundario = '#f2eee2'
 
   const themeStyles = (
     <style dangerouslySetInnerHTML={{

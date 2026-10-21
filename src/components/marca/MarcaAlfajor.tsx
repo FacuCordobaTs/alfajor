@@ -5,13 +5,13 @@ import { DIAS, INSTAGRAM_URL, SEMANA, hhmm, minutos, type Turno } from '@/lib/ma
 // Piezas de la identidad de Alfajor que comparten la carta (MenuDelivery) y el pedido en grupo (Menu):
 // el logo sobre el verde, el "toldo" festoneado, la cinta de sabores, el alfajor que se apoya en ella, los títulos
 // de sección, las categorías, el botón del pedido y el footer. Nada queda fijo arriba al scrollear.
-// Paleta fija: verde #0b3821, crema #eae7e0, papel #fbf8f1, amarillo cheddar #f6b73c y verde pepino
-// #c5d86d. Lo que va dentro de la carta sigue usando las variables del tema.
+// Paleta oficial de la marca: verde #083821, naranja #eb623a y crema #f2eee2 (#052a18 es el verde
+// del modo oscuro). Lo que va dentro de la carta sigue usando las variables del tema.
 
 export function HeaderMarca({ children, enlaceInicio = false }: { children?: ReactNode; enlaceInicio?: boolean }) {
     const logo = <img src="/logo.webp" alt="Alfajor" className="h-11 w-auto -rotate-3" />
     return (
-        <header className="relative bg-[#0b3821] text-[#eae7e0] dark:bg-[#072616]">
+        <header className="relative bg-[#083821] text-[#f2eee2] dark:bg-[#052a18]">
             <div className="mx-auto flex h-20 max-w-2xl items-center justify-between gap-3 px-5 lg:max-w-5xl xl:max-w-6xl">
                 {enlaceInicio ? <a href="/" aria-label="Alfajor, inicio" className="shrink-0">{logo}</a> : <span className="shrink-0">{logo}</span>}
                 <div className="flex min-w-0 items-center gap-2">{children}</div>
@@ -22,7 +22,7 @@ export function HeaderMarca({ children, enlaceInicio = false }: { children?: Rea
 
 export function EstadoLocal({ abierto, texto, corto }: { abierto: boolean; texto: string; corto?: string }) {
     return (
-        <span className="inline-flex min-w-0 items-center gap-2 rounded-full border border-[#eae7e0]/20 bg-[#eae7e0]/5 px-3 py-1.5 text-xs font-semibold text-[#eae7e0]">
+        <span className="inline-flex min-w-0 items-center gap-2 rounded-full border border-[#f2eee2]/20 bg-[#f2eee2]/5 px-3 py-1.5 text-xs font-semibold text-[#f2eee2]">
             <span className="relative flex size-2 shrink-0">
                 <span className={`absolute inline-flex size-full animate-ping rounded-full opacity-60 ${abierto ? 'bg-emerald-400' : 'bg-red-400'}`} />
                 <span className={`relative size-2 rounded-full ${abierto ? 'bg-emerald-400' : 'bg-red-400'}`} />
@@ -37,16 +37,16 @@ export function EstadoLocal({ abierto, texto, corto }: { abierto: boolean; texto
     )
 }
 
-/** El botón principal: un ticket cheddar con su talón troquelado a la derecha. */
+/** El botón principal: un ticket naranja con su talón troquelado a la derecha. */
 export function BotonTicket({ children, onClick, icono }: { children: ReactNode; onClick: () => void; icono?: ReactNode }) {
     return (
         <button
             type="button"
             onClick={onClick}
-            className="group inline-flex h-14 items-stretch overflow-hidden rounded-lg bg-[#f6b73c] text-[#0b3821] shadow-[0_14px_30px_-14px_rgba(0,0,0,0.8)] transition-transform duration-150 hover:-rotate-1 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#eae7e0]"
+            className="group inline-flex h-14 items-stretch overflow-hidden rounded-lg bg-[#eb623a] text-[#083821] shadow-[0_14px_30px_-14px_rgba(0,0,0,0.8)] transition-transform duration-150 hover:-rotate-1 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2eee2]"
         >
             <span className="font-alfajor flex items-center px-5 pt-0.5 text-[22px] uppercase leading-none">{children}</span>
-            <span className="flex w-14 items-center justify-center border-l-2 border-dashed border-[#0b3821]/35 [&_svg]:size-5">
+            <span className="flex w-14 items-center justify-center border-l-2 border-dashed border-[#083821]/35 [&_svg]:size-5">
                 {icono ?? <ArrowDown className="transition-transform group-hover:translate-y-0.5" />}
             </span>
         </button>
@@ -55,7 +55,7 @@ export function BotonTicket({ children, onClick, icono }: { children: ReactNode;
 
 /** Fondo de puntitos sutil para los bloques verdes. */
 export const Puntillado = () => (
-    <div aria-hidden className="pointer-events-none absolute inset-0 bg-[radial-gradient(#eae7e0_1px,transparent_1px)] bg-[length:18px_18px] opacity-[0.07]" />
+    <div aria-hidden className="pointer-events-none absolute inset-0 bg-[radial-gradient(#f2eee2_1px,transparent_1px)] bg-[length:18px_18px] opacity-[0.07]" />
 )
 
 /** El borde festoneado de un toldo: cuelga del bloque verde (abajo) o lo corona (arriba). */
@@ -64,8 +64,8 @@ export function Toldo({ arriba = false }: { arriba?: boolean }) {
         <div
             aria-hidden
             className={`h-3 w-full bg-[length:24px_12px] bg-repeat-x ${arriba
-                ? 'bg-[radial-gradient(circle_at_50%_100%,#0b3821_11.5px,transparent_12px)] dark:bg-[radial-gradient(circle_at_50%_100%,#072616_11.5px,transparent_12px)]'
-                : 'bg-[radial-gradient(circle_at_50%_0,#0b3821_11.5px,transparent_12px)] dark:bg-[radial-gradient(circle_at_50%_0,#072616_11.5px,transparent_12px)]'
+                ? 'bg-[radial-gradient(circle_at_50%_100%,#083821_11.5px,transparent_12px)] dark:bg-[radial-gradient(circle_at_50%_100%,#052a18_11.5px,transparent_12px)]'
+                : 'bg-[radial-gradient(circle_at_50%_0,#083821_11.5px,transparent_12px)] dark:bg-[radial-gradient(circle_at_50%_0,#052a18_11.5px,transparent_12px)]'
                 }`}
         />
     )
@@ -73,7 +73,7 @@ export function Toldo({ arriba = false }: { arriba?: boolean }) {
 
 /** Trazo de marcador que tacha una palabra del titular (se dibuja al cargar). */
 export const Tachado = () => (
-    <svg viewBox="0 0 200 40" preserveAspectRatio="none" aria-hidden className="pointer-events-none absolute left-[-5%] top-[34%] h-[0.34em] w-[110%] text-[#f6b73c]">
+    <svg viewBox="0 0 200 40" preserveAspectRatio="none" aria-hidden className="pointer-events-none absolute left-[-5%] top-[34%] h-[0.34em] w-[110%] text-[#eb623a]">
         <path
             className="alfajor-trazo"
             pathLength={1}
@@ -141,7 +141,7 @@ export function Cinta({ palabras }: { palabras: string[] }) {
     )
     return (
         <div className="relative z-10 -mt-2 -rotate-2 py-3">
-            <div className="-mx-4 overflow-hidden bg-[#f6b73c] py-3 text-[#0b3821] shadow-[0_10px_24px_-10px_rgba(0,0,0,0.45)]">
+            <div className="-mx-4 overflow-hidden bg-[#eb623a] py-3 text-[#083821] shadow-[0_10px_24px_-10px_rgba(0,0,0,0.45)]">
                 <div className="alfajor-marquesina font-alfajor flex w-max text-[26px] uppercase leading-none">
                     {grupo(false)}
                     {grupo(true)}
@@ -154,7 +154,7 @@ export function Cinta({ palabras }: { palabras: string[] }) {
 export function TituloSeccion({ indice, titulo, detalle }: { indice: number; titulo: string; detalle?: string }) {
     return (
         <div className="flex items-end gap-3 border-b-2 border-foreground/85 px-1 pb-2.5">
-            <span className="font-alfajor mb-1 shrink-0 -rotate-6 rounded-md bg-[#f6b73c] px-1.5 py-1 text-base leading-none text-[#0b3821] tabular-nums">{String(indice).padStart(2, '0')}</span>
+            <span className="font-alfajor mb-1 shrink-0 -rotate-6 rounded-md bg-[#eb623a] px-1.5 py-1 text-base leading-none text-[#083821] tabular-nums">{String(indice).padStart(2, '0')}</span>
             <h2 className="font-alfajor min-w-0 flex-1 break-words text-[34px] uppercase leading-[0.86] text-foreground sm:text-[44px]">{titulo}</h2>
             {detalle && <span className="shrink-0 pb-1 text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">{detalle}</span>}
         </div>
@@ -203,11 +203,11 @@ export function BotonPedido({ cantidad, total, visible, onClick, pulso = false, 
                 type="button"
                 onClick={onClick}
                 tabIndex={visible ? 0 : -1}
-                className={`group flex h-14 w-full max-w-sm items-center gap-2 rounded-2xl bg-[#0b3821] pl-5 pr-2 text-[#eae7e0] shadow-[0_18px_40px_-14px_rgba(0,0,0,0.6)] transition-transform duration-300 active:scale-[0.97] dark:bg-[#eae7e0] dark:text-[#0b3821] ${visible ? 'pointer-events-auto' : ''} ${pulso ? 'scale-105' : ''} ${className}`}
+                className={`group flex h-14 w-full max-w-sm items-center gap-2 rounded-2xl bg-[#083821] pl-5 pr-2 text-[#f2eee2] shadow-[0_18px_40px_-14px_rgba(0,0,0,0.6)] transition-transform duration-300 active:scale-[0.97] dark:bg-[#f2eee2] dark:text-[#083821] ${visible ? 'pointer-events-auto' : ''} ${pulso ? 'scale-105' : ''} ${className}`}
             >
                 <span className="text-[15px] font-bold">Ver mi pedido</span>
                 <span className="text-[13px] tabular-nums opacity-60">· {cantidad} {cantidad === 1 ? 'producto' : 'productos'}</span>
-                <span className="ml-auto flex h-10 items-center gap-1.5 rounded-xl bg-[#f6b73c] px-3.5 text-[15px] font-black tabular-nums text-[#0b3821]">
+                <span className="ml-auto flex h-10 items-center gap-1.5 rounded-xl bg-[#eb623a] px-3.5 text-[15px] font-black tabular-nums text-[#083821]">
                     ${total}
                     <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
                 </span>
@@ -227,14 +227,14 @@ export function FooterMarca({ horarios, direccion, onPedir }: { horarios: Turno[
     const mapa = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${calle}, Santa Fe, Argentina`)}`
 
     return (
-        <footer className="relative mt-24 text-[#eae7e0]">
+        <footer className="relative mt-24 text-[#f2eee2]">
             <Toldo arriba />
-            <div className="relative overflow-hidden bg-[#0b3821] pb-32 dark:bg-[#072616]">
+            <div className="relative overflow-hidden bg-[#083821] pb-32 dark:bg-[#052a18]">
                 <Puntillado />
                 <div className="relative mx-auto grid max-w-2xl gap-12 px-5 pt-12 lg:max-w-5xl lg:grid-cols-[1.2fr_1fr_1fr] xl:max-w-6xl">
                     <div>
                         <img src="/logo.webp" alt="Alfajor" className="h-20 w-auto -rotate-3" />
-                        <p className="mt-5 max-w-xs text-[15px] leading-relaxed text-[#eae7e0]/70">
+                        <p className="mt-5 max-w-xs text-[15px] leading-relaxed text-[#f2eee2]/70">
                             Alfajores salados a la plancha, con papas y bien calentitos. Desde Santa Fe, para tu mesa.
                         </p>
                         <div className="mt-6 flex flex-wrap gap-2">
@@ -242,7 +242,7 @@ export function FooterMarca({ horarios, direccion, onPedir }: { horarios: Turno[
                                 <button
                                     type="button"
                                     onClick={onPedir}
-                                    className="inline-flex h-11 items-center gap-2 rounded-lg bg-[#f6b73c] px-5 text-sm font-extrabold uppercase tracking-wide text-[#0b3821] transition-transform active:scale-95"
+                                    className="inline-flex h-11 items-center gap-2 rounded-lg bg-[#eb623a] px-5 text-sm font-extrabold uppercase tracking-wide text-[#083821] transition-transform active:scale-95"
                                 >
                                     Hacer mi pedido <ArrowUp className="size-4" />
                                 </button>
@@ -251,7 +251,7 @@ export function FooterMarca({ horarios, direccion, onPedir }: { horarios: Turno[
                                 href={INSTAGRAM_URL}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-flex h-11 items-center gap-2 rounded-lg border-2 border-[#eae7e0]/25 px-4 text-sm font-bold transition-colors hover:border-[#eae7e0]/60"
+                                className="inline-flex h-11 items-center gap-2 rounded-lg border-2 border-[#f2eee2]/25 px-4 text-sm font-bold transition-colors hover:border-[#f2eee2]/60"
                             >
                                 <Instagram className="size-4" /> @alfajorconpapas
                             </a>
@@ -259,23 +259,23 @@ export function FooterMarca({ horarios, direccion, onPedir }: { horarios: Turno[
                     </div>
 
                     <div>
-                        <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#c5d86d]">Dónde estamos</p>
+                        <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#eb623a]">Dónde estamos</p>
                         <a href={mapa} target="_blank" rel="noopener noreferrer" className="group mt-3 block">
-                            <span className="font-alfajor block text-[40px] uppercase leading-[0.86] transition-colors group-hover:text-[#c5d86d]">
+                            <span className="font-alfajor block text-[40px] uppercase leading-[0.86] transition-colors group-hover:text-[#eb623a]">
                                 {calle}
                                 <br />
                                 Santa Fe
                             </span>
-                            <span className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-[#eae7e0]/70 underline decoration-[#eae7e0]/30 underline-offset-4 group-hover:decoration-[#eae7e0]">
+                            <span className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-[#f2eee2]/70 underline decoration-[#f2eee2]/30 underline-offset-4 group-hover:decoration-[#f2eee2]">
                                 <MapPin className="size-4" /> Cómo llegar
                             </span>
                         </a>
-                        <p className="mt-5 text-sm text-[#eae7e0]/60">Delivery y take away.</p>
+                        <p className="mt-5 text-sm text-[#f2eee2]/60">Delivery y take away.</p>
                     </div>
 
                     {horarios.length > 0 && (
                         <div>
-                            <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#c5d86d]">Horarios</p>
+                            <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#eb623a]">Horarios</p>
                             <ul className="mt-3">
                                 {SEMANA.map(dia => {
                                     const turnos = turnosDe(dia)
@@ -283,7 +283,7 @@ export function FooterMarca({ horarios, direccion, onPedir }: { horarios: Turno[
                                     return (
                                         <li
                                             key={dia}
-                                            className={`flex items-baseline justify-between gap-4 border-b border-dashed border-[#eae7e0]/15 py-2 text-sm ${esHoy ? 'font-bold text-[#f6b73c]' : 'text-[#eae7e0]/80'}`}
+                                            className={`flex items-baseline justify-between gap-4 border-b border-dashed border-[#f2eee2]/15 py-2 text-sm ${esHoy ? 'font-bold text-[#eb623a]' : 'text-[#f2eee2]/80'}`}
                                         >
                                             <span>{DIAS[dia]}{esHoy && <span className="ml-1.5 text-[10px] uppercase tracking-widest">· hoy</span>}</span>
                                             <span className="tabular-nums">{turnos || 'Cerrado'}</span>
@@ -299,7 +299,7 @@ export function FooterMarca({ horarios, direccion, onPedir }: { horarios: Turno[
                     Alfajor
                 </p>
 
-                <div className="relative mx-auto mt-8 flex max-w-2xl flex-wrap justify-between gap-2 px-5 text-xs text-[#eae7e0]/45 lg:max-w-5xl xl:max-w-6xl">
+                <div className="relative mx-auto mt-8 flex max-w-2xl flex-wrap justify-between gap-2 px-5 text-xs text-[#f2eee2]/45 lg:max-w-5xl xl:max-w-6xl">
                     <span>© {new Date().getFullYear()} Alfajor · Santa Fe</span>
                     <span>Pedidos online con Piru</span>
                 </div>

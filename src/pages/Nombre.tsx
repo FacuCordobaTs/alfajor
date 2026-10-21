@@ -217,8 +217,8 @@ const Nombre = () => {
   }
 
   // Colores hardcodeados para single tenant
-  const primario = '#0a331d'
-  const secundario = '#eae7e0'
+  const primario = '#083821'
+  const secundario = '#f2eee2'
 
   // Mostrar cargando mientras se hidrata el store o se carga la mesa
   if (isLoading || !isHydrated || !shouldAskName) {

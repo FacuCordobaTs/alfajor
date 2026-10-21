@@ -196,8 +196,8 @@ const avisoDescuento = (porcentaje: number, exclusivo = false): AvisoDescuento =
     ? { titulo: 'Oferta exclusiva', detalle: `${porcentaje}% OFF por 48 horas, aplicado a tu pedido` }
     : { titulo: '¡Te extrañamos!', detalle: `${porcentaje}% OFF aplicado a tu pedido` }
 
-// Los accesos secundarios del hero (pedido en grupo, puntos): texto subrayado en verde pepino, sin caja.
-const ACCESO_HERO = 'inline-flex max-w-full items-center gap-2 py-1 text-[15px] font-bold text-[#eae7e0] underline decoration-[#c5d86d] decoration-2 underline-offset-[6px] transition-colors hover:text-[#c5d86d] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c5d86d] rounded-sm'
+// Los accesos secundarios del hero (pedido en grupo, puntos): texto subrayado en naranja, sin caja.
+const ACCESO_HERO = 'inline-flex max-w-full items-center gap-2 py-1 text-[15px] font-bold text-[#f2eee2] underline decoration-[#eb623a] decoration-2 underline-offset-[6px] transition-colors hover:text-[#eb623a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#eb623a] rounded-sm'
 
 // Riel horizontal sin barra de scroll (`scrollbar-hide` no existe en este Tailwind).
 const RIEL_SIN_BARRA = '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
@@ -1210,11 +1210,10 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
         }
     }
 
-    const cachedThemeStr = sessionStorage.getItem(`theme_${username}`)
-    const cachedTheme = cachedThemeStr ? JSON.parse(cachedThemeStr) : null
-
-    const primario = restaurante?.colorPrimario || cachedTheme?.primario
-    const secundario = restaurante?.colorSecundario || cachedTheme?.secundario
+    // Paleta oficial de Alfajor (verde #083821, crema #f2eee2), fija como en Menu.tsx: no depende
+    // de los colores cargados en el panel.
+    const primario = '#083821'
+    const secundario = '#f2eee2'
 
     const themeStyles = (primario && secundario) ? (
         <style dangerouslySetInnerHTML={{
@@ -1257,7 +1256,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
 
     if (loading) {
         return (
-            <div className="menu-delivery flex min-h-screen items-center justify-center bg-[#0b3821] text-[#eae7e0]">
+            <div className="menu-delivery flex min-h-screen items-center justify-center bg-[#083821] text-[#f2eee2]">
                 {themeStyles}
                 <div className="flex flex-col items-center gap-5 px-6 text-center">
                     <img
@@ -1282,7 +1281,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
             {themeStyles}
 
             {!estadoAbierto.abierto && (
-                <div className={restaurante?.permitirPedidosProgramados ? "bg-[#f6b73c] text-[#0b3821]" : "bg-[#eae7e0] text-[#0b3821]"}>
+                <div className={restaurante?.permitirPedidosProgramados ? "bg-[#eb623a] text-[#083821]" : "bg-[#f2eee2] text-[#083821]"}>
                     <div className="max-w-2xl lg:max-w-5xl xl:max-w-6xl mx-auto px-5 py-2.5 flex items-center justify-center gap-2">
                         <Clock className="w-4 h-4 shrink-0" />
                         <p className="text-sm font-bold text-center">
@@ -1300,7 +1299,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
             </HeaderMarca>
 
             {/* HERO: el toldo verde del local, el titular y la comanda con la polaroid. */}
-            <section className="relative bg-[#0b3821] text-[#eae7e0] dark:bg-[#072616]">
+            <section className="relative bg-[#083821] text-[#f2eee2] dark:bg-[#052a18]">
                 <Puntillado />
                 <div className="relative mx-auto grid max-w-2xl items-center gap-10 px-5 pb-44 pt-4 sm:pb-56 lg:max-w-5xl lg:grid-cols-[1.1fr_1fr] lg:pb-20 lg:pt-8 xl:max-w-6xl">
                     <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -1309,22 +1308,22 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                             <br />
                             que no es
                             <br />
-                            <span className="relative inline-block text-[#eae7e0]/90">
+                            <span className="relative inline-block text-[#f2eee2]/90">
                                 dulce.
                                 <Tachado />
                             </span>
                         </h1>
                         <p className="mt-5">
-                            <span className="font-alfajor inline-block origin-left -rotate-2 bg-[#c5d86d] px-2.5 pb-1 pt-1.5 text-[26px] uppercase leading-none text-[#0b3821] sm:text-[34px]">
+                            <span className="font-alfajor inline-block origin-left -rotate-2 bg-[#eb623a] px-2.5 pb-1 pt-1.5 text-[26px] uppercase leading-none text-[#083821] sm:text-[34px]">
                                 Es salado. Y se come con papas.
                             </span>
                         </p>
-                        <p className="mt-6 max-w-md text-base leading-relaxed text-[#eae7e0]/75">
+                        <p className="mt-6 max-w-md text-base leading-relaxed text-[#f2eee2]/75">
                             Pedís desde acá, sale de la plancha cuando llega tu comanda y te lo llevamos antes de que se enfríe. Así de simple.
                         </p>
 
                         {bannerGrowth && (
-                            <p className="animate-in fade-in duration-300 mt-6 inline-flex max-w-full items-center gap-2 rounded-2xl bg-[#f6b73c] px-3.5 py-2 text-[13px] leading-snug text-[#0b3821]">
+                            <p className="animate-in fade-in duration-300 mt-6 inline-flex max-w-full items-center gap-2 rounded-2xl bg-[#eb623a] px-3.5 py-2 text-[13px] leading-snug text-[#083821]">
                                 <BadgePercent className="size-4 shrink-0" aria-hidden />
                                 <span>
                                     <strong className="font-extrabold">{bannerGrowth.titulo}</strong> {bannerGrowth.detalle}
@@ -1338,7 +1337,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                                 <button type="button" onClick={onArmarPedidoClick} aria-busy={creandoSala} className={ACCESO_HERO}>
                                     {creandoSala
                                         ? <Loader2 className="size-4 shrink-0 animate-spin" />
-                                        : <Users className="size-4 shrink-0 text-[#f6b73c]" />}
+                                        : <Users className="size-4 shrink-0 text-[#eb623a]" />}
                                     <span className="truncate">{creandoSala ? 'Creando link…' : 'Pedir entre varios'}</span>
                                 </button>
                             )}
@@ -1351,7 +1350,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                                 >
                                     {loadingPuntos
                                         ? <Loader2 className="size-4 shrink-0 animate-spin" />
-                                        : <Sparkles className="size-4 shrink-0 text-[#f6b73c]" />}
+                                        : <Sparkles className="size-4 shrink-0 text-[#eb623a]" />}
                                     {puntosConPedido === null ? 'Ver mis puntos' : (
                                         <span className="tabular-nums">{puntosConPedido.toLocaleString('es-AR')} pts</span>
                                     )}
@@ -1384,7 +1383,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                     <section ref={canjeRef} aria-label="Canje de puntos" className="scroll-mt-20 space-y-3">
                         <div className="flex items-baseline justify-between gap-3 px-1">
                             <h2 className="font-alfajor flex items-center gap-1.5 text-2xl uppercase leading-none text-foreground">
-                                <Sparkles className="size-5 text-[#f6b73c]" />
+                                <Sparkles className="size-5 text-[#eb623a]" />
                                 Canje de puntos
                             </h2>
                             {puntosDisponibles !== null ? (
@@ -1521,7 +1520,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
 
                     <div className="shrink-0 sticky top-0 z-10 bg-background pt-2">
                         <div className="w-full flex justify-center pt-3 pb-1">
-                            <span className="w-12 h-1.5 rounded-full bg-[#f6b73c]" />
+                            <span className="w-12 h-1.5 rounded-full bg-[#eb623a]" />
                         </div>
                         <div className="flex items-center justify-between px-4 pb-3 pt-2">
                             <div className="w-8 h-8" />

@@ -1352,7 +1352,7 @@ export function CheckoutDeliveryGrupal({
               {pasos.map((_, i) => (
                 <div
                   key={i}
-                  className={`h-1.5 rounded-full flex-1 transition-all duration-300 ${i < paso ? 'bg-primary' : i === paso ? 'bg-[#f6b73c]' : 'bg-secondary'}`}
+                  className={`h-1.5 rounded-full flex-1 transition-all duration-300 ${i < paso ? 'bg-primary' : i === paso ? 'bg-[#eb623a]' : 'bg-secondary'}`}
                 />
               ))}
             </div>

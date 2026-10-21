@@ -459,8 +459,8 @@ const Menu = () => {
   const checkoutCerrado = bloqueadoPorCierre && !import.meta.env.DEV
 
   // Colores hardcodeados para single tenant
-  const primario = '#0a331d'
-  const secundario = '#eae7e0'
+  const primario = '#083821'
+  const secundario = '#f2eee2'
 
   const themeStyles = (
     <style dangerouslySetInnerHTML={{
@@ -569,7 +569,7 @@ const Menu = () => {
       {themeStyles}
 
       {localCerrado && (
-        <div className={puedeProgramar ? "bg-[#f6b73c] text-[#0b3821]" : "bg-[#eae7e0] text-[#0b3821]"}>
+        <div className={puedeProgramar ? "bg-[#eb623a] text-[#083821]" : "bg-[#f2eee2] text-[#083821]"}>
           <div className="max-w-2xl lg:max-w-5xl xl:max-w-6xl mx-auto px-5 py-2.5 flex items-center justify-center gap-2">
             <Clock className="w-4 h-4 shrink-0" />
             <p className="text-sm font-bold text-center">
@@ -586,16 +586,16 @@ const Menu = () => {
       <HeaderMarca>
         <span
           title={isConnected ? 'Conectado' : 'Sin conexión'}
-          className="grid size-9 place-items-center rounded-full border border-[#eae7e0]/20 text-[#eae7e0]"
+          className="grid size-9 place-items-center rounded-full border border-[#f2eee2]/20 text-[#f2eee2]"
         >
           {isConnected ? <Wifi className="size-4 text-emerald-400" /> : <WifiOff className="size-4 text-red-400" />}
         </span>
-        <span className="text-[#eae7e0] [&_button]:bg-[#eae7e0]/10 [&_button]:text-[#eae7e0] [&_button:hover]:bg-[#eae7e0]/20 [&_button:hover]:text-[#eae7e0]">
+        <span className="text-[#f2eee2] [&_button]:bg-[#f2eee2]/10 [&_button]:text-[#f2eee2] [&_button:hover]:bg-[#f2eee2]/20 [&_button:hover]:text-[#f2eee2]">
           <ThemeToggle />
         </span>
         <button
           onClick={() => setMisPedidosOpen(true)}
-          className="flex h-9 items-center gap-1.5 rounded-full border border-[#eae7e0]/25 px-3.5 text-xs font-bold text-[#eae7e0] transition-colors hover:border-[#eae7e0]/60"
+          className="flex h-9 items-center gap-1.5 rounded-full border border-[#f2eee2]/25 px-3.5 text-xs font-bold text-[#f2eee2] transition-colors hover:border-[#f2eee2]/60"
         >
           <Package className="w-3.5 h-3.5" />
           Mis pedidos
@@ -603,32 +603,32 @@ const Menu = () => {
       </HeaderMarca>
 
       {/* --- HERO DE LA SALA: quién arma el pedido y con quién --- */}
-      <section className="relative bg-[#0b3821] text-[#eae7e0] dark:bg-[#072616]">
+      <section className="relative bg-[#083821] text-[#f2eee2] dark:bg-[#052a18]">
         <Puntillado />
         <div className="relative mx-auto grid max-w-2xl items-center gap-10 px-5 pb-44 pt-4 sm:pb-56 lg:max-w-5xl lg:grid-cols-[1.15fr_1fr] lg:pb-20 lg:pt-8 xl:max-w-6xl">
           <div className="min-w-0 animate-in fade-in slide-in-from-bottom-4 duration-700">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full bg-[#f6b73c] px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#0b3821]">
+              <span className="rounded-full bg-[#eb623a] px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#083821]">
                 {restaurante?.esCarrito && pedido?.nombrePedido ? `Pedido de ${pedido.nombrePedido}` : (mesa?.nombre || 'Pedido en grupo')}
               </span>
               <EstadoLocal abierto={estadoAbierto.abierto} texto={textoEstado(horarios, estadoAbierto)} />
             </div>
 
-            <p className="font-alfajor mt-6 text-3xl uppercase leading-none text-[#eae7e0]/70">Hola,</p>
-            <h1 className="font-alfajor mt-1 break-words text-[64px] uppercase leading-[0.84] text-[#f6b73c] [overflow-wrap:anywhere] sm:text-[84px] lg:text-[96px]">
+            <p className="font-alfajor mt-6 text-3xl uppercase leading-none text-[#f2eee2]/70">Hola,</p>
+            <h1 className="font-alfajor mt-1 break-words text-[64px] uppercase leading-[0.84] text-[#eb623a] [overflow-wrap:anywhere] sm:text-[84px] lg:text-[96px]">
               {clienteNombre}.
             </h1>
             <p className="font-alfajor mt-3 text-[30px] uppercase leading-[0.9] sm:text-[40px]">
               Armen el pedido{' '}
-              <span className="inline-block -rotate-2 bg-[#c5d86d] px-2 pt-1 text-[#0b3821]">juntos.</span>
+              <span className="inline-block -rotate-2 bg-[#eb623a] px-2 pt-1 text-[#083821]">juntos.</span>
             </p>
-            <p className="mt-5 max-w-md text-base leading-relaxed text-[#eae7e0]/75">
+            <p className="mt-5 max-w-md text-base leading-relaxed text-[#f2eee2]/75">
               Una sola comanda para toda la mesa: cada uno anota lo suyo desde su celu y cuando están todos, la mandan a la plancha.
             </p>
 
             {/* En la mesa: cada participante es un sticker */}
             <div className="mt-7">
-              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#eae7e0]/55">En el pedido</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#f2eee2]/55">En el pedido</p>
               <div className="-mx-5 mt-3 flex items-center gap-3 overflow-x-auto px-5 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 <Participante iniciales="YO" nombre="Vos" indice={0} />
                 {clientes.filter(c => c.nombre !== clienteNombre).map((cliente, i) => (
@@ -641,14 +641,14 @@ const Menu = () => {
                     aria-label="Invitar a alguien más"
                     className="flex shrink-0 flex-col items-center gap-1.5"
                   >
-                    <span className="grid size-14 place-items-center rounded-2xl border-2 border-dashed border-[#eae7e0]/40 text-[#eae7e0]/70 transition-colors hover:border-[#eae7e0] hover:text-[#eae7e0]">
+                    <span className="grid size-14 place-items-center rounded-2xl border-2 border-dashed border-[#f2eee2]/40 text-[#f2eee2]/70 transition-colors hover:border-[#f2eee2] hover:text-[#f2eee2]">
                       <Plus className="size-5" />
                     </span>
-                    <span className="text-[11px] font-semibold text-[#eae7e0]/60">Sumar</span>
+                    <span className="text-[11px] font-semibold text-[#f2eee2]/60">Sumar</span>
                   </button>
                 )}
                 {clientes.length <= 1 && (
-                  <p className="shrink-0 pl-1 text-xs italic text-[#eae7e0]/50">Esperando al resto…</p>
+                  <p className="shrink-0 pl-1 text-xs italic text-[#f2eee2]/50">Esperando al resto…</p>
                 )}
               </div>
             </div>
@@ -771,7 +771,7 @@ const Menu = () => {
           {/* Header */}
           <div className="shrink-0 sticky top-0 z-10 bg-background pt-2">
             <div className="w-full flex justify-center pt-3 pb-1">
-              <span className="w-12 h-1.5 rounded-full bg-[#f6b73c]" />
+              <span className="w-12 h-1.5 rounded-full bg-[#eb623a]" />
             </div>
             <div className="flex items-center justify-between px-4 pb-3 pt-2">
               <div className="w-8 h-8 flex items-center justify-center" />
@@ -1082,10 +1082,10 @@ const Menu = () => {
 
 // Cada participante de la sala es un sticker de color con sus iniciales, apenas girado.
 const COLORES_PARTICIPANTE = [
-  'bg-[#c5d86d] text-[#0b3821]',
-  'bg-[#f6b73c] text-[#0b3821]',
-  'bg-[#eae7e0] text-[#0b3821]',
-  'bg-[#e889a8] text-[#0b3821]',
+  'bg-[#eb623a] text-[#083821]',
+  'bg-[#f2eee2] text-[#083821]',
+  'bg-[#eb623a] text-[#083821]',
+  'bg-[#f2eee2] text-[#083821]',
 ]
 const GIROS_PARTICIPANTE = ['-rotate-6', 'rotate-3', '-rotate-2', 'rotate-6']
 
@@ -1094,7 +1094,7 @@ const Participante = ({ iniciales, nombre, indice }: { iniciales: string; nombre
     <span className={`font-alfajor grid size-14 place-items-center rounded-2xl text-xl leading-none shadow-[0_8px_18px_-8px_rgba(0,0,0,0.6)] ${COLORES_PARTICIPANTE[indice % 4]} ${GIROS_PARTICIPANTE[indice % 4]}`}>
       {iniciales}
     </span>
-    <span className="max-w-full truncate text-[11px] font-semibold text-[#eae7e0]/80">{nombre}</span>
+    <span className="max-w-full truncate text-[11px] font-semibold text-[#f2eee2]/80">{nombre}</span>
   </div>
 )
 const EmptyState = () => (
