@@ -1313,7 +1313,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                         <span className={`block transition-opacity duration-500 ${fase === 'armado' ? 'opacity-100' : 'opacity-20'}`}>
                             Dos tapas.
                         </span>
-                        <span className={`block transition-[color,opacity] duration-500 ${fase === 'cayendo' ? 'opacity-20' : 'text-[#eb623a] opacity-100'}`}>
+                        <span className={`block transition-opacity duration-500 ${fase === 'cayendo' ? 'opacity-20' : 'opacity-100'}`}>
                             Un relleno.
                         </span>
                     </h1>
