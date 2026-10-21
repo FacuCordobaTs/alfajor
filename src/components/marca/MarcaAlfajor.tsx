@@ -45,7 +45,7 @@ export function BotonTicket({ children, onClick, icono }: { children: ReactNode;
             onClick={onClick}
             className="group inline-flex h-14 items-stretch overflow-hidden rounded-lg bg-[#eb623a] text-[#083821] shadow-[0_14px_30px_-14px_rgba(0,0,0,0.8)] transition-transform duration-150 hover:-rotate-1 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2eee2]"
         >
-            <span className="font-alfajor flex items-center px-5 pt-0.5 text-[17px] uppercase leading-none">{children}</span>
+            <span className="font-alfajor flex items-center px-5 pt-0.5 text-[20px] uppercase leading-none">{children}</span>
             <span className="flex w-14 items-center justify-center border-l-2 border-dashed border-[#083821]/35 [&_svg]:size-5">
                 {icono ?? <ArrowDown className="transition-transform group-hover:translate-y-0.5" />}
             </span>
@@ -142,7 +142,7 @@ export function Cinta({ palabras }: { palabras: string[] }) {
     return (
         <div className="relative z-10 -mt-2 -rotate-2 py-3">
             <div className="-mx-4 overflow-hidden bg-[#eb623a] py-3 text-[#083821] shadow-[0_10px_24px_-10px_rgba(0,0,0,0.45)]">
-                <div className="alfajor-marquesina font-alfajor flex w-max text-[20px] uppercase leading-none">
+                <div className="alfajor-marquesina font-alfajor flex w-max text-[24px] uppercase leading-none">
                     {grupo(false)}
                     {grupo(true)}
                 </div>
@@ -155,7 +155,7 @@ export function TituloSeccion({ indice, titulo, detalle }: { indice: number; tit
     return (
         <div className="flex items-end gap-3 border-b-2 border-foreground/85 px-1 pb-2.5">
             <span className="font-barlow mb-1 shrink-0 -rotate-6 rounded-md bg-[#eb623a] px-1.5 py-1 text-lg leading-none text-[#083821] tabular-nums">{String(indice).padStart(2, '0')}</span>
-            <h2 className="font-alfajor min-w-0 flex-1 break-words text-[24px] uppercase leading-[0.95] text-foreground sm:text-[32px]">{titulo}</h2>
+            <h2 className="font-alfajor min-w-0 flex-1 break-words text-[30px] uppercase leading-[0.95] text-foreground sm:text-[40px]">{titulo}</h2>
             {detalle && <span className="shrink-0 pb-1 text-[11px] font-normal uppercase tracking-[0.14em] text-muted-foreground">{detalle}</span>}
         </div>
     )

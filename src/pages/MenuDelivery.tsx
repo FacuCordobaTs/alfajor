@@ -1304,7 +1304,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                 <Puntillado />
                 <div className="relative mx-auto grid max-w-2xl items-center gap-10 px-5 pb-44 pt-4 sm:pb-56 lg:max-w-5xl lg:grid-cols-[1.1fr_1fr] lg:pb-20 lg:pt-8 xl:max-w-6xl">
                     <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
-                        <h1 className="font-alfajor mt-2 text-[42px] uppercase leading-[0.95] sm:text-[64px] lg:text-[78px]">
+                        <h1 className="font-alfajor mt-2 text-[58px] uppercase leading-[0.92] sm:text-[80px] lg:text-[96px]">
                             Dos tapas.
                             <br />
                             Un relleno.

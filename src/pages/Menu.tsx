@@ -615,10 +615,10 @@ const Menu = () => {
             </div>
 
             <p className="font-alfajor mt-6 text-2xl uppercase leading-none text-[#f2eee2]/70">Hola,</p>
-            <h1 className="font-alfajor mt-1 break-words text-[42px] uppercase leading-[0.95] text-[#eb623a] [overflow-wrap:anywhere] sm:text-[60px] lg:text-[72px]">
+            <h1 className="font-alfajor mt-1 break-words text-[56px] uppercase leading-[0.92] text-[#eb623a] [overflow-wrap:anywhere] sm:text-[76px] lg:text-[90px]">
               {clienteNombre}.
             </h1>
-            <p className="font-alfajor mt-3 text-[22px] uppercase leading-[1.05] sm:text-[30px]">
+            <p className="font-alfajor mt-3 text-[28px] uppercase leading-[1.05] sm:text-[36px]">
               Armen el pedido{' '}
               <span className="inline-block -rotate-2 bg-[#eb623a] px-2 pt-1 text-[#083821]">juntos.</span>
             </p>

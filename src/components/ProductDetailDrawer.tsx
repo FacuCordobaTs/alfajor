@@ -405,7 +405,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
   const timeLeft = tieneDescuento ? formatTimeLeft(product?.descuentoFechaFin ?? null) : null
   // El nombre va con la letra de titulares de la marca (condensada): un punto más grande que en la ficha.
   const nombreLength = product?.nombre.trim().length ?? 0
-  const nombreClass = nombreLength > 70 ? 'text-lg' : nombreLength > 48 ? 'text-xl' : nombreLength > 30 ? 'text-[22px]' : 'text-2xl'
+  const nombreClass = nombreLength > 70 ? 'text-xl' : nombreLength > 48 ? 'text-[22px]' : nombreLength > 30 ? 'text-2xl' : 'text-[28px]'
   const nombreLargo = nombreLength > 30
 
   // ── Altura del drawer ──

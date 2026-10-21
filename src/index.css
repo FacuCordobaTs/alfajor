@@ -6,7 +6,7 @@
 }
 
 /* Tipografías de la marca Alfajor (public/fonts):
-   - Eastman: títulos, textos grandes, botones, la cinta y el nombre de cada producto (.font-alfajor).
+   - Eastman Condensed: títulos, textos grandes, botones, la cinta y el nombre de cada producto (.font-alfajor).
      No trae números (la versión de prueba tiene marcas "trial" en los dígitos): el unicode-range los
      deja afuera y el navegador los dibuja con la siguiente fuente de la lista, Barlow Condensed.
    - Barlow Condensed: los números de sección y la dirección (.font-barlow).
@@ -14,7 +14,7 @@
      Bold (700) para los precios. Es la fuente base de .menu-delivery. */
 @font-face {
   font-family: 'Eastman';
-  src: url('/fonts/EastmanRomanTrial-Heavy.otf') format('opentype');
+  src: url('/fonts/Eastman-Condensed-Heavy-trial.otf') format('opentype');
   font-weight: 800;
   font-display: swap;
   unicode-range: U+0000-002F, U+003A-10FFFF;
