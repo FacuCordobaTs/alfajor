@@ -204,7 +204,8 @@ const RIEL_SIN_BARRA = '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
 
 // La grilla de la carta, la misma en "Todas" y en una categoría: una columna en el celular y una
 // más cada vez que la pantalla se ensancha. Sin rieles ni scroll horizontal en ningún ancho.
-const GRILLA_PRODUCTOS = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 px-1'
+// `auto-rows-fr`: todas las filas miden como la más alta, así las tarjetas de una sección son iguales.
+const GRILLA_PRODUCTOS = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 auto-rows-fr gap-4 px-1'
 
 const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) => {
     const navigate = useNavigate()
@@ -1825,12 +1826,14 @@ const ProductoCard = ({ producto, onClick }: { producto: any, onClick: () => voi
             className="group relative flex min-h-[260px] flex-col w-full rounded-[24px] bg-card border border-border/50 shadow-md hover:shadow-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] overflow-hidden"
             onClick={onClick}
         >
-            <div className="w-full aspect-[3/2] shrink-0 bg-zinc-900 relative">
+            {/* La foto va `absolute`: así no estira el recuadro 3:2 cuando es más alta (botellas, etc.) y
+                todas las tarjetas tienen la misma foto y el mismo alto. */}
+            <div className="w-full aspect-[3/2] shrink-0 bg-zinc-900 relative overflow-hidden">
                 {producto.imagenUrl ? (
                     <img
                         src={producto.imagenUrl}
                         alt={producto.nombre}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
+                        className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
                     />
                 ) : (
                     <div className="w-full h-full flex items-center justify-center bg-linear-to-br from-zinc-800 to-zinc-900">
