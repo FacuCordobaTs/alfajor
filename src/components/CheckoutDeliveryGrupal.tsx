@@ -4,7 +4,7 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from 'sonner'
-import { MapPin, Store, Truck, AlertTriangle, Loader2, Pencil, X, Tag, Home, Building2, Clock, CreditCard, Wallet, Banknote, ChevronLeft, Check, Zap, UserRound } from 'lucide-react'
+import { MapPin, Store, Truck, AlertTriangle, Loader2, Pencil, X, Tag, Home, Building2, Clock, CreditCard, Wallet, Banknote, ChevronLeft, Check, Zap, UserRound, ArrowRight } from 'lucide-react'
 import { AddressAutocomplete } from '@/components/AddressAutocomplete'
 import { AddressMapPreview } from '@/components/AddressMapPreview'
 import { etiquetaVarianteMedallon } from '@/components/ProductDetailDrawer'
@@ -1275,7 +1275,7 @@ export function CheckoutDeliveryGrupal({
           <span className="font-semibold">-${formatPrecio(checkoutData?.montoDescuento ?? montoDescuento)}</span>
         </div>
       )}
-      <div className="flex justify-between font-bold text-base pt-2.5">
+      <div className="flex justify-between font-bold text-base pt-3 border-t border-dashed border-foreground/20">
         <span>Total</span>
         <span>${formatPrecio(checkoutData?.total || total)}</span>
       </div>
@@ -1287,13 +1287,13 @@ export function CheckoutDeliveryGrupal({
   let footerButton: React.ReactNode
   if (pedidoHabitual && editandoHabitual) {
     footerButton = (
-      <Button className="w-full h-12 rounded-2xl font-bold text-base" onClick={guardarCambiosHabituales} disabled={isCheckingZona || fueraDeZona}>
+      <Button className="w-full h-13 rounded-2xl font-bold text-base" onClick={guardarCambiosHabituales} disabled={isCheckingZona || fueraDeZona}>
         Guardar cambios
       </Button>
     )
   } else if (alguienEditando) {
     footerButton = (
-      <Button disabled className="w-full h-12 rounded-2xl font-bold text-base">
+      <Button disabled className="w-full h-13 rounded-2xl font-bold text-base">
         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
         {editSemaphore?.clienteNombre} está editando...
       </Button>
@@ -1302,17 +1302,17 @@ export function CheckoutDeliveryGrupal({
     const esUltimo = modo === 'pasos' ? paso === pasos.length - 1 : true
     footerButton = (
       <Button
-        className="w-full h-12 rounded-2xl font-bold text-base"
+        className="w-full h-13 rounded-2xl font-bold text-base"
         onClick={modo === 'pasos' ? handleSiguiente : handleGuardarEdicion}
         disabled={accionDisabled}
       >
-        {modo === 'pasos' && !esUltimo ? 'Siguiente' : (labelGuardar || 'Guardar datos')}
+        {modo === 'pasos' && !esUltimo ? <>Siguiente <ArrowRight className="w-4 h-4 ml-1" /></> : (labelGuardar || 'Guardar datos')}
       </Button>
     )
   } else if (checkoutData) {
     footerButton = datosCompletos ? (
       <Button
-        className={`w-full h-12 rounded-2xl font-bold text-base ${
+        className={`w-full h-13 rounded-2xl font-bold text-base ${
           pedidoHabitual && checkoutData.metodoPago?.startsWith('mercadopago')
             ? 'bg-[#009EE3] text-white hover:bg-[#008DCC]'
             : ''
@@ -1326,7 +1326,7 @@ export function CheckoutDeliveryGrupal({
     )
   } else {
     footerButton = (
-      <Button className="w-full h-12 rounded-2xl font-bold text-base" onClick={handleIniciarEdicion}>
+      <Button className="w-full h-13 rounded-2xl font-bold text-base" onClick={handleIniciarEdicion}>
         <Pencil className="w-4 h-4 mr-2" />
         Completar datos de envío
       </Button>
@@ -1352,11 +1352,11 @@ export function CheckoutDeliveryGrupal({
               {pasos.map((_, i) => (
                 <div
                   key={i}
-                  className={`h-1 rounded-full flex-1 transition-all duration-300 ${i <= paso ? 'bg-primary' : 'bg-secondary'}`}
+                  className={`h-1.5 rounded-full flex-1 transition-all duration-300 ${i < paso ? 'bg-primary' : i === paso ? 'bg-[#f6b73c]' : 'bg-secondary'}`}
                 />
               ))}
             </div>
-            <span className="text-xs font-semibold text-muted-foreground shrink-0">{paso + 1}/{pasos.length}</span>
+            <span className="font-alfajor text-base leading-none text-muted-foreground shrink-0 tabular-nums">{paso + 1}/{pasos.length}</span>
           </>
         ) : (
           <span className="text-sm font-bold">
@@ -1414,7 +1414,7 @@ export function CheckoutDeliveryGrupal({
       <div className={`${pedidoHabitual ? 'px-9' : 'px-5'} pb-5 pt-4 bg-background space-y-3 lg:w-full lg:max-w-md lg:mx-auto ${compacto ? 'sticky bottom-0 z-10' : 'shrink-0'}`}>
         <div className="flex justify-between items-baseline">
           <span className="text-sm text-muted-foreground">Total</span>
-          <span className="text-2xl font-black tracking-tight">${formatPrecio(checkoutData?.total || total)}</span>
+          <span className="font-alfajor text-[32px] leading-none tabular-nums">${formatPrecio(checkoutData?.total || total)}</span>
         </div>
         {footerButton}
         {pedidoHabitual && checkoutData && !estoyEditando && (

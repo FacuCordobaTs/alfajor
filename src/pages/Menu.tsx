@@ -1,6 +1,8 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { Button } from '@/components/ui/button'
+import { BotonPedido, BotonTicket, Cinta, FotoPolaroid, EstadoLocal, FooterMarca, HeaderMarca, NavCategorias, Puntillado, TituloSeccion, Toldo } from '@/components/marca/MarcaAlfajor'
+import { nombreCorto, sabores, textoEstado } from '@/lib/marcaAlfajor'
 import { Badge } from '@/components/ui/badge'
 import { useMesaStore } from '@/store/mesaStore'
 import { useClienteWebSocket } from '@/hooks/useClienteWebSocket'
@@ -8,8 +10,8 @@ import { mesaApi } from '@/lib/api'
 import { toast } from 'sonner'
 import {
   Trash2, Maximize2, Minimize2,
-  Wifi, WifiOff, Package, UtensilsCrossed, Receipt, Utensils,
-  Check, X, Users, Loader2, Share2, Clock
+  Wifi, WifiOff, Package, UtensilsCrossed, Utensils,
+  Check, X, Users, Loader2, Share2, Clock, Plus, ArrowRight
 } from 'lucide-react'
 import { ProductDetailDrawer } from '@/components/ProductDetailDrawer'
 import { ThemeToggle } from '@/components/ThemeToggle'
@@ -271,6 +273,22 @@ const Menu = () => {
     abrirProductoDrawer()
   }
 
+  // El arranque de la carta: el footer y la barra de categorías llevan hasta acá.
+  const cartaRef = useRef<HTMLDivElement | null>(null)
+  const irACarta = () => {
+    const sinMovimiento = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    cartaRef.current?.scrollIntoView({ behavior: sinMovimiento ? 'auto' : 'smooth', block: 'start' })
+  }
+  const elegirCategoria = (categoria: string) => {
+    setSelectedCategory(categoria || 'All')
+    if (cartaRef.current && cartaRef.current.getBoundingClientRect().top < 0) {
+      cartaRef.current.scrollIntoView({ block: 'start' })
+    }
+  }
+
+  const productoHero = (productosPorCategoria[categoriasOrdenadas[0]] || []).find(p => p.imagenUrl) ?? productos.find(p => p.imagenUrl) ?? null
+  const palabrasCinta = sabores((productosPorCategoria[categoriasOrdenadas[0]] || []).map(p => String(p.nombre)))
+
   // Lista ordenada de productos "hermanos" para saltar de uno a otro dentro del drawer
   // (mismo orden en que se ven en pantalla), igual que en MenuDelivery. Alimenta las
   // flechas anterior/siguiente y el swipe del ProductDetailDrawer.
@@ -434,6 +452,9 @@ const Menu = () => {
   const localCerrado = !estadoAbierto.abierto
   const puedeProgramar = esSala && permitirProgramados
   const bloqueadoPorCierre = localCerrado && !puedeProgramar
+  // En desarrollo se puede entrar al checkout con el local cerrado, para probarlo a cualquier hora.
+  // Confirmar el pedido sigue bloqueado: la API de desarrollo es la de producción.
+  const checkoutCerrado = bloqueadoPorCierre && !import.meta.env.DEV
 
   // Colores hardcodeados para single tenant
   const primario = '#0a331d'
@@ -542,37 +563,14 @@ const Menu = () => {
   }
 
   return (
-    <div className="min-h-screen pb-32 bg-background font-sans selection:bg-primary/20">
+    <div className="min-h-screen overflow-x-clip bg-background font-sans selection:bg-primary/20">
       {themeStyles}
 
-      {/* --- HEADER --- */}
-      <div className="sticky top-0 z-20 bg-background/80 backdrop-blur-md border-b border-border/50 supports-backdrop-filter:bg-background/60">
-        <div className="max-w-2xl lg:max-w-5xl xl:max-w-6xl mx-auto px-4 py-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-secondary/50">
-              {isConnected ? <Wifi className="w-3.5 h-3.5 text-green-500" /> : <WifiOff className="w-3.5 h-3.5 text-destructive" />}
-              <span className="text-xs font-medium text-muted-foreground hidden sm:inline-block">{mesa?.nombre}</span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <ThemeToggle />
-              <button
-                onClick={() => setMisPedidosOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-primary hover:bg-primary/10 transition-colors border border-primary/20"
-              >
-                <Package className="w-3.5 h-3.5" />
-                Mis Pedidos
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {localCerrado && (
-        <div className={puedeProgramar ? "bg-amber-500 text-white" : "bg-red-600 text-white"}>
-          <div className="max-w-2xl lg:max-w-5xl xl:max-w-6xl mx-auto px-5 py-3 flex items-center justify-center gap-2">
+        <div className={puedeProgramar ? "bg-[#f6b73c] text-[#0b3821]" : "bg-[#eae7e0] text-[#0b3821]"}>
+          <div className="max-w-2xl lg:max-w-5xl xl:max-w-6xl mx-auto px-5 py-2.5 flex items-center justify-center gap-2">
             <Clock className="w-4 h-4 shrink-0" />
-            <p className="text-sm font-semibold text-center">
+            <p className="text-sm font-bold text-center">
               {puedeProgramar
                 ? 'Estamos cerrados. Podés programar tu pedido para después'
                 : `Estamos cerrados${estadoAbierto.proximaApertura ? `. Abrimos ${estadoAbierto.proximaApertura}` : ''}`
@@ -582,119 +580,119 @@ const Menu = () => {
         </div>
       )}
 
-      <div className="max-w-2xl lg:max-w-5xl xl:max-w-6xl mx-auto px-5 pt-4 space-y-6">
+      {/* --- HEADER --- */}
+      <HeaderMarca>
+        <span
+          title={isConnected ? 'Conectado' : 'Sin conexión'}
+          className="grid size-9 place-items-center rounded-full border border-[#eae7e0]/20 text-[#eae7e0]"
+        >
+          {isConnected ? <Wifi className="size-4 text-emerald-400" /> : <WifiOff className="size-4 text-red-400" />}
+        </span>
+        <span className="text-[#eae7e0] [&_button]:bg-[#eae7e0]/10 [&_button]:text-[#eae7e0] [&_button:hover]:bg-[#eae7e0]/20 [&_button:hover]:text-[#eae7e0]">
+          <ThemeToggle />
+        </span>
+        <button
+          onClick={() => setMisPedidosOpen(true)}
+          className="flex h-9 items-center gap-1.5 rounded-full border border-[#eae7e0]/25 px-3.5 text-xs font-bold text-[#eae7e0] transition-colors hover:border-[#eae7e0]/60"
+        >
+          <Package className="w-3.5 h-3.5" />
+          Mis pedidos
+        </button>
+      </HeaderMarca>
 
-        {/* --- SECCIÓN BIENVENIDA & USUARIOS --- */}
-        <section className="space-y-4 lg:max-w-2xl lg:mx-auto lg:w-full">
-          <div className="flex items-end justify-between px-1">
-            <div>
-              <p className="text-sm text-muted-foreground font-medium mb-0.5">Bienvenido,</p>
-              <h1 className="text-3xl font-extrabold tracking-tight text-primary">
-                {clienteNombre}
-              </h1>
-            </div>
-            <div className="text-right">
-              {restaurante?.esCarrito && pedido?.nombrePedido ? (
-                <>
-                  <span className="text-xs font-semibold text-primary uppercase tracking-wider block">Pedido</span>
-                  <span className="text-sm font-medium">de {pedido.nombrePedido}</span>
-                </>
-              ) : (
-                <>
-                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">Pedido</span>
-                  <span className="text-sm font-medium">{mesa?.nombre}</span>
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* Lista de Usuarios */}
-          <div>
-            <div className="flex items-center gap-2 mb-2 px-1">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                En el pedido:
-              </p>
+      {/* --- HERO DE LA SALA: quién arma el pedido y con quién --- */}
+      <section className="relative bg-[#0b3821] text-[#eae7e0] dark:bg-[#072616]">
+        <Puntillado />
+        <div className="relative mx-auto grid max-w-2xl items-center gap-10 px-5 pb-14 pt-4 lg:max-w-5xl lg:grid-cols-[1.15fr_1fr] lg:pb-16 lg:pt-8 xl:max-w-6xl">
+          <div className="min-w-0 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full bg-[#f6b73c] px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#0b3821]">
+                {restaurante?.esCarrito && pedido?.nombrePedido ? `Pedido de ${pedido.nombrePedido}` : (mesa?.nombre || 'Pedido en grupo')}
+              </span>
+              <EstadoLocal abierto={estadoAbierto.abierto} texto={textoEstado(horarios, estadoAbierto)} />
             </div>
 
-            <div className="flex -mx-5 pl-5 overflow-x-auto scrollbar-hide py-2 gap-4 snap-x">
-              {/* Usuario actual */}
-              <div className="flex flex-col items-center gap-1.5 min-w-[56px] snap-start">
-                <div className="relative">
-                  <div className="w-12 h-12 rounded-xl border-2 shadow-sm ring-2 ring-background bg-primary text-primary-foreground font-bold text-sm flex items-center justify-center">
-                    YO
-                  </div>
-                </div>
-                <span className="text-xs font-medium truncate max-w-[60px] text-center">Tú</span>
+            <p className="font-alfajor mt-6 text-3xl uppercase leading-none text-[#eae7e0]/70">Hola,</p>
+            <h1 className="font-alfajor mt-1 break-words text-[64px] uppercase leading-[0.84] text-[#f6b73c] [overflow-wrap:anywhere] sm:text-[84px] lg:text-[96px]">
+              {clienteNombre}.
+            </h1>
+            <p className="font-alfajor mt-3 text-[30px] uppercase leading-[0.9] sm:text-[40px]">
+              Armen el pedido{' '}
+              <span className="inline-block -rotate-2 bg-[#c5d86d] px-2 pt-1 text-[#0b3821]">juntos.</span>
+            </p>
+            <p className="mt-5 max-w-md text-base leading-relaxed text-[#eae7e0]/75">
+              Una sola comanda para toda la mesa: cada uno anota lo suyo desde su celu y cuando están todos, la mandan a la plancha.
+            </p>
+
+            {/* En la mesa: cada participante es un sticker */}
+            <div className="mt-7">
+              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#eae7e0]/55">En el pedido</p>
+              <div className="-mx-5 mt-3 flex items-center gap-3 overflow-x-auto px-5 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <Participante iniciales="YO" nombre="Vos" indice={0} />
+                {clientes.filter(c => c.nombre !== clienteNombre).map((cliente, i) => (
+                  <Participante key={cliente.id} iniciales={cliente.nombre.slice(0, 2).toUpperCase()} nombre={cliente.nombre} indice={i + 1} />
+                ))}
+                {esSala && (
+                  <button
+                    type="button"
+                    onClick={compartirLink}
+                    aria-label="Invitar a alguien más"
+                    className="flex shrink-0 flex-col items-center gap-1.5"
+                  >
+                    <span className="grid size-14 place-items-center rounded-2xl border-2 border-dashed border-[#eae7e0]/40 text-[#eae7e0]/70 transition-colors hover:border-[#eae7e0] hover:text-[#eae7e0]">
+                      <Plus className="size-5" />
+                    </span>
+                    <span className="text-[11px] font-semibold text-[#eae7e0]/60">Sumar</span>
+                  </button>
+                )}
+                {clientes.length <= 1 && (
+                  <p className="shrink-0 pl-1 text-xs italic text-[#eae7e0]/50">Esperando al resto…</p>
+                )}
               </div>
-
-              {/* Otros usuarios */}
-              {clientes.filter(c => c.nombre !== clienteNombre).map((cliente) => (
-                <div key={cliente.id} className="flex flex-col items-center gap-1.5 min-w-[56px] snap-start opacity-80 hover:opacity-100 transition-opacity">
-                  <div className="w-12 h-12 rounded-xl border border-border shadow-xs bg-secondary text-foreground text-xs font-medium flex items-center justify-center">
-                    {cliente.nombre.slice(0, 2).toUpperCase()}
-                  </div>
-                  <span className="text-xs text-muted-foreground truncate max-w-[60px] text-center">
-                    {cliente.nombre}
-                  </span>
-                </div>
-              ))}
-
-              {clientes.length === 1 && (
-                <div className="flex items-center justify-center pl-2">
-                  <p className="text-xs text-muted-foreground italic">Esperando...</p>
-                </div>
-              )}
-
-              <div className="min-w-5 shrink-0"></div>
             </div>
+
+            {esSala && (
+              <div className="mt-7">
+                <BotonTicket onClick={compartirLink} icono={<Share2 />}>Invitá a tus amigos</BotonTicket>
+              </div>
+            )}
           </div>
 
-          {/* Botón compartir sala */}
-          {window.location.pathname.includes('/sala/') && (
-            <button
-              onClick={compartirLink}
-              className="w-full flex items-center justify-center gap-2.5 py-3 px-4 rounded-xl border-2 border-dashed border-primary/30 text-primary hover:bg-primary/5 active:bg-primary/10 transition-colors text-sm font-semibold"
-            >
-              <Share2 className="w-4 h-4" />
-              Invitá a tus amigos
-            </button>
+          {productoHero && (
+            <FotoPolaroid
+              imagenUrl={productoHero.imagenUrl}
+              nombre={nombreCorto(productoHero.nombre)}
+              precio={`$${parseFloat(String(productoHero.precio)).toFixed(0)}`}
+              onClick={() => abrirDetalleProducto(productoHero)}
+              className="hidden animate-in fade-in zoom-in-95 duration-700 lg:block"
+            />
           )}
-        </section>
-        
+        </div>
+      </section>
+      <Toldo />
+      <Cinta palabras={palabrasCinta} />
+
+      <div ref={cartaRef} className="max-w-2xl lg:max-w-5xl xl:max-w-6xl mx-auto px-5 pt-6 scroll-mt-4">
+
         {/* --- CATEGORÍAS --- */}
         {categorias.length > 1 && (
-          <section className="space-y-3 pt-2">
-            <h2 className="text-lg font-bold text-foreground px-1">Categorías</h2>
-            <div className="flex gap-2 overflow-x-auto pb-2 mx-2 scrollbar-hide snap-x">
-              {categorias.map((category) => (
-                <Button
-                  key={category}
-                  onClick={() => setSelectedCategory(category || 'All')}
-                  variant={selectedCategory === category ? "default" : "secondary"}
-                  className={`rounded-lg px-5 h-10 text-xs font-medium whitespace-nowrap snap-start transition-all ${selectedCategory === category
-                    ? "shadow-md"
-                    : "bg-secondary/50 hover:bg-secondary border border-transparent"
-                  }`}
-                >
-                  {category === 'All' ? 'Todas' : category}
-                </Button>
-              ))}
-            </div>
-          </section>
+          <NavCategorias categorias={categorias as string[]} activa={selectedCategory} onChange={elegirCategoria} />
         )}
 
         {/* --- PRODUCTOS --- */}
-        <section className="space-y-8 min-h-[50vh]">
+        <section className="mt-6 space-y-12 min-h-[50vh]">
           {selectedCategory === 'All' ? (
             categoriasOrdenadas.length > 0 ? (
-              categoriasOrdenadas.map((categoriaNombre) => {
+              categoriasOrdenadas.map((categoriaNombre, indice) => {
                 const productosDeCategoria = productosPorCategoria[categoriaNombre]
                 if (!productosDeCategoria || productosDeCategoria.length === 0) return null
                 return (
-                  <div key={categoriaNombre} className="space-y-4">
-                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider px-1">
-                      {categoriaNombre}
-                    </h3>
+                  <div key={categoriaNombre} className="space-y-5">
+                    <TituloSeccion
+                      indice={indice + 1}
+                      titulo={categoriaNombre}
+                      detalle={`${productosDeCategoria.length} ${productosDeCategoria.length === 1 ? 'opción' : 'opciones'}`}
+                    />
                     <div className="flex gap-4 overflow-x-auto pb-3 ml-2 scrollbar-hide snap-x snap-mandatory lg:grid lg:grid-cols-3 xl:grid-cols-4 lg:gap-5 lg:ml-0 lg:pb-0 lg:overflow-visible lg:snap-none">
                       {productosDeCategoria.map((producto) => (
                         <ProductoCard
@@ -713,10 +711,12 @@ const Menu = () => {
             )
           ) : (
             productosFiltrados.length > 0 ? (
-              <div className="space-y-4">
-                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider px-1">
-                  {selectedCategory}
-                </h3>
+              <div className="space-y-5">
+                <TituloSeccion
+                  indice={categoriasOrdenadas.indexOf(selectedCategory) + 1}
+                  titulo={selectedCategory}
+                  detalle={`${productosFiltrados.length} ${productosFiltrados.length === 1 ? 'opción' : 'opciones'}`}
+                />
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 px-1">
                   {productosFiltrados.map((producto) => (
                     <ProductoCard
@@ -735,34 +735,19 @@ const Menu = () => {
         </section>
       </div>
 
+      <FooterMarca
+        horarios={horarios}
+        direccion={restaurante?.direccion}
+        onPedir={() => (todosLosItems.length > 0 ? abrirCarrito() : irACarta())}
+      />
+
       {/* --- BOTÓN FLOTANTE CARRITO --- */}
-      <div className={`fixed bottom-6 left-0 right-0 flex justify-center z-40 transition-all duration-500 ${todosLosItems.length > 0 ? 'translate-y-0 opacity-100' : 'translate-y-20 opacity-0'}`}>
-        <button
-          onClick={abrirCarrito}
-          className={`
-            group relative flex items-center gap-4 pl-5 pr-6 py-3.5 rounded-full
-            shadow-2xl hover:scale-[1.02] active:scale-95 transition-all duration-300
-            bg-zinc-900 text-white shadow-zinc-900/20
-            dark:bg-white/10 dark:text-white dark:backdrop-blur-xl
-            dark:border dark:border-white/10 dark:shadow-[0_0_20px_rgba(255,255,255,0.05)]
-          `}
-        >
-          <div className="absolute -top-2 -right-1 bg-red-500 text-white text-[10px] font-bold h-5 min-w-[20px] px-1 flex items-center justify-center rounded-full border-2 border-background z-10">
-            {todosLosItems.length}
-          </div>
-
-          <div className="flex items-center gap-2.5">
-            <Receipt className="w-5 h-5 text-current opacity-90" />
-            <span className="font-semibold text-sm tracking-wide">Ver Pedido</span>
-          </div>
-
-          <div className="h-4 w-px bg-current opacity-20"></div>
-
-          <span className="font-bold text-base font-mono">
-            ${totalPedido}
-          </span>
-        </button>
-      </div>
+      <BotonPedido
+        cantidad={todosLosItems.length}
+        total={parseFloat(totalPedido).toFixed(0)}
+        visible={todosLosItems.length > 0}
+        onClick={abrirCarrito}
+      />
 
       {/* --- OVERLAY DEL PEDIDO --- */}
       {carritoAbierto && (
@@ -783,11 +768,11 @@ const Menu = () => {
           {/* Header */}
           <div className="shrink-0 sticky top-0 z-10 bg-background pt-2">
             <div className="w-full flex justify-center pt-3 pb-1">
-              <span className="w-12 h-1.5 rounded-full bg-muted-foreground/30" />
+              <span className="w-12 h-1.5 rounded-full bg-[#f6b73c]" />
             </div>
             <div className="flex items-center justify-between px-4 pb-3 pt-2">
               <div className="w-8 h-8 flex items-center justify-center" />
-              <span className="text-xl font-extrabold">
+              <span className="font-alfajor text-[28px] uppercase leading-none">
                 {mostrarCheckoutEnCarrito ? tituloCheckout : 'Tu pedido'}
               </span>
               {mostrarCheckoutEnCarrito ? (
@@ -838,16 +823,16 @@ const Menu = () => {
                 {todosLosItems.map((item) => renderItem(item))}
               </div>
 
-              <div className="shrink-0 p-4 border-t border-border bg-background">
+              <div className="shrink-0 p-4 border-t-2 border-dashed border-border bg-background">
                 <div className="flex justify-between items-center mb-3">
                   <span className="text-muted-foreground text-sm">Total a pagar</span>
-                  <span className="text-2xl font-black tracking-tight">${totalPedido}</span>
+                  <span className="font-alfajor text-[32px] leading-none tabular-nums">${parseFloat(totalPedido).toFixed(0)}</span>
                 </div>
                 {!restaurante?.soloCartaDigital ? (
                   <Button
-                    className={`w-full h-12 rounded-xl font-bold text-base shadow-md ${bloqueadoPorCierre ? 'bg-muted text-muted-foreground cursor-not-allowed' : ''}`}
+                    className={`w-full h-13 rounded-2xl font-bold text-base shadow-md ${checkoutCerrado ? 'bg-muted text-muted-foreground cursor-not-allowed' : ''}`}
                     onClick={() => {
-                      if (bloqueadoPorCierre) {
+                      if (checkoutCerrado) {
                         toast.error('El restaurante está cerrado en este momento')
                         return
                       }
@@ -863,9 +848,9 @@ const Menu = () => {
                         iniciarConfirmacionPedido()
                       }
                     }}
-                    disabled={bloqueadoPorCierre}
+                    disabled={checkoutCerrado}
                   >
-                    {bloqueadoPorCierre ? 'Restaurante cerrado' : 'Continuar'}
+                    {checkoutCerrado ? 'Restaurante cerrado' : <>Continuar <ArrowRight className="size-4" /></>}
                   </Button>
                 ) : (
                   <div className="text-center text-sm font-medium text-primary py-3 bg-primary/10 rounded-xl">
@@ -1091,6 +1076,24 @@ const Menu = () => {
 }
 
 // Componentes auxiliares
+
+// Cada participante de la sala es un sticker de color con sus iniciales, apenas girado.
+const COLORES_PARTICIPANTE = [
+  'bg-[#c5d86d] text-[#0b3821]',
+  'bg-[#f6b73c] text-[#0b3821]',
+  'bg-[#eae7e0] text-[#0b3821]',
+  'bg-[#e889a8] text-[#0b3821]',
+]
+const GIROS_PARTICIPANTE = ['-rotate-6', 'rotate-3', '-rotate-2', 'rotate-6']
+
+const Participante = ({ iniciales, nombre, indice }: { iniciales: string; nombre: string; indice: number }) => (
+  <div className="flex w-16 shrink-0 flex-col items-center gap-1.5">
+    <span className={`font-alfajor grid size-14 place-items-center rounded-2xl text-xl leading-none shadow-[0_8px_18px_-8px_rgba(0,0,0,0.6)] ${COLORES_PARTICIPANTE[indice % 4]} ${GIROS_PARTICIPANTE[indice % 4]}`}>
+      {iniciales}
+    </span>
+    <span className="max-w-full truncate text-[11px] font-semibold text-[#eae7e0]/80">{nombre}</span>
+  </div>
+)
 const EmptyState = () => (
   <div className="flex flex-col items-center justify-center py-20 text-muted-foreground opacity-50">
     <Package className="w-10 h-10 mb-2" />

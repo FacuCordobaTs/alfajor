@@ -5,9 +5,11 @@ import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { toast } from 'sonner'
 import {
     Trash2, Maximize2, Minimize2, Loader2,
-    Package, Receipt, UtensilsCrossed, Utensils, Clock, Share2, User, Plus,
-    BadgePercent, Users, Sparkles, Check
+    Package, UtensilsCrossed, Utensils, Clock, Share2, User, Plus,
+    BadgePercent, Users, Sparkles, Check, ArrowRight
 } from 'lucide-react'
+import { BotonPedido, BotonTicket, Cinta, EstadoLocal, FooterMarca, HeaderMarca, NavCategorias, FotoPolaroid, Puntillado, Tachado, TituloSeccion, Toldo } from '@/components/marca/MarcaAlfajor'
+import { nombreCorto, sabores, textoEstado } from '@/lib/marcaAlfajor'
 import { ProductDetailDrawer, etiquetaVarianteMedallon } from '@/components/ProductDetailDrawer'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -194,9 +196,8 @@ const avisoDescuento = (porcentaje: number, exclusivo = false): AvisoDescuento =
     ? { titulo: 'Oferta exclusiva', detalle: `${porcentaje}% OFF por 48 horas, aplicado a tu pedido` }
     : { titulo: '¡Te extrañamos!', detalle: `${porcentaje}% OFF aplicado a tu pedido` }
 
-// Los accesos de arriba de la carta (pedido en grupo, puntos): una píldora lisa, sin borde ni sombra.
-// El color de la marca queda en el ícono; el texto es el de la tienda, que lee bien en cualquier tema.
-const ACCESO_RAPIDO = 'inline-flex h-11 max-w-full items-center gap-2 rounded-full bg-secondary px-4 text-[13px] font-semibold text-foreground transition-[background-color,transform] duration-200 hover:bg-secondary/70 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60'
+// Los accesos secundarios del hero (pedido en grupo, puntos): texto subrayado en verde pepino, sin caja.
+const ACCESO_HERO = 'inline-flex max-w-full items-center gap-2 py-1 text-[15px] font-bold text-[#eae7e0] underline decoration-[#c5d86d] decoration-2 underline-offset-[6px] transition-colors hover:text-[#c5d86d] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c5d86d] rounded-sm'
 
 // Riel horizontal sin barra de scroll (`scrollbar-hide` no existe en este Tailwind).
 const RIEL_SIN_BARRA = '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
@@ -224,6 +225,8 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
     const scrollTimerRef = useRef<number | null>(null)
     // La sección "Canje de puntos": el acceso de puntos de arriba lleva hasta ahí.
     const canjeRef = useRef<HTMLElement | null>(null)
+    // El arranque de la carta: "Elegí tu alfajor" del hero y el footer llevan hasta acá.
+    const cartaRef = useRef<HTMLDivElement | null>(null)
 
     // El botón "Ver Pedido" reacciona a la dirección del scroll (efecto contra-scroll):
     // mientras scrollés hacia arriba baja un poco, mientras scrollés hacia abajo sube un
@@ -252,21 +255,6 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
     const [loading, setLoading] = useState(true)
     const [horarios, setHorarios] = useState<HorarioTurno[]>([])
     const [estadoAbierto, setEstadoAbierto] = useState<{ abierto: boolean; proximaApertura: string | null }>({ abierto: true, proximaApertura: null })
-
-    // Píldora de Instagram: aparece desde arriba cuando el logo queda fuera de vista
-    // al scrollear, y desaparece cuando el logo vuelve a entrar en pantalla.
-    const logoRef = useRef<HTMLDivElement>(null)
-    const [logoOculto, setLogoOculto] = useState(false)
-
-    useEffect(() => {
-        const el = logoRef.current
-        if (!el) return
-        const obs = new IntersectionObserver(([entry]) => {
-            setLogoOculto(!entry.isIntersecting)
-        }, { threshold: 0 })
-        obs.observe(el)
-        return () => obs.disconnect()
-    }, [restaurante])
 
     const [modalSalaOpen, setModalSalaOpen] = useState(false)
     const [nombreSala, setNombreSala] = useState('')
@@ -1025,6 +1013,23 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
         abrirProductoDrawer()
     }
 
+    // El hero muestra el primer producto con foto de la primera categoría; la cinta, sus sabores.
+    const productoHero = (productosPorCategoria[categoriasOrdenadas[0]] || []).find((p: any) => p.imagenUrl) ?? productosVenta.find(p => p.imagenUrl) ?? null
+    const palabrasCinta = sabores((productosPorCategoria[categoriasOrdenadas[0]] || []).map((p: any) => String(p.nombre)))
+
+    const irACarta = () => {
+        const sinMovimiento = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        cartaRef.current?.scrollIntoView({ behavior: sinMovimiento ? 'auto' : 'smooth', block: 'start' })
+    }
+
+    // Cambiar de categoría desde la barra pegada: si la carta ya quedó arriba, vuelve a su inicio.
+    const elegirCategoria = (categoria: string) => {
+        setSelectedCategory(categoria || 'All')
+        if (cartaRef.current && cartaRef.current.getBoundingClientRect().top < 0) {
+            cartaRef.current.scrollIntoView({ block: 'start' })
+        }
+    }
+
     useEffect(() => {
         if (!drawerOpen || !selectedProduct?.id || !restaurante?.id) return
         registrarEventoTrackingUnaVez(restaurante.id, username, 'product_view', `producto-${selectedProduct.id}`, {
@@ -1153,6 +1158,10 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
         toast.info('Sumás puntos con cada pedido')
     }
 
+    // En desarrollo se puede entrar al checkout con el local cerrado, para probarlo a cualquier hora.
+    // Mandar el pedido sigue bloqueado (submitOrder): la API de desarrollo es la de producción.
+    const checkoutCerrado = !import.meta.env.DEV && !estadoAbierto.abierto && !restaurante?.permitirPedidosProgramados
+
     const alturaCarrito = (() => {
         const n = cartItems.length
         if (n >= 4) return '85vh'
@@ -1246,15 +1255,15 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-background text-foreground flex justify-center items-center">
+            <div className="menu-delivery flex min-h-screen items-center justify-center bg-[#0b3821] text-[#eae7e0]">
                 {themeStyles}
                 <div className="flex flex-col items-center gap-5 px-6 text-center">
                     <img
                         src="/logo.webp"
                         alt="Alfajor"
-                        className="w-28 h-28 object-contain animate-pulse"
+                        className="w-44 h-auto object-contain animate-pulse"
                     />
-                    <span className="text-base font-semibold tracking-wide animate-pulse">
+                    <span className="font-alfajor text-2xl uppercase tracking-wide animate-pulse">
                         Armando los alfajores
                     </span>
                 </div>
@@ -1267,48 +1276,14 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
     }
 
     return (
-        <div className="menu-delivery min-h-screen pb-32 bg-background selection:bg-primary/20">
+        <div className="menu-delivery min-h-screen overflow-x-clip bg-background selection:bg-primary/20">
             {themeStyles}
 
-            {/* PÍLDORA INSTAGRAM: aparece deslizándose desde arriba cuando el logo queda fuera de
-                vista, y vuelve a esconderse cuando el logo reaparece. Mismo glassmorphism y mismo
-                contra-scroll que el botón "Ver Pedido". */}
-            <div className={`fixed top-0 left-0 right-0 flex justify-center z-40 transition-all duration-500 ${logoOculto ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0 pointer-events-none'}`}>
-                <a
-                    href="https://www.instagram.com/alfajorconpapas/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={`
-                        mt-3 group relative flex items-center gap-3 pl-2 pr-5 py-2 rounded-full
-                        before:absolute before:inset-0 before:rounded-full before:pointer-events-none before:content-[''] before:bg-linear-to-b before:from-white/25 before:via-white/5 before:to-transparent
-                        hover:scale-[1.02] active:scale-95 transition-all duration-300
-                        bg-white/20 text-zinc-900 backdrop-blur-xl backdrop-saturate-150 border border-white/40
-                        shadow-[0_12px_32px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.7),inset_0_0_0_1px_rgba(255,255,255,0.3),inset_0_0_16px_rgba(255,255,255,0.3)]
-                        dark:bg-white/10 dark:text-white dark:backdrop-blur-xl dark:backdrop-saturate-150
-                        dark:border dark:border-white/15 dark:shadow-[0_12px_32px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.25),inset_0_0_0_1px_rgba(255,255,255,0.15),inset_0_0_16px_rgba(255,255,255,0.1)]
-                        ${scrollDir === 'down' ? '-translate-y-1.5' : scrollDir === 'up' ? 'translate-y-1.5' : 'translate-y-0'}
-                    `}
-                >
-                    <img
-                        src="/logo.webp"
-                        alt="Logo Alfajor con Papas"
-                        className="w-16 h-auto shrink-0 object-contain"
-                    />
-                    <div className="h-4 w-px bg-current opacity-20" />
-                    <span className="flex items-center gap-1.5">
-                        <span className={`w-2 h-2 rounded-full ${estadoAbierto.abierto ? 'bg-emerald-500' : 'bg-red-500'}`} />
-                        <span className="font-semibold text-xs tracking-wide">
-                            {estadoAbierto.abierto ? 'Abierto' : 'Cerrado'}
-                        </span>
-                    </span>
-                </a>
-            </div>
-
             {!estadoAbierto.abierto && (
-                <div className={restaurante?.permitirPedidosProgramados ? "bg-amber-500 text-white" : "bg-red-600 text-white"}>
-                    <div className="max-w-2xl lg:max-w-5xl xl:max-w-6xl mx-auto px-5 py-3 flex items-center justify-center gap-2">
+                <div className={restaurante?.permitirPedidosProgramados ? "bg-[#f6b73c] text-[#0b3821]" : "bg-[#eae7e0] text-[#0b3821]"}>
+                    <div className="max-w-2xl lg:max-w-5xl xl:max-w-6xl mx-auto px-5 py-2.5 flex items-center justify-center gap-2">
                         <Clock className="w-4 h-4 shrink-0" />
-                        <p className="text-sm font-semibold text-center">
+                        <p className="text-sm font-bold text-center">
                             {restaurante?.permitirPedidosProgramados
                                 ? 'Arma tu pedido y programa el horario al que quieres recibirlo.'
                                 : `Estamos cerrados${estadoAbierto.proximaApertura ? `. Abrimos ${estadoAbierto.proximaApertura}` : ''}`
@@ -1318,73 +1293,95 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                 </div>
             )}
 
-            <div className="max-w-2xl lg:max-w-5xl xl:max-w-6xl mx-auto px-5 pt-4 space-y-5">
-                {/* Lo primero que se ve es la marca y, si lo hay, el descuento; lo demás, chico: la carta
-                    tiene que entrar en la primera pantalla. */}
-                <header className="flex flex-col items-center gap-3.5">
-                    <div ref={logoRef} className="flex items-center justify-center">
-                        {restaurante.imagenUrl && (
-                            <img
-                                src={restaurante.imagenUrl}
-                                alt="logo"
-                                className={`size-32 rounded-3xl object-cover ${restaurante.imagenLightUrl ? 'hidden dark:block' : ''}`}
-                            />
-                        )}
-                        {restaurante.imagenLightUrl && (
-                            <img
-                                src={restaurante.imagenLightUrl}
-                                alt="logo"
-                                className="size-32 rounded-3xl object-cover block dark:hidden"
-                            />
-                        )}
-                    </div>
-                    {bannerGrowth && (
-                        <p className="animate-in fade-in duration-300 inline-flex max-w-full items-center gap-2 rounded-2xl bg-emerald-500/10 px-3.5 py-2 text-[13px] leading-snug text-emerald-900 dark:bg-emerald-400/10 dark:text-emerald-100">
-                            <BadgePercent className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
-                            <span>
-                                <strong className="font-bold">{bannerGrowth.titulo}</strong> {bannerGrowth.detalle}
+            <HeaderMarca enlaceInicio>
+                <EstadoLocal abierto={estadoAbierto.abierto} texto={textoEstado(horarios, estadoAbierto)} corto={estadoAbierto.abierto ? 'Abierto' : 'Cerrado'} />
+            </HeaderMarca>
+
+            {/* HERO: el toldo verde del local, el titular y la comanda con la polaroid. */}
+            <section className="relative bg-[#0b3821] text-[#eae7e0] dark:bg-[#072616]">
+                <Puntillado />
+                <div className="relative mx-auto grid max-w-2xl items-center gap-10 px-5 pb-14 pt-4 lg:max-w-5xl lg:grid-cols-[1.1fr_1fr] lg:pb-16 lg:pt-8 xl:max-w-6xl">
+                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
+                        <h1 className="font-alfajor mt-2 text-[64px] uppercase leading-[0.88] sm:text-[86px] lg:text-[104px]">
+                            El alfajor
+                            <br />
+                            que no es
+                            <br />
+                            <span className="relative inline-block text-[#eae7e0]/90">
+                                dulce.
+                                <Tachado />
+                            </span>
+                        </h1>
+                        <p className="mt-5">
+                            <span className="font-alfajor inline-block origin-left -rotate-2 bg-[#c5d86d] px-2.5 pb-1 pt-1.5 text-[26px] uppercase leading-none text-[#0b3821] sm:text-[34px]">
+                                Es salado. Y se come con papas.
                             </span>
                         </p>
-                    )}
-                </header>
+                        <p className="mt-6 max-w-md text-base leading-relaxed text-[#eae7e0]/75">
+                            Pedís desde acá, sale de la plancha cuando llega tu comanda y te lo llevamos antes de que se enfríe. Así de simple.
+                        </p>
 
+                        {bannerGrowth && (
+                            <p className="animate-in fade-in duration-300 mt-6 inline-flex max-w-full items-center gap-2 rounded-2xl bg-[#f6b73c] px-3.5 py-2 text-[13px] leading-snug text-[#0b3821]">
+                                <BadgePercent className="size-4 shrink-0" aria-hidden />
+                                <span>
+                                    <strong className="font-extrabold">{bannerGrowth.titulo}</strong> {bannerGrowth.detalle}
+                                </span>
+                            </p>
+                        )}
+
+                        <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-4">
+                            <BotonTicket onClick={irACarta}>Elegí tu alfajor</BotonTicket>
+                            {mostrarPedidoGrupal && (
+                                <button type="button" onClick={onArmarPedidoClick} aria-busy={creandoSala} className={ACCESO_HERO}>
+                                    {creandoSala
+                                        ? <Loader2 className="size-4 shrink-0 animate-spin" />
+                                        : <Users className="size-4 shrink-0 text-[#f6b73c]" />}
+                                    <span className="truncate">{creandoSala ? 'Creando link…' : 'Pedir entre varios'}</span>
+                                </button>
+                            )}
+                            {restaurante?.sistemaPuntos && (
+                                <button
+                                    type="button"
+                                    onClick={verPuntos}
+                                    aria-label={puntosConPedido === null ? undefined : `Tus puntos: ${puntosConPedido.toLocaleString('es-AR')} pts`}
+                                    className={ACCESO_HERO}
+                                >
+                                    {loadingPuntos
+                                        ? <Loader2 className="size-4 shrink-0 animate-spin" />
+                                        : <Sparkles className="size-4 shrink-0 text-[#f6b73c]" />}
+                                    {puntosConPedido === null ? 'Ver mis puntos' : (
+                                        <span className="tabular-nums">{puntosConPedido.toLocaleString('es-AR')} pts</span>
+                                    )}
+                                </button>
+                            )}
+                        </div>
+                    </div>
+
+                    {productoHero && (
+                        <FotoPolaroid
+                            imagenUrl={productoHero.imagenUrl}
+                            nombre={nombreCorto(productoHero.nombre)}
+                            precio={`$${formatPrecio(productoHero.descuento > 0 ? Number(productoHero.precio) * (1 - productoHero.descuento / 100) : productoHero.precio)}`}
+                            onClick={() => abrirDetalleProducto(productoHero)}
+                            className="animate-in fade-in zoom-in-95 duration-700"
+                          />
+                    )}
+                </div>
+            </section>
+            <Toldo />
+            <Cinta palabras={palabrasCinta} />
+
+            <div className="max-w-2xl lg:max-w-5xl xl:max-w-6xl mx-auto px-5 pt-6 space-y-8">
                 {productoCampana && campana && (
                     <CampanaProductoHero campana={campana} producto={productoCampana} onClick={() => abrirDetalleProducto(productoCampana)} />
-                )}
-
-                {(mostrarPedidoGrupal || restaurante?.sistemaPuntos) && (
-                    <div className="flex flex-wrap items-center justify-center gap-2">
-                        {mostrarPedidoGrupal && (
-                            <button type="button" onClick={onArmarPedidoClick} aria-busy={creandoSala} className={ACCESO_RAPIDO}>
-                                {creandoSala
-                                    ? <Loader2 className="size-4 shrink-0 animate-spin" />
-                                    : <Users className="size-4 shrink-0 text-primary" />}
-                                <span className="truncate">{creandoSala ? 'Creando link…' : 'Pedir entre varios'}</span>
-                            </button>
-                        )}
-                        {restaurante?.sistemaPuntos && (
-                            <button
-                                type="button"
-                                onClick={verPuntos}
-                                aria-label={puntosConPedido === null ? undefined : `Tus puntos: ${puntosConPedido.toLocaleString('es-AR')} pts`}
-                                className={ACCESO_RAPIDO}
-                            >
-                                {loadingPuntos
-                                    ? <Loader2 className="size-4 shrink-0 animate-spin" />
-                                    : <Sparkles className="size-4 shrink-0 text-primary" />}
-                                {puntosConPedido === null ? 'Ver mis puntos' : (
-                                    <span className="tabular-nums">{puntosConPedido.toLocaleString('es-AR')} pts</span>
-                                )}
-                            </button>
-                        )}
-                    </div>
                 )}
 
                 {restaurante?.sistemaPuntos && tieneOpcionesCanje && (
                     <section ref={canjeRef} aria-label="Canje de puntos" className="scroll-mt-20 space-y-3">
                         <div className="flex items-baseline justify-between gap-3 px-1">
-                            <h2 className="flex items-center gap-1.5 text-[15px] font-bold text-foreground">
-                                <Sparkles className="size-4 text-primary" />
+                            <h2 className="font-alfajor flex items-center gap-1.5 text-2xl uppercase leading-none text-foreground">
+                                <Sparkles className="size-5 text-[#f6b73c]" />
                                 Canje de puntos
                             </h2>
                             {puntosDisponibles !== null ? (
@@ -1418,109 +1415,81 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                     </section>
                 )}
 
-                {categorias.length > 1 && (
-                    <nav aria-label="Categorías" className="-mx-5">
-                        <div className={`flex snap-x scroll-px-5 gap-2 overflow-x-auto px-5 py-1 lg:flex-wrap lg:justify-center lg:overflow-visible ${RIEL_SIN_BARRA}`}>
-                            {categorias.map((category) => {
-                                const activa = selectedCategory === category
-                                return (
-                                    <button
-                                        key={category}
-                                        type="button"
-                                        onClick={() => setSelectedCategory(category || 'All')}
-                                        aria-pressed={activa}
-                                        className={`h-10 shrink-0 snap-start whitespace-nowrap rounded-full px-4 text-[13px] font-semibold transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 ${activa
-                                            ? 'bg-primary text-primary-foreground'
-                                            : 'bg-secondary text-secondary-foreground hover:bg-secondary/70'
-                                            }`}
-                                    >
-                                        {category === 'All' ? 'Todas' : category}
-                                    </button>
-                                )
-                            })}
-                        </div>
-                    </nav>
-                )}
-
-                <section className="space-y-8 min-h-[50vh]">
-                    {selectedCategory === 'All' ? (
-                        categoriasOrdenadas.length > 0 ? (
-                            categoriasOrdenadas.map((categoriaNombre) => {
-                                const productosDeCategoria = productosPorCategoria[categoriaNombre]
-                                if (!productosDeCategoria || productosDeCategoria.length === 0) return null
-
-                                return (
-                                    <div key={categoriaNombre} className="space-y-4">
-                                        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider px-1">
-                                            {categoriaNombre}
-                                        </h3>
-                                        <div className={GRILLA_PRODUCTOS}>
-                                            {productosDeCategoria.map((producto: any) => (
-                                                <ProductoCard
-                                                    key={producto.id}
-                                                    producto={producto}
-                                                    onClick={() => abrirDetalleProducto(producto)}
-                                                />
-                                            ))}
-                                        </div>
-                                    </div>
-                                )
-                            })
-                        ) : (
-                            <EmptyState />
-                        )
-                    ) : (
-                        productosFiltrados.length > 0 ? (
-                            <div className="space-y-4">
-                                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider px-1">
-                                    {selectedCategory}
-                                </h3>
-                                <div className={GRILLA_PRODUCTOS}>
-                                    {productosFiltrados.map((producto: any) => (
-                                        <ProductoCard
-                                            key={producto.id}
-                                            producto={producto}
-                                            onClick={() => abrirDetalleProducto(producto)}
-                                        />
-                                    ))}
-                                </div>
-                            </div>
-                        ) : (
-                            <EmptyState />
-                        )
+                <div ref={cartaRef} className="scroll-mt-4">
+                    {categorias.length > 1 && (
+                        <NavCategorias categorias={categorias} activa={selectedCategory} onChange={elegirCategoria} />
                     )}
-                </section>
+
+                    <section className="mt-6 space-y-14 min-h-[50vh]">
+                        {selectedCategory === 'All' ? (
+                            categoriasOrdenadas.length > 0 ? (
+                                categoriasOrdenadas.map((categoriaNombre, indice) => {
+                                    const productosDeCategoria = productosPorCategoria[categoriaNombre]
+                                    if (!productosDeCategoria || productosDeCategoria.length === 0) return null
+
+                                    return (
+                                        <div key={categoriaNombre} className="space-y-5">
+                                            <TituloSeccion
+                                                indice={indice + 1}
+                                                titulo={categoriaNombre}
+                                                detalle={`${productosDeCategoria.length} ${productosDeCategoria.length === 1 ? 'opción' : 'opciones'}`}
+                                            />
+                                            <div className={GRILLA_PRODUCTOS}>
+                                                {productosDeCategoria.map((producto: any) => (
+                                                    <ProductoCard
+                                                        key={producto.id}
+                                                        producto={producto}
+                                                        onClick={() => abrirDetalleProducto(producto)}
+                                                    />
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )
+                                })
+                            ) : (
+                                <EmptyState />
+                            )
+                        ) : (
+                            productosFiltrados.length > 0 ? (
+                                <div className="space-y-5">
+                                    <TituloSeccion
+                                        indice={categoriasOrdenadas.indexOf(selectedCategory) + 1}
+                                        titulo={selectedCategory}
+                                        detalle={`${productosFiltrados.length} ${productosFiltrados.length === 1 ? 'opción' : 'opciones'}`}
+                                    />
+                                    <div className={GRILLA_PRODUCTOS}>
+                                        {productosFiltrados.map((producto: any) => (
+                                            <ProductoCard
+                                                key={producto.id}
+                                                producto={producto}
+                                                onClick={() => abrirDetalleProducto(producto)}
+                                            />
+                                        ))}
+                                    </div>
+                                </div>
+                            ) : (
+                                <EmptyState />
+                            )
+                        )}
+                    </section>
+                </div>
             </div>
 
-            {/* FOOTER / VER PEDIDO */}
-            <div className={`fixed bottom-6 left-0 right-0 flex justify-center z-40 transition-all duration-500 ${cartItems.length > 0 ? 'translate-y-0 opacity-100' : 'translate-y-20 opacity-0'}`}>
-                <button
-                    onClick={abrirCarrito}
-                    className={`
-            group relative flex items-center gap-4 pl-5 pr-6 py-3.5 rounded-full
-            before:absolute before:inset-0 before:rounded-full before:pointer-events-none before:content-[''] before:bg-linear-to-b before:from-white/25 before:via-white/5 before:to-transparent
-            hover:scale-[1.02] active:scale-95 transition-all duration-300
-            bg-white/20 text-zinc-900 backdrop-blur-xl backdrop-saturate-150 border border-white/40
-            shadow-[0_12px_32px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.7),inset_0_0_0_1px_rgba(255,255,255,0.3),inset_0_0_16px_rgba(255,255,255,0.3)]
-            dark:bg-white/10 dark:text-white dark:backdrop-blur-xl dark:backdrop-saturate-150
-            dark:border dark:border-white/15 dark:shadow-[0_12px_32px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.25),inset_0_0_0_1px_rgba(255,255,255,0.15),inset_0_0_16px_rgba(255,255,255,0.1)]
-            ${cartAnimation ? 'scale-105' : 'scale-100'}
-            ${scrollDir === 'down' ? '-translate-y-1.5' : scrollDir === 'up' ? 'translate-y-1.5' : 'translate-y-0'}
-          `}
-                >
-                    <div className={`absolute -top-2 -right-1 bg-red-500 text-white text-[10px] font-bold h-5 min-w-[20px] px-1 flex items-center justify-center rounded-full border-2 border-background z-10 transition-transform duration-300 ${cartAnimation ? 'scale-125' : 'scale-100'}`}>
-                        {cartItems.length}
-                    </div>
-                    <div className="relative z-10 flex items-center gap-2.5">
-                        <Receipt className="w-5 h-5 text-current opacity-90" />
-                        <span className="font-semibold text-sm tracking-wide">Ver Pedido</span>
-                    </div>
-                    <div className="relative z-10 h-4 w-px bg-current opacity-20"></div>
-                    <span className="relative z-10 font-bold text-base font-mono">
-                        ${formatPrecio(totalPedido)}
-                    </span>
-                </button>
-            </div>
+            <FooterMarca
+                horarios={horarios}
+                direccion={restaurante.direccion}
+                onPedir={() => (cartItems.length > 0 ? abrirCarrito() : irACarta())}
+            />
+
+            {/* VER PEDIDO: reacciona a la dirección del scroll (contra-scroll) y late al sumar algo. */}
+            <BotonPedido
+                cantidad={cartItems.length}
+                total={formatPrecio(totalPedido)}
+                visible={cartItems.length > 0}
+                onClick={abrirCarrito}
+                pulso={cartAnimation}
+                className={scrollDir === 'down' ? '-translate-y-1.5' : scrollDir === 'up' ? 'translate-y-1.5' : 'translate-y-0'}
+            />
 
             {/* CARRITO OVERLAY */}
             {carritoAbierto && (
@@ -1549,11 +1518,11 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
 
                     <div className="shrink-0 sticky top-0 z-10 bg-background pt-2">
                         <div className="w-full flex justify-center pt-3 pb-1">
-                            <span className="w-12 h-1.5 rounded-full bg-muted-foreground/30" />
+                            <span className="w-12 h-1.5 rounded-full bg-[#f6b73c]" />
                         </div>
                         <div className="flex items-center justify-between px-4 pb-3 pt-2">
                             <div className="w-8 h-8" />
-                            <span className={`${esPedidoHabitual ? 'text-lg' : 'text-xl'} font-extrabold text-center px-2`}>
+                            <span className={`font-alfajor ${esPedidoHabitual ? 'text-[24px]' : 'text-[28px]'} uppercase leading-none text-center px-2`}>
                                 {mostrarCheckoutEnCarrito ? tituloCheckout : 'Tu Pedido'}
                             </span>
                             {mostrarCheckoutEnCarrito && !esPedidoHabitual ? (
@@ -1674,16 +1643,16 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                                     )
                                 })}
                             </div>
-                            <div className="shrink-0 p-4 border-t border-border bg-background">
+                            <div className="shrink-0 p-4 border-t-2 border-dashed border-border bg-background">
                                 <div className="flex justify-between items-center mb-3">
                                     <span className="text-muted-foreground text-sm">Total a pagar</span>
-                                    <span className="text-2xl font-black tracking-tight">${formatPrecio(totalPedido)}</span>
+                                    <span className="font-alfajor text-[32px] leading-none tabular-nums">${formatPrecio(totalPedido)}</span>
                                 </div>
                                 <Button
-                                    className="w-full h-12 rounded-xl font-bold text-base shadow-md"
-                                    disabled={!estadoAbierto.abierto && !restaurante?.permitirPedidosProgramados}
+                                    className="w-full h-13 rounded-2xl font-bold text-base shadow-md"
+                                    disabled={checkoutCerrado}
                                     onClick={() => {
-                                        if (!estadoAbierto.abierto && !restaurante?.permitirPedidosProgramados) return
+                                        if (checkoutCerrado) return
                                         // Meta cuenta el inicio de checkout una vez por sesión: ir y
                                         // volver del carrito no puede inflar el paso del embudo.
                                         registrarEventoPixelUnaVez('InitiateCheckout', 'checkout', {
@@ -1694,7 +1663,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                                         setExpandido(false)
                                     }}
                                 >
-                                    {!estadoAbierto.abierto && !restaurante?.permitirPedidosProgramados ? 'Cerrado' : 'Continuar'}
+                                    {checkoutCerrado ? 'Cerrado' : <>Continuar <ArrowRight className="size-4" /></>}
                                 </Button>
                             </div>
                         </>

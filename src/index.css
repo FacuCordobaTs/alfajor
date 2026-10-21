@@ -5,6 +5,26 @@
   font-family: 'Bricolage Grotesque', ui-sans-serif, system-ui, sans-serif;
 }
 
+/* Identidad de Alfajor (components/marca): Bricolage condensada y negra para titulares. */
+.font-alfajor {
+  font-family: 'Bricolage Grotesque', ui-sans-serif, system-ui, sans-serif;
+  font-weight: 800;
+  font-stretch: 75%;
+  font-variation-settings: 'wdth' 75, 'opsz' 96;
+  letter-spacing: -0.01em;
+}
+
+@keyframes alfajor-marquesina { to { transform: translateX(-50%); } }
+@keyframes alfajor-trazo { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+
+.alfajor-marquesina { animation: alfajor-marquesina 32s linear infinite; }
+.alfajor-trazo { stroke-dasharray: 1; stroke-dashoffset: 1; animation: alfajor-trazo 0.7s 0.5s cubic-bezier(0.65, 0, 0.35, 1) forwards; }
+
+@media (prefers-reduced-motion: reduce) {
+  .alfajor-marquesina { animation: none; }
+  .alfajor-trazo { animation: none; stroke-dashoffset: 0; }
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -153,4 +173,4 @@
 
 .shadow-floating-orange {
   box-shadow: 0 10px 30px -4px rgba(249, 115, 22, 0.35);
-}
+}

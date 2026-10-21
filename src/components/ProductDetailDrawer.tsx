@@ -403,9 +403,9 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
   const mostrarResumen = stage !== 'primary' && resumen !== ''
 
   const timeLeft = tieneDescuento ? formatTimeLeft(product?.descuentoFechaFin ?? null) : null
-  // Misma escala que el nombre de las fichas de producto de MenuDelivery (`ProductoCard`).
+  // El nombre va con la letra de titulares de la marca (condensada): un punto más grande que en la ficha.
   const nombreLength = product?.nombre.trim().length ?? 0
-  const nombreClass = nombreLength > 70 ? 'text-lg' : nombreLength > 48 ? 'text-[19px]' : nombreLength > 30 ? 'text-xl' : 'text-[22px]'
+  const nombreClass = nombreLength > 70 ? 'text-[22px]' : nombreLength > 48 ? 'text-2xl' : nombreLength > 30 ? 'text-[26px]' : 'text-[30px]'
   const nombreLargo = nombreLength > 30
 
   // ── Altura del drawer ──
@@ -575,7 +575,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                               )}
                             </div>
                             <div className={cn('flex gap-3', nombreLargo ? 'flex-col items-stretch gap-1' : 'items-end justify-between')}>
-                              <h3 className={cn('min-w-0 flex-1 break-words font-bold leading-tight text-foreground [overflow-wrap:anywhere]', nombreClass)}>
+                              <h3 className={cn('font-alfajor min-w-0 flex-1 break-words uppercase text-foreground [overflow-wrap:anywhere]', nombreClass, 'leading-[0.92]')}>
                                 {product.nombre}
                               </h3>
                               <div className={cn('shrink-0 text-right', nombreLargo && 'self-end')}>
@@ -584,7 +584,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                                     ${formatPrecio(totalTachado)}
                                   </p>
                                 )}
-                                <p className={cn('text-[22px] font-black', tieneDescuento ? 'text-emerald-600 dark:text-emerald-400' : 'text-primary')}>
+                                <p className={cn('font-alfajor text-[28px] leading-none tabular-nums', tieneDescuento ? 'text-emerald-600 dark:text-emerald-400' : 'text-primary')}>
                                   ${formatPrecio(total)}
                                 </p>
                               </div>
@@ -606,7 +606,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                             )}
                           </div>
                           <div className={cn('flex gap-3', nombreLargo ? 'flex-col items-stretch gap-1' : 'items-end justify-between')}>
-                            <h3 className={cn('min-w-0 flex-1 break-words font-bold leading-tight text-white drop-shadow-sm [overflow-wrap:anywhere]', nombreClass)}>
+                            <h3 className={cn('font-alfajor min-w-0 flex-1 break-words uppercase text-white drop-shadow-sm [overflow-wrap:anywhere]', nombreClass, 'leading-[0.92]')}>
                               {product.nombre}
                             </h3>
                             <div className={cn('shrink-0 text-right', nombreLargo && 'self-end')}>
@@ -615,7 +615,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                                   ${formatPrecio(totalTachado)}
                                 </p>
                               )}
-                              <p className="text-[22px] font-black text-white drop-shadow-sm">
+                              <p className="font-alfajor text-[28px] leading-none tabular-nums text-[#f6b73c] drop-shadow-sm">
                                 ${formatPrecio(total)}
                               </p>
                             </div>
@@ -755,6 +755,36 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                             >
                               <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
                                 <Medido onAltura={setContenidoH} className={cn('space-y-7 px-6 pt-6', hayPie ? 'pb-4' : 'pb-8')}>
+                                  {isExtrasStage && currentExtras.length > 0 && (
+                                    <div className="space-y-1">
+                                      <p className="px-1 pb-1 text-lg font-bold text-foreground">
+                                        {currentExtrasTitle}
+                                      </p>
+                                      <div className="flex flex-col gap-0.5">
+                                        {currentExtras.map((ag) => {
+                                          const sel = !!agregadosSeleccionados.find(a => a.id === ag.id)
+                                          return (
+                                            <button
+                                              key={ag.id}
+                                              type="button"
+                                              onClick={() => toggleAgregado(ag)}
+                                              className={cn(rowBtn, sel ? 'bg-primary/10' : 'bg-secondary/50')}
+                                            >
+                                              <span className={cn('text-[15px]', sel ? 'font-semibold text-primary' : 'text-foreground')}>
+                                                {ag.nombre}
+                                              </span>
+                                              <span className="flex items-center gap-2">
+                                                <span className={cn('text-[15px]', sel ? 'font-semibold text-primary' : 'text-muted-foreground')}>
+                                                  +${formatPrecio(parseFloat(ag.precio))}
+                                                </span>
+                                                {sel && <Check className="h-[18px] w-[18px] text-primary" />}
+                                              </span>
+                                            </button>
+                                          )
+                                        })}
+                                      </div>
+                                    </div>
+                                  )}
                                   {stage === 'extrasPrimary' && tieneIngredientes && (
                                     <div className="space-y-1">
                                       <p className="px-1 pb-1 text-lg font-bold text-foreground">
@@ -786,36 +816,6 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                                     </div>
                                   )}
 
-                                  {isExtrasStage && currentExtras.length > 0 && (
-                                    <div className="space-y-1">
-                                      <p className="px-1 pb-1 text-lg font-bold text-foreground">
-                                        {currentExtrasTitle}
-                                      </p>
-                                      <div className="flex flex-col gap-0.5">
-                                        {currentExtras.map((ag) => {
-                                          const sel = !!agregadosSeleccionados.find(a => a.id === ag.id)
-                                          return (
-                                            <button
-                                              key={ag.id}
-                                              type="button"
-                                              onClick={() => toggleAgregado(ag)}
-                                              className={cn(rowBtn, sel ? 'bg-primary/10' : 'bg-secondary/50')}
-                                            >
-                                              <span className={cn('text-[15px]', sel ? 'font-semibold text-primary' : 'text-foreground')}>
-                                                {ag.nombre}
-                                              </span>
-                                              <span className="flex items-center gap-2">
-                                                <span className={cn('text-[15px]', sel ? 'font-semibold text-primary' : 'text-muted-foreground')}>
-                                                  +${formatPrecio(parseFloat(ag.precio))}
-                                                </span>
-                                                {sel && <Check className="h-[18px] w-[18px] text-primary" />}
-                                              </span>
-                                            </button>
-                                          )
-                                        })}
-                                      </div>
-                                    </div>
-                                  )}
                                 </Medido>
                               </div>
                             </motion.div>
@@ -849,7 +849,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                                 className={cn(
                                   'relative h-14 min-w-0 flex-1 overflow-hidden rounded-2xl text-[17px] font-semibold transition-all duration-300 active:scale-[0.98]',
                                   addCount > 0
-                                    ? 'bg-emerald-500 text-white'
+                                    ? 'bg-[#f6b73c] text-[#0b3821]'
                                     : !isExtrasStage && variantBloqueada
                                       ? 'bg-foreground/10 text-muted-foreground'
                                       : 'bg-primary text-primary-foreground'
