@@ -1,31 +1,31 @@
-import { Fragment, type ReactNode } from 'react'
-import { ArrowDown, ArrowRight, ArrowUp, Instagram, MapPin } from 'lucide-react'
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
+import { ArrowDown, ArrowRight, ArrowUp, Instagram, MapPin, RotateCcw } from 'lucide-react'
 import { DIAS, INSTAGRAM_URL, SEMANA, hhmm, minutos, type Turno } from '@/lib/marcaAlfajor'
 
 // Piezas de la identidad de Alfajor que comparten la carta (MenuDelivery) y el pedido en grupo (Menu):
-// el logo sobre el verde, el "toldo" festoneado, la cinta de sabores, el alfajor que se apoya en ella, los títulos
-// de sección, las categorías, el botón del pedido y el footer. Nada queda fijo arriba al scrollear.
+// el hero con el video del alfajor que se arma, la cinta de sabores, los títulos de sección, las
+// categorías, el botón del pedido y el footer. Nada queda fijo arriba al scrollear.
 // Paleta oficial de la marca: verde #083821, naranja #eb623a y crema #f2eee2 (#052a18 es el verde
-// del modo oscuro). Lo que va dentro de la carta sigue usando las variables del tema.
+// del modo oscuro). El hero usa de fondo #efeae7, el blanco cálido del video, para que no tenga cortes.
+// Lo que va dentro de la carta sigue usando las variables del tema.
 
-export function HeaderMarca({ children, enlaceInicio = false }: { children?: ReactNode; enlaceInicio?: boolean }) {
-    const logo = <img src="/logo.webp" alt="Alfajor" className="h-11 w-auto -rotate-3" />
+/** El logo en verde. El archivo (/logo.webp) es crema sobre transparente: se usa de máscara y se pinta. */
+export function LogoAlfajor({ className = '' }: { className?: string }) {
     return (
-        <header className="relative bg-[#083821] text-[#f2eee2] dark:bg-[#052a18]">
-            <div className="mx-auto flex h-20 max-w-2xl items-center justify-between gap-3 px-5 lg:max-w-5xl xl:max-w-6xl">
-                {enlaceInicio ? <a href="/" aria-label="Alfajor, inicio" className="shrink-0">{logo}</a> : <span className="shrink-0">{logo}</span>}
-                <div className="flex min-w-0 items-center gap-2">{children}</div>
-            </div>
-        </header>
+        <span
+            role="img"
+            aria-label="Alfajor"
+            className={`block aspect-[1080/472] bg-[#083821] [mask-image:url(/logo.webp)] [mask-position:left_center] [mask-repeat:no-repeat] [mask-size:contain] [-webkit-mask-image:url(/logo.webp)] [-webkit-mask-position:left_center] [-webkit-mask-repeat:no-repeat] [-webkit-mask-size:contain] ${className}`}
+        />
     )
 }
 
 export function EstadoLocal({ abierto, texto, corto }: { abierto: boolean; texto: string; corto?: string }) {
     return (
-        <span className="inline-flex min-w-0 items-center gap-2 rounded-full border border-[#f2eee2]/20 bg-[#f2eee2]/5 px-3 py-1.5 text-xs font-semibold text-[#f2eee2]">
+        <span className="inline-flex min-w-0 items-center gap-2 rounded-full border border-[#083821]/15 bg-[#083821]/5 px-3 py-1.5 text-xs text-[#083821] backdrop-blur-sm">
             <span className="relative flex size-2 shrink-0">
-                <span className={`absolute inline-flex size-full animate-ping rounded-full opacity-60 ${abierto ? 'bg-emerald-400' : 'bg-red-400'}`} />
-                <span className={`relative size-2 rounded-full ${abierto ? 'bg-emerald-400' : 'bg-red-400'}`} />
+                <span className={`absolute inline-flex size-full animate-ping rounded-full opacity-60 ${abierto ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                <span className={`relative size-2 rounded-full ${abierto ? 'bg-emerald-500' : 'bg-red-500'}`} />
             </span>
             {corto ? (
                 <>
@@ -43,7 +43,7 @@ export function BotonTicket({ children, onClick, icono }: { children: ReactNode;
         <button
             type="button"
             onClick={onClick}
-            className="group inline-flex h-14 items-stretch overflow-hidden rounded-lg bg-[#eb623a] text-[#083821] shadow-[0_14px_30px_-14px_rgba(0,0,0,0.8)] transition-transform duration-150 hover:-rotate-1 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2eee2]"
+            className="group inline-flex h-14 items-stretch overflow-hidden rounded-lg bg-[#eb623a] text-[#083821] shadow-[0_14px_30px_-14px_rgba(8,56,33,0.6)] transition-transform duration-150 hover:-rotate-1 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#083821]"
         >
             <span className="font-alfajor flex items-center px-5 pt-0.5 text-[20px] uppercase leading-none">{children}</span>
             <span className="flex w-14 items-center justify-center border-l-2 border-dashed border-[#083821]/35 [&_svg]:size-5">
@@ -58,63 +58,137 @@ export const Puntillado = () => (
     <div aria-hidden className="pointer-events-none absolute inset-0 bg-[radial-gradient(#f2eee2_1px,transparent_1px)] bg-[length:18px_18px] opacity-[0.07]" />
 )
 
-/** El borde festoneado de un toldo: cuelga del bloque verde (abajo) o lo corona (arriba). */
-export function Toldo({ arriba = false }: { arriba?: boolean }) {
+/** El borde festoneado de un toldo verde, coronando el footer. */
+export function Toldo() {
     return (
         <div
             aria-hidden
-            className={`h-3 w-full bg-[length:24px_12px] bg-repeat-x ${arriba
-                ? 'bg-[radial-gradient(circle_at_50%_100%,#083821_11.5px,transparent_12px)] dark:bg-[radial-gradient(circle_at_50%_100%,#052a18_11.5px,transparent_12px)]'
-                : 'bg-[radial-gradient(circle_at_50%_0,#083821_11.5px,transparent_12px)] dark:bg-[radial-gradient(circle_at_50%_0,#052a18_11.5px,transparent_12px)]'
-                }`}
+            className="h-3 w-full bg-[length:24px_12px] bg-repeat-x bg-[radial-gradient(circle_at_50%_100%,#083821_11.5px,transparent_12px)] dark:bg-[radial-gradient(circle_at_50%_100%,#052a18_11.5px,transparent_12px)]"
         />
     )
 }
 
-/** Trazo de marcador que tacha una palabra del titular (se dibuja al cargar). */
-export const Tachado = () => (
-    <svg viewBox="0 0 200 40" preserveAspectRatio="none" aria-hidden className="pointer-events-none absolute left-[-5%] top-[34%] h-[0.34em] w-[110%] text-[#eb623a]">
-        <path
-            className="alfajor-trazo"
-            pathLength={1}
-            d="M4 26 C 46 8, 92 34, 132 16 S 184 6, 196 18"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="10"
-            strokeLinecap="round"
-        />
-    </svg>
-)
+/** En qué punto del armado va el video: el relleno todavía cae, ya aterrizó, o cayó la segunda tapa. */
+export type FaseArmado = 'cayendo' | 'relleno' | 'armado'
 
-/** El alfajor recortado (sin fondo) que sale del bloque verde y queda detrás de la cinta de sabores.
- * Va con `absolute` dentro del contenedor del hero: la página le da tamaño y lugar con `className`.
- * Queda por encima del toldo y por debajo de la cinta (z-[5] contra su z-10). */
-export function AlfajorEnElToldo({ src, srcSet, sizes, nombre, onClick, className = '' }: {
-    src: string
-    srcSet?: string
-    sizes?: string
-    nombre: string
-    onClick?: () => void
-    className?: string
+// Momentos del video /hero-alfajor (5,3 s): la tapa de abajo está desde el principio, el relleno
+// aterriza a 1,25 s y la tapa de arriba a 1,85 s; después el alfajor queda quieto.
+const T_RELLENO = 1.25
+const T_TAPA = 1.85
+
+/** El hero entero gira alrededor del video del alfajor que se arma.
+ *
+ * En el celular el hero ocupa la primera pantalla: arriba, en el aire por donde cae el relleno, va el
+ * titular; en el medio se arma el alfajor; abajo, sobre el piso, las acciones. El video (vertical,
+ * 9:16) no cubre: se escala para que el alfajor —que ocupa casi todo el ancho del cuadro— quede en
+ * ~87% del ancho del teléfono, y se funde en los bordes. En escritorio va a la derecha, a toda
+ * altura. El fondo es el mismo blanco cálido del video, así que no hay recuadro ni borde.
+ *
+ * El video se reproduce una vez y queda en el último cuadro (el alfajor armado); se puede volver a
+ * armar. `titulo` recibe la fase para encenderse al compás: primero el relleno, después la tapa.
+ * Sin movimiento (prefers-reduced-motion) o si el navegador no lo reproduce solo, se ve la foto
+ * final y la fase es 'armado' desde el principio. */
+export function HeroVideo({ arriba, titulo, abajo, nombreVideo, onClickVideo }: {
+    arriba: ReactNode
+    titulo: (fase: FaseArmado) => ReactNode
+    abajo: ReactNode
+    nombreVideo: string
+    onClickVideo?: () => void
 }) {
+    const videoRef = useRef<HTMLVideoElement>(null)
+    const [sinMovimiento] = useState(() => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+    const [fase, setFase] = useState<FaseArmado>(sinMovimiento ? 'armado' : 'cayendo')
+    const [terminado, setTerminado] = useState(sinMovimiento)
+
+    useEffect(() => {
+        const video = videoRef.current
+        if (!video || sinMovimiento) return
+        let frame = 0
+        const leer = () => {
+            const t = video.currentTime
+            setFase(t >= T_TAPA ? 'armado' : t >= T_RELLENO ? 'relleno' : 'cayendo')
+        }
+        // currentTime leído en cada cuadro: `timeupdate` llega cada ~250 ms y el titular quedaría tarde.
+        // Igual se escucha `timeupdate` de respaldo, por si el navegador frena los cuadros (pestaña oculta).
+        const seguir = () => {
+            leer()
+            if (!video.paused && !video.ended) frame = requestAnimationFrame(seguir)
+        }
+        const alReproducir = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(seguir) }
+        const alTerminar = () => { setFase('armado'); setTerminado(true) }
+        video.addEventListener('playing', alReproducir)
+        video.addEventListener('timeupdate', leer)
+        video.addEventListener('ended', alTerminar)
+        // Si no arranca solo (modo ahorro, autoplay bloqueado) o tarda, el titular no queda apagado.
+        const respaldo = window.setTimeout(() => { if (video.paused) alTerminar() }, 2500)
+        video.play().catch(alTerminar)
+        return () => {
+            cancelAnimationFrame(frame)
+            window.clearTimeout(respaldo)
+            video.removeEventListener('playing', alReproducir)
+            video.removeEventListener('timeupdate', leer)
+            video.removeEventListener('ended', alTerminar)
+        }
+    }, [sinMovimiento])
+
+    const rearmar = () => {
+        const video = videoRef.current
+        if (!video) return
+        setTerminado(false)
+        video.currentTime = 0
+        video.play().catch(() => { setFase('armado'); setTerminado(true) })
+    }
+
     return (
-        <button
-            type="button"
-            onClick={onClick}
-            disabled={!onClick}
-            aria-label={onClick ? `Ver ${nombre}` : undefined}
-            className={`group absolute z-[5] animate-in fade-in slide-in-from-bottom-8 duration-700 ${className}`}
-        >
-            <img
-                src={src}
-                srcSet={srcSet}
-                sizes={sizes}
-                alt={nombre}
-                draggable={false}
-                decoding="async"
-                className="w-full -rotate-[4deg] select-none drop-shadow-[0_26px_22px_rgba(0,0,0,0.55)] transition-transform duration-500 group-enabled:group-hover:-translate-y-1.5 group-enabled:group-hover:-rotate-[2deg]"
-            />
-        </button>
+        <section className="relative isolate overflow-hidden bg-[#efeae7] text-[#083821]">
+            <video
+                ref={videoRef}
+                muted
+                playsInline
+                preload="auto"
+                poster={sinMovimiento ? '/hero-alfajor-final.webp' : '/hero-alfajor-inicio.webp'}
+                aria-label={nombreVideo}
+                className="absolute left-1/2 top-[calc(50%+12px)] -z-20 aspect-[9/16] h-[min(172vw,82%)] -translate-x-1/2 -translate-y-1/2 object-cover [mask-composite:intersect] [mask-image:linear-gradient(to_bottom,transparent,#000_14%,#000_86%,transparent),linear-gradient(to_right,transparent,#000_8%,#000_92%,transparent)] [-webkit-mask-composite:source-in] [-webkit-mask-image:linear-gradient(to_bottom,transparent,#000_14%,#000_86%,transparent),linear-gradient(to_right,transparent,#000_8%,#000_92%,transparent)] md:left-auto md:right-[5%] md:h-[112%] md:translate-x-0 lg:right-[7%]"
+            >
+                <source src="/hero-alfajor.webm" type="video/webm" />
+                <source src="/hero-alfajor.mp4" type="video/mp4" />
+            </video>
+
+            {/* Velos del color del fondo: el titular y las acciones se leen aunque pase el relleno o el
+                piso tenga sombra. En escritorio no hacen falta: el texto va al costado. */}
+            <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[26%] bg-gradient-to-b from-[#efeae7] via-[#efeae7]/60 to-transparent md:hidden" />
+            <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 -z-10 h-[24%] bg-gradient-to-t from-[#efeae7] via-[#efeae7]/85 to-transparent md:hidden" />
+
+            {/* El alfajor también se toca: abre el producto. Va debajo del texto (que deja pasar los toques). */}
+            {onClickVideo && (
+                <button
+                    type="button"
+                    onClick={onClickVideo}
+                    aria-label={`Ver ${nombreVideo}`}
+                    className="absolute inset-x-[8%] bottom-[32%] top-[36%] -z-10 cursor-pointer md:inset-x-auto md:bottom-[28%] md:right-[12%] md:top-[30%] md:w-[30%]"
+                />
+            )}
+
+            <div className="pointer-events-none mx-auto flex min-h-[max(640px,100svh)] max-w-2xl flex-col px-5 pb-20 pt-5 md:min-h-[620px] md:max-w-5xl md:justify-center md:pb-24 lg:min-h-[700px] xl:max-w-6xl">
+                <div className="pointer-events-auto animate-in fade-in duration-700 md:absolute md:inset-x-0 md:top-0 md:mx-auto md:max-w-5xl md:px-5 md:pt-6 xl:max-w-6xl">{arriba}</div>
+                <div className="pointer-events-auto mt-6 md:mt-0 md:max-w-[54%]">{titulo(fase)}</div>
+                {/* En el celular, el alfajor se arma en este hueco. */}
+                <div className="flex-1 md:hidden" />
+                <div className="pointer-events-auto animate-in fade-in slide-in-from-bottom-4 duration-700 md:mt-9 md:max-w-[54%]">{abajo}</div>
+            </div>
+
+            {terminado && !sinMovimiento && (
+                <button
+                    type="button"
+                    onClick={rearmar}
+                    aria-label="Armalo de nuevo"
+                    title="Armalo de nuevo"
+                    className="absolute bottom-[86px] right-5 grid size-10 place-items-center rounded-full bg-[#083821] text-[#f2eee2] shadow-[0_10px_24px_-10px_rgba(8,56,33,0.7)] transition-transform animate-in fade-in zoom-in-75 duration-500 active:scale-90 md:bottom-28 md:right-8"
+                >
+                    <RotateCcw className="size-4" />
+                </button>
+            )}
+        </section>
     )
 }
 
@@ -124,8 +198,8 @@ const Destello = () => (
     </svg>
 )
 
-/** Cinta naranja con los sabores pasando, inclinada sobre el borde del hero. */
-export function Cinta({ palabras }: { palabras: string[] }) {
+/** Cinta naranja con los sabores pasando, inclinada sobre el borde de abajo del hero. */
+export function Cinta({ palabras, className = '-mt-2' }: { palabras: string[]; className?: string }) {
     // Se repite hasta llenar un monitor ancho: la animación corre la mitad del total.
     const lista: string[] = []
     while (lista.length < 14) lista.push(...palabras)
@@ -140,7 +214,7 @@ export function Cinta({ palabras }: { palabras: string[] }) {
         </div>
     )
     return (
-        <div className="relative z-10 -mt-2 -rotate-2 py-3">
+        <div className={`relative z-10 -rotate-2 py-3 ${className}`}>
             <div className="-mx-4 overflow-hidden bg-[#eb623a] py-3 text-[#083821] shadow-[0_10px_24px_-10px_rgba(0,0,0,0.45)]">
                 <div className="alfajor-marquesina font-alfajor flex w-max text-[24px] uppercase leading-none">
                     {grupo(false)}
@@ -228,7 +302,7 @@ export function FooterMarca({ horarios, direccion, onPedir }: { horarios: Turno[
 
     return (
         <footer className="relative mt-24 text-[#f2eee2]">
-            <Toldo arriba />
+            <Toldo />
             <div className="relative overflow-hidden bg-[#083821] pb-32 dark:bg-[#052a18]">
                 <Puntillado />
                 <div className="relative mx-auto grid max-w-2xl gap-12 px-5 pt-12 lg:max-w-5xl lg:grid-cols-[1.2fr_1fr_1fr] xl:max-w-6xl">

@@ -8,7 +8,7 @@ import {
     Package, UtensilsCrossed, Utensils, Clock, Share2, User, Plus,
     BadgePercent, Users, Sparkles, Check, ArrowRight
 } from 'lucide-react'
-import { BotonPedido, BotonTicket, Cinta, EstadoLocal, FooterMarca, HeaderMarca, NavCategorias, AlfajorEnElToldo, Puntillado, TituloSeccion, Toldo } from '@/components/marca/MarcaAlfajor'
+import { BotonPedido, BotonTicket, Cinta, EstadoLocal, FooterMarca, HeroVideo, LogoAlfajor, NavCategorias, TituloSeccion } from '@/components/marca/MarcaAlfajor'
 import { sabores, textoEstado } from '@/lib/marcaAlfajor'
 import { ProductDetailDrawer, etiquetaVarianteMedallon } from '@/components/ProductDetailDrawer'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
@@ -196,8 +196,8 @@ const avisoDescuento = (porcentaje: number, exclusivo = false): AvisoDescuento =
     ? { titulo: 'Oferta exclusiva', detalle: `${porcentaje}% OFF por 48 horas, aplicado a tu pedido` }
     : { titulo: '¡Te extrañamos!', detalle: `${porcentaje}% OFF aplicado a tu pedido` }
 
-// Los accesos secundarios del hero (pedido en grupo, puntos): texto subrayado en naranja, sin caja.
-const ACCESO_HERO = 'font-alfajor inline-flex max-w-full items-center gap-2 py-1 text-[15px] text-[#f2eee2] underline decoration-[#eb623a] decoration-2 underline-offset-[6px] transition-colors hover:text-[#eb623a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#eb623a] rounded-sm'
+// Los accesos secundarios del hero (pedido en grupo, puntos): texto verde subrayado en naranja, sin caja.
+const ACCESO_HERO = 'font-alfajor inline-flex max-w-full items-center gap-2 py-1 text-[15px] text-[#083821] underline decoration-[#eb623a] decoration-2 underline-offset-[6px] transition-colors hover:text-[#eb623a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#eb623a] rounded-sm'
 
 // Riel horizontal sin barra de scroll (`scrollbar-hide` no existe en este Tailwind).
 const RIEL_SIN_BARRA = '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
@@ -1014,10 +1014,10 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
         abrirProductoDrawer()
     }
 
-    // El alfajor que se apoya en la cinta del hero es el Cheese (la foto recortada /cheese-hero-v2.webp):
-    // tocarlo abre ese producto. La cinta muestra los sabores de la primera categoría.
-    const productoCheese = productosVenta.find(p => /cheese/i.test(p.nombre) && /con papas/i.test(p.nombre))
-        ?? productosVenta.find(p => /cheese/i.test(p.nombre)) ?? null
+    // El del video del hero (lechuga, tomate, salsa y doble cheddar) es el American: tocarlo abre ese.
+    // La cinta muestra los sabores de la primera categoría.
+    const productoHeroVideo = productosVenta.find(p => /american/i.test(p.nombre) && /con papas/i.test(p.nombre))
+        ?? productosVenta.find(p => /american/i.test(p.nombre)) ?? null
     const palabrasCinta = sabores((productosPorCategoria[categoriasOrdenadas[0]] || []).map((p: any) => String(p.nombre)))
 
     const irACarta = () => {
@@ -1295,31 +1295,40 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                 </div>
             )}
 
-            <HeaderMarca enlaceInicio>
-                <EstadoLocal abierto={estadoAbierto.abierto} texto={textoEstado(horarios, estadoAbierto)} corto={estadoAbierto.abierto ? 'Abierto' : 'Cerrado'} />
-            </HeaderMarca>
-
-            {/* HERO: el toldo verde del local, el titular y la comanda con la polaroid. */}
-            <section className="relative bg-[#083821] text-[#f2eee2] dark:bg-[#052a18]">
-                <Puntillado />
-                <div className="relative mx-auto grid max-w-2xl items-center gap-10 px-5 pb-44 pt-4 sm:pb-56 lg:max-w-5xl lg:grid-cols-[1.1fr_1fr] lg:pb-20 lg:pt-8 xl:max-w-6xl">
-                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
-                        <h1 className="font-alfajor mt-2 text-[58px] uppercase leading-[0.92] sm:text-[80px] lg:text-[96px]">
+            {/* HERO: el video del alfajor que se arma es el hero. El titular cuenta lo que pasa en el
+                video ("Dos tapas. Un relleno.") y se enciende con cada parte que aterriza. */}
+            <HeroVideo
+                nombreVideo={productoHeroVideo?.nombre ?? 'Alfajor'}
+                onClickVideo={productoHeroVideo ? () => abrirDetalleProducto(productoHeroVideo) : undefined}
+                arriba={
+                    <div className="flex items-center justify-between gap-3">
+                        <a href="/" aria-label="Alfajor, inicio" className="shrink-0">
+                            <LogoAlfajor className="h-11 -rotate-3" />
+                        </a>
+                        <EstadoLocal abierto={estadoAbierto.abierto} texto={textoEstado(horarios, estadoAbierto)} corto={estadoAbierto.abierto ? 'Abierto' : 'Cerrado'} />
+                    </div>
+                }
+                titulo={(fase) => (
+                    <h1 className="font-alfajor text-[58px] uppercase leading-[0.92] sm:text-[80px] md:text-[76px] lg:text-[92px]">
+                        <span className={`block transition-opacity duration-500 ${fase === 'armado' ? 'opacity-100' : 'opacity-20'}`}>
                             Dos tapas.
-                            <br />
+                        </span>
+                        <span className={`block transition-[color,opacity] duration-500 ${fase === 'cayendo' ? 'opacity-20' : 'text-[#eb623a] opacity-100'}`}>
                             Un relleno.
-                        </h1>
-
+                        </span>
+                    </h1>
+                )}
+                abajo={
+                    <>
                         {bannerGrowth && (
-                            <p className="animate-in fade-in duration-300 mt-6 inline-flex max-w-full items-center gap-2 rounded-2xl bg-[#eb623a] px-3.5 py-2 text-[13px] leading-snug text-[#083821]">
+                            <p className="animate-in fade-in duration-300 mb-4 inline-flex max-w-full items-center gap-2 rounded-2xl bg-[#eb623a] px-3.5 py-2 text-[13px] leading-snug text-[#083821]">
                                 <BadgePercent className="size-4 shrink-0" aria-hidden />
                                 <span>
-                                    <strong className="font-extrabold">{bannerGrowth.titulo}</strong> {bannerGrowth.detalle}
+                                    <strong className="font-bold">{bannerGrowth.titulo}</strong> {bannerGrowth.detalle}
                                 </span>
                             </p>
                         )}
-
-                        <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-4">
+                        <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
                             <BotonTicket onClick={irACarta}>Elegí tu alfajor</BotonTicket>
                             {mostrarPedidoGrupal && (
                                 <button type="button" onClick={onArmarPedidoClick} aria-busy={creandoSala} className={ACCESO_HERO}>
@@ -1345,22 +1354,10 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                                 </button>
                             )}
                         </div>
-                    </div>
-
-                    {productoCheese && (
-                        <AlfajorEnElToldo
-                            src="/cheese-hero-v2.webp"
-                            srcSet="/cheese-hero-v2-1200.webp 1200w, /cheese-hero-v2.webp 1600w"
-                            sizes="(min-width: 1024px) 57vw, (min-width: 640px) 62vw, 88vw"
-                            nombre={sabores([productoCheese.nombre])[0]}
-                            onClick={() => abrirDetalleProducto(productoCheese)}
-                            className="right-[-10%] bottom-[-62px] w-[88%] sm:right-[-4%] sm:w-[62%] lg:right-[-4%] lg:bottom-[-78px] lg:w-[57%]"
-                          />
-                    )}
-                </div>
-            </section>
-            <Toldo />
-            <Cinta palabras={palabrasCinta} />
+                    </>
+                }
+            />
+            <Cinta palabras={palabrasCinta} className="-mt-14 md:-mt-16" />
 
             <div className="max-w-2xl lg:max-w-5xl xl:max-w-6xl mx-auto px-5 pt-6 space-y-8">
                 {productoCampana && campana && (

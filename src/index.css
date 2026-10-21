@@ -49,14 +49,11 @@
 }
 
 @keyframes alfajor-marquesina { to { transform: translateX(-50%); } }
-@keyframes alfajor-trazo { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
 
 .alfajor-marquesina { animation: alfajor-marquesina 32s linear infinite; }
-.alfajor-trazo { stroke-dasharray: 1; stroke-dashoffset: 1; animation: alfajor-trazo 0.7s 0.5s cubic-bezier(0.65, 0, 0.35, 1) forwards; }
 
 @media (prefers-reduced-motion: reduce) {
   .alfajor-marquesina { animation: none; }
-  .alfajor-trazo { animation: none; stroke-dashoffset: 0; }
 }
 
 @custom-variant dark (&:is(.dark *));

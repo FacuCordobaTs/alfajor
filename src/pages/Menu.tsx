@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { Button } from '@/components/ui/button'
-import { BotonPedido, BotonTicket, Cinta, AlfajorEnElToldo, EstadoLocal, FooterMarca, HeaderMarca, NavCategorias, Puntillado, TituloSeccion, Toldo } from '@/components/marca/MarcaAlfajor'
+import { BotonPedido, BotonTicket, Cinta, EstadoLocal, FooterMarca, HeroVideo, LogoAlfajor, NavCategorias, TituloSeccion } from '@/components/marca/MarcaAlfajor'
 import { sabores, textoEstado } from '@/lib/marcaAlfajor'
 import { Badge } from '@/components/ui/badge'
 import { useMesaStore } from '@/store/mesaStore'
@@ -286,9 +286,9 @@ const Menu = () => {
     }
   }
 
-  // El alfajor recortado del hero es el Cheese: tocarlo abre ese producto.
-  const productoCheese = productos.find(p => /cheese/i.test(p.nombre) && /con papas/i.test(p.nombre))
-    ?? productos.find(p => /cheese/i.test(p.nombre)) ?? null
+  // El del video del hero (lechuga, tomate, salsa y doble cheddar) es el American: tocarlo abre ese.
+  const productoHeroVideo = productos.find(p => /american/i.test(p.nombre) && /con papas/i.test(p.nombre))
+    ?? productos.find(p => /american/i.test(p.nombre)) ?? null
   const palabrasCinta = sabores((productosPorCategoria[categoriasOrdenadas[0]] || []).map(p => String(p.nombre)))
 
   // Lista ordenada de productos "hermanos" para saltar de uno a otro dentro del drawer
@@ -582,98 +582,85 @@ const Menu = () => {
         </div>
       )}
 
-      {/* --- HEADER --- */}
-      <HeaderMarca>
-        <span
-          title={isConnected ? 'Conectado' : 'Sin conexión'}
-          className="grid size-9 place-items-center rounded-full border border-[#f2eee2]/20 text-[#f2eee2]"
-        >
-          {isConnected ? <Wifi className="size-4 text-emerald-400" /> : <WifiOff className="size-4 text-red-400" />}
-        </span>
-        <span className="text-[#f2eee2] [&_button]:bg-[#f2eee2]/10 [&_button]:text-[#f2eee2] [&_button:hover]:bg-[#f2eee2]/20 [&_button:hover]:text-[#f2eee2]">
-          <ThemeToggle />
-        </span>
-        <button
-          onClick={() => setMisPedidosOpen(true)}
-          className="flex h-9 items-center gap-1.5 rounded-full border border-[#f2eee2]/25 px-3.5 text-xs font-alfajor text-[#f2eee2] transition-colors hover:border-[#f2eee2]/60"
-        >
-          <Package className="w-3.5 h-3.5" />
-          Mis pedidos
-        </button>
-      </HeaderMarca>
-
-      {/* --- HERO DE LA SALA: quién arma el pedido y con quién --- */}
-      <section className="relative bg-[#083821] text-[#f2eee2] dark:bg-[#052a18]">
-        <Puntillado />
-        <div className="relative mx-auto grid max-w-2xl items-center gap-10 px-5 pb-44 pt-4 sm:pb-56 lg:max-w-5xl lg:grid-cols-[1.15fr_1fr] lg:pb-20 lg:pt-8 xl:max-w-6xl">
-          <div className="min-w-0 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      {/* --- HERO DE LA SALA: el mismo video del alfajor que se arma, con quién arma el pedido --- */}
+      <HeroVideo
+        nombreVideo={productoHeroVideo?.nombre ?? 'Alfajor'}
+        onClickVideo={productoHeroVideo ? () => abrirDetalleProducto(productoHeroVideo) : undefined}
+        arriba={
+          <div className="flex items-center justify-between gap-3">
+            <LogoAlfajor className="h-10 shrink-0 -rotate-3" />
+            <div className="flex min-w-0 items-center gap-2">
+              <span
+                title={isConnected ? 'Conectado' : 'Sin conexión'}
+                className="grid size-9 place-items-center rounded-full border border-[#083821]/15 bg-[#083821]/5"
+              >
+                {isConnected ? <Wifi className="size-4 text-emerald-600" /> : <WifiOff className="size-4 text-red-500" />}
+              </span>
+              <span className="[&_button]:bg-[#083821]/5 [&_button]:text-[#083821] [&_button:hover]:bg-[#083821]/10 [&_button:hover]:text-[#083821]">
+                <ThemeToggle />
+              </span>
+              <button
+                onClick={() => setMisPedidosOpen(true)}
+                className="flex h-9 items-center gap-1.5 rounded-full border border-[#083821]/20 px-3.5 text-xs font-alfajor text-[#083821] transition-colors hover:border-[#083821]/50"
+              >
+                <Package className="w-3.5 h-3.5" />
+                Mis pedidos
+              </button>
+            </div>
+          </div>
+        }
+        titulo={(fase) => (
+          <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full bg-[#eb623a] px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#083821]">
+              <span className="font-alfajor rounded-full bg-[#eb623a] px-3 py-1.5 text-[11px] uppercase tracking-[0.12em] text-[#083821]">
                 {restaurante?.esCarrito && pedido?.nombrePedido ? `Pedido de ${pedido.nombrePedido}` : (mesa?.nombre || 'Pedido en grupo')}
               </span>
               <EstadoLocal abierto={estadoAbierto.abierto} texto={textoEstado(horarios, estadoAbierto)} />
             </div>
-
-            <p className="font-alfajor mt-6 text-2xl uppercase leading-none text-[#f2eee2]/70">Hola,</p>
-            <h1 className="font-alfajor mt-1 break-words text-[56px] uppercase leading-[0.92] text-[#eb623a] [overflow-wrap:anywhere] sm:text-[76px] lg:text-[90px]">
-              {clienteNombre}.
+            <h1 className="font-alfajor mt-4 break-words uppercase leading-[0.92] [overflow-wrap:anywhere]">
+              <span className="block text-2xl opacity-70">Hola,</span>
+              <span className="block text-[46px] text-[#eb623a] sm:text-[72px] lg:text-[88px]">{clienteNombre}.</span>
             </h1>
-            <p className="font-alfajor mt-3 text-[28px] uppercase leading-[1.05] sm:text-[36px]">
-              Armen el pedido{' '}
-              <span className="inline-block -rotate-2 bg-[#eb623a] px-2 pt-1 text-[#083821]">juntos.</span>
+            {/* Igual que en la carta: la frase se enciende cuando el alfajor termina de armarse. */}
+            <p className={`font-alfajor mt-2 text-[22px] uppercase leading-[1.05] transition-opacity duration-500 sm:text-[32px] ${fase === 'armado' ? 'opacity-100' : 'opacity-20'}`}>
+              Armen el pedido juntos.
             </p>
-            <p className="mt-5 max-w-md text-base leading-relaxed text-[#f2eee2]/75">
-              Una sola comanda para toda la mesa: cada uno anota lo suyo desde su celu y cuando están todos, la mandan a la plancha.
-            </p>
-
-            {/* En la mesa: cada participante es un sticker */}
-            <div className="mt-7">
-              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#f2eee2]/55">En el pedido</p>
-              <div className="-mx-5 mt-3 flex items-center gap-3 overflow-x-auto px-5 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                <Participante iniciales="YO" nombre="Vos" indice={0} />
-                {clientes.filter(c => c.nombre !== clienteNombre).map((cliente, i) => (
-                  <Participante key={cliente.id} iniciales={cliente.nombre.slice(0, 2).toUpperCase()} nombre={cliente.nombre} indice={i + 1} />
-                ))}
-                {esSala && (
-                  <button
-                    type="button"
-                    onClick={compartirLink}
-                    aria-label="Invitar a alguien más"
-                    className="flex shrink-0 flex-col items-center gap-1.5"
-                  >
-                    <span className="grid size-14 place-items-center rounded-2xl border-2 border-dashed border-[#f2eee2]/40 text-[#f2eee2]/70 transition-colors hover:border-[#f2eee2] hover:text-[#f2eee2]">
-                      <Plus className="size-5" />
-                    </span>
-                    <span className="text-[11px] font-semibold text-[#f2eee2]/60">Sumar</span>
-                  </button>
-                )}
-                {clientes.length <= 1 && (
-                  <p className="shrink-0 pl-1 text-xs italic text-[#f2eee2]/50">Esperando al resto…</p>
-                )}
-              </div>
+          </div>
+        )}
+        abajo={
+          <>
+            <p className="text-[11px] uppercase tracking-[0.2em] text-[#083821]/60">En el pedido</p>
+            <div className="-mx-5 mt-2 flex items-center gap-3 overflow-x-auto px-5 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <Participante iniciales="YO" nombre="Vos" indice={0} />
+              {clientes.filter(c => c.nombre !== clienteNombre).map((cliente, i) => (
+                <Participante key={cliente.id} iniciales={cliente.nombre.slice(0, 2).toUpperCase()} nombre={cliente.nombre} indice={i + 1} />
+              ))}
+              {esSala && (
+                <button
+                  type="button"
+                  onClick={compartirLink}
+                  aria-label="Invitar a alguien más"
+                  className="flex shrink-0 flex-col items-center gap-1.5"
+                >
+                  <span className="grid size-14 place-items-center rounded-2xl border-2 border-dashed border-[#083821]/30 text-[#083821]/60 transition-colors hover:border-[#083821] hover:text-[#083821]">
+                    <Plus className="size-5" />
+                  </span>
+                  <span className="text-[11px] text-[#083821]/70">Sumar</span>
+                </button>
+              )}
+              {clientes.length <= 1 && (
+                <p className="shrink-0 pl-1 text-xs italic text-[#083821]/60">Esperando al resto…</p>
+              )}
             </div>
-
             {esSala && (
-              <div className="mt-7">
+              <div className="mt-3">
                 <BotonTicket onClick={compartirLink} icono={<Share2 />}>Invitá a tus amigos</BotonTicket>
               </div>
             )}
-          </div>
-
-          {productoCheese && (
-            <AlfajorEnElToldo
-              src="/cheese-hero-v2.webp"
-              srcSet="/cheese-hero-v2-1200.webp 1200w, /cheese-hero-v2.webp 1600w"
-              sizes="(min-width: 1024px) 57vw, (min-width: 640px) 62vw, 88vw"
-              nombre={sabores([productoCheese.nombre])[0]}
-              onClick={() => abrirDetalleProducto(productoCheese)}
-              className="right-[-10%] bottom-[-62px] w-[88%] sm:right-[-4%] sm:w-[62%] lg:right-[-4%] lg:bottom-[-78px] lg:w-[57%]"
-            />
-          )}
-        </div>
-      </section>
-      <Toldo />
-      <Cinta palabras={palabrasCinta} />
+          </>
+        }
+      />
+      <Cinta palabras={palabrasCinta} className="-mt-14 md:-mt-16" />
 
       <div ref={cartaRef} className="max-w-2xl lg:max-w-5xl xl:max-w-6xl mx-auto px-5 pt-6 scroll-mt-4">
 
@@ -1083,9 +1070,9 @@ const Menu = () => {
 // Cada participante de la sala es un sticker de color con sus iniciales, apenas girado.
 const COLORES_PARTICIPANTE = [
   'bg-[#eb623a] text-[#083821]',
-  'bg-[#f2eee2] text-[#083821]',
+  'bg-[#083821] text-[#f2eee2]',
   'bg-[#eb623a] text-[#083821]',
-  'bg-[#f2eee2] text-[#083821]',
+  'bg-[#083821] text-[#f2eee2]',
 ]
 const GIROS_PARTICIPANTE = ['-rotate-6', 'rotate-3', '-rotate-2', 'rotate-6']
 
@@ -1094,7 +1081,7 @@ const Participante = ({ iniciales, nombre, indice }: { iniciales: string; nombre
     <span className={`font-alfajor grid size-14 place-items-center rounded-2xl text-xl leading-none shadow-[0_8px_18px_-8px_rgba(0,0,0,0.6)] ${COLORES_PARTICIPANTE[indice % 4]} ${GIROS_PARTICIPANTE[indice % 4]}`}>
       {iniciales}
     </span>
-    <span className="max-w-full truncate text-[11px] font-semibold text-[#f2eee2]/80">{nombre}</span>
+    <span className="max-w-full truncate text-[11px] text-[#083821]/80">{nombre}</span>
   </div>
 )
 const EmptyState = () => (
