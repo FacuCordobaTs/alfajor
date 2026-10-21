@@ -662,8 +662,8 @@ const Menu = () => {
 
           {productoCheese && (
             <AlfajorEnElToldo
-              src="/cheese-hero.webp"
-              srcSet="/cheese-hero-1200.webp 1200w, /cheese-hero.webp 1743w"
+              src="/cheese-hero-v2.webp"
+              srcSet="/cheese-hero-v2-1200.webp 1200w, /cheese-hero-v2.webp 1600w"
               sizes="(min-width: 1024px) 57vw, (min-width: 640px) 62vw, 88vw"
               nombre={sabores([productoCheese.nombre])[0]}
               onClick={() => abrirDetalleProducto(productoCheese)}

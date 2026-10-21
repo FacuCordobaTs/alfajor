@@ -1013,7 +1013,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
         abrirProductoDrawer()
     }
 
-    // El alfajor que se apoya en la cinta del hero es el Cheese (la foto recortada /cheese-hero.webp):
+    // El alfajor que se apoya en la cinta del hero es el Cheese (la foto recortada /cheese-hero-v2.webp):
     // tocarlo abre ese producto. La cinta muestra los sabores de la primera categoría.
     const productoCheese = productosVenta.find(p => /cheese/i.test(p.nombre) && /con papas/i.test(p.nombre))
         ?? productosVenta.find(p => /cheese/i.test(p.nombre)) ?? null
@@ -1358,8 +1358,8 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
 
                     {productoCheese && (
                         <AlfajorEnElToldo
-                            src="/cheese-hero.webp"
-                            srcSet="/cheese-hero-1200.webp 1200w, /cheese-hero.webp 1743w"
+                            src="/cheese-hero-v2.webp"
+                            srcSet="/cheese-hero-v2-1200.webp 1200w, /cheese-hero-v2.webp 1600w"
                             sizes="(min-width: 1024px) 57vw, (min-width: 640px) 62vw, 88vw"
                             nombre={sabores([productoCheese.nombre])[0]}
                             onClick={() => abrirDetalleProducto(productoCheese)}
