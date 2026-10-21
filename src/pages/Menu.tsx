@@ -569,7 +569,7 @@ const Menu = () => {
       {themeStyles}
 
       {localCerrado && (
-        <div className={puedeProgramar ? "bg-[#eb623a] text-[#083821]" : "bg-[#f2eee2] text-[#083821]"}>
+        <div className={puedeProgramar ? "bg-[#eb623a] text-[#083821]" : "bg-[#efeae7] text-[#083821]"}>
           <div className="max-w-2xl lg:max-w-5xl xl:max-w-6xl mx-auto px-5 py-2.5 flex items-center justify-center gap-2">
             <Clock className="w-4 h-4 shrink-0" />
             <p className="text-sm text-center">
