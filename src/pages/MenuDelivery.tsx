@@ -8,7 +8,7 @@ import {
     Package, UtensilsCrossed, Utensils, Clock, Share2, User, Plus,
     BadgePercent, Users, Sparkles, Check, ArrowRight
 } from 'lucide-react'
-import { BotonPedido, BotonTicket, Cinta, EstadoLocal, FooterMarca, HeaderMarca, NavCategorias, AlfajorEnElToldo, Puntillado, Tachado, TituloSeccion, Toldo } from '@/components/marca/MarcaAlfajor'
+import { BotonPedido, BotonTicket, Cinta, EstadoLocal, FooterMarca, HeaderMarca, NavCategorias, AlfajorEnElToldo, Puntillado, TituloSeccion, Toldo } from '@/components/marca/MarcaAlfajor'
 import { sabores, textoEstado } from '@/lib/marcaAlfajor'
 import { ProductDetailDrawer, etiquetaVarianteMedallon } from '@/components/ProductDetailDrawer'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
@@ -1305,20 +1305,10 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                 <div className="relative mx-auto grid max-w-2xl items-center gap-10 px-5 pb-44 pt-4 sm:pb-56 lg:max-w-5xl lg:grid-cols-[1.1fr_1fr] lg:pb-20 lg:pt-8 xl:max-w-6xl">
                     <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
                         <h1 className="font-alfajor mt-2 text-[42px] uppercase leading-[0.95] sm:text-[64px] lg:text-[78px]">
-                            El alfajor
+                            Dos tapas.
                             <br />
-                            que no es
-                            <br />
-                            <span className="relative inline-block text-[#f2eee2]/90">
-                                dulce.
-                                <Tachado />
-                            </span>
+                            Un relleno.
                         </h1>
-                        <p className="mt-5">
-                            <span className="font-alfajor inline-block origin-left -rotate-2 bg-[#eb623a] px-2.5 pb-1 pt-1.5 text-[17px] uppercase leading-tight text-[#083821] sm:text-[24px]">
-                                Es salado. Y se come con papas.
-                            </span>
-                        </p>
 
                         {bannerGrowth && (
                             <p className="animate-in fade-in duration-300 mt-6 inline-flex max-w-full items-center gap-2 rounded-2xl bg-[#eb623a] px-3.5 py-2 text-[13px] leading-snug text-[#083821]">
