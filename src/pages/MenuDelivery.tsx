@@ -1858,7 +1858,7 @@ const ProductoCard = ({ producto, onClick }: { producto: any, onClick: () => voi
                     )}
                 </div>
 
-                <div className="flex flex-wrap items-baseline justify-end gap-1.5 mt-2 text-right">
+                <div className="flex flex-wrap items-baseline justify-start gap-1.5 mt-2 text-left">
                     <span className={`font-bold text-[22px] ${tieneDescuento ? 'text-emerald-600 dark:text-emerald-400' : 'text-primary'}`}>
                         ${precioFinal.toFixed(0)}
                     </span>
