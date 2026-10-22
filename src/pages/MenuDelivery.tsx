@@ -1357,7 +1357,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                     </>
                 }
             />
-            <Cinta palabras={palabrasCinta} className="-mt-14 md:-mt-16" />
+            <Cinta verde palabras={palabrasCinta} className="-mt-9 md:-mt-12" />
 
             <div className="max-w-2xl lg:max-w-5xl xl:max-w-6xl mx-auto px-5 pt-6 space-y-8">
                 {productoCampana && campana && (
@@ -1417,6 +1417,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                                     return (
                                         <div key={categoriaNombre} className="space-y-5">
                                             <TituloSeccion
+                                                recto
                                                 indice={indice + 1}
                                                 titulo={categoriaNombre}
                                                 detalle={`${productosDeCategoria.length} ${productosDeCategoria.length === 1 ? 'opción' : 'opciones'}`}
@@ -1440,6 +1441,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                             productosFiltrados.length > 0 ? (
                                 <div className="space-y-5">
                                     <TituloSeccion
+                                        recto
                                         indice={categoriasOrdenadas.indexOf(selectedCategory) + 1}
                                         titulo={selectedCategory}
                                         detalle={`${productosFiltrados.length} ${productosFiltrados.length === 1 ? 'opción' : 'opciones'}`}

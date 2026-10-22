@@ -199,7 +199,7 @@ const Destello = () => (
 )
 
 /** Cinta naranja con los sabores pasando, inclinada sobre el borde de abajo del hero. */
-export function Cinta({ palabras, className = '-mt-2' }: { palabras: string[]; className?: string }) {
+export function Cinta({ palabras, className = '-mt-2', verde = false }: { palabras: string[]; className?: string; verde?: boolean }) {
     // Se repite hasta llenar un monitor ancho: la animación corre la mitad del total.
     const lista: string[] = []
     while (lista.length < 14) lista.push(...palabras)
@@ -208,14 +208,18 @@ export function Cinta({ palabras, className = '-mt-2' }: { palabras: string[]; c
             {lista.map((p, i) => (
                 <Fragment key={i}>
                     <span className="whitespace-nowrap">{p}</span>
-                    <Destello />
+                    {verde ? (
+                        <span className="font-alfajor whitespace-normal text-center text-[13px] leading-[1.05] tracking-wide">SMASHING<br />HAPPINESS WITH<br />EVERY BURGER</span>
+                    ) : (
+                        <Destello />
+                    )}
                 </Fragment>
             ))}
         </div>
     )
     return (
         <div className={`relative z-10 -rotate-2 py-3 ${className}`}>
-            <div className="-mx-4 overflow-hidden bg-[#eb623a] py-3 text-[#083821] shadow-[0_10px_24px_-10px_rgba(0,0,0,0.45)]">
+            <div className={`-mx-4 overflow-hidden py-3 shadow-[0_10px_24px_-10px_rgba(0,0,0,0.45)] ${verde ? 'bg-[#083821] text-[#e8e1d5]' : 'bg-[#eb623a] text-[#083821]'}`}>
                 <div className="alfajor-marquesina font-alfajor flex w-max text-[24px] uppercase leading-none">
                     {grupo(false)}
                     {grupo(true)}
@@ -225,10 +229,10 @@ export function Cinta({ palabras, className = '-mt-2' }: { palabras: string[]; c
     )
 }
 
-export function TituloSeccion({ indice, titulo, detalle }: { indice: number; titulo: string; detalle?: string }) {
+export function TituloSeccion({ indice, titulo, detalle, recto = false }: { indice: number; titulo: string; detalle?: string; recto?: boolean }) {
     return (
         <div className="flex items-end gap-3 border-b-2 border-foreground/85 px-1 pb-2.5">
-            <span className="font-barlow mb-1 shrink-0 -rotate-6 rounded-md bg-[#eb623a] px-1.5 py-1 text-lg leading-none text-[#083821] tabular-nums">{String(indice).padStart(2, '0')}</span>
+            <span className={`font-barlow mb-1 shrink-0 ${recto ? '' : '-rotate-6'} rounded-md bg-[#eb623a] px-1.5 py-1 text-lg leading-none text-[#083821] tabular-nums`}>{String(indice).padStart(2, '0')}</span>
             <h2 className="font-alfajor min-w-0 flex-1 break-words text-[30px] uppercase leading-[0.95] text-foreground sm:text-[40px]">{titulo}</h2>
             {detalle && <span className="shrink-0 pb-1 text-[11px] font-normal uppercase tracking-[0.14em] text-muted-foreground">{detalle}</span>}
         </div>
