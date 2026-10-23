@@ -1,9 +1,10 @@
-import { useState, useEffect, useLayoutEffect, useRef, type ReactNode } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
 import { Drawer, DrawerContent, DrawerTitle } from '@/components/ui/drawer'
-import { motion, AnimatePresence, useIsPresent, type PanInfo } from 'motion/react'
+import { motion, AnimatePresence, useIsPresent, useMotionValue, animate, type PanInfo } from 'motion/react'
 import { Check, ChevronLeft, ChevronRight, Clock } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { formatPrecio } from '@/lib/formatPrecio'
+import { fotosDeProducto } from '@/lib/fotosProducto'
 
 interface Ingrediente {
   id: number
@@ -29,6 +30,8 @@ interface Product {
   descripcion: string | null
   precio: number | string
   imagenUrl: string | null
+  /** Galería opcional: se recorre deslizando la foto del detalle. La portada es `imagenUrl`. */
+  imagenesExtra?: string[]
   categoria?: string
   ingredientes?: Ingrediente[]
   agregados?: Agregado[]
@@ -116,6 +119,10 @@ const SLIDE = { type: 'tween' as const, duration: 0.34, ease: [0.22, 1, 0.36, 1]
 const CRUCE_MS = 400
 /** Transición del deslizamiento horizontal al pasar de un producto a otro. */
 const NAV_SLIDE = { type: 'tween' as const, duration: 0.42, ease: [0.32, 0.72, 0, 1] as const }
+/** Paso entre fotos de la galería: sigue al dedo y se asienta con un resorte corto. */
+const FOTO_SPRING = { type: 'spring' as const, stiffness: 380, damping: 38 }
+/** Resistencia al tirar de la galería hacia un borde sin foto (ni producto) del otro lado. */
+const BORDE_ELASTICO = 0.3
 
 // Cada fila de la lista de variantes (py-3.5 + texto + gap). Sólo dimensiona el tope de esa lista:
 // el alto del drawer sale de medir el contenido (`Medido`), no de constantes.
@@ -184,6 +191,16 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
   const [cruzando, setCruzando] = useState(false)
   const cruceTimer = useRef<number | undefined>(undefined)
   const productId = product?.id
+  // Foto visible de la galería, atada al producto: al pasar a otro arranca en la portada desde el
+  // primer frame (un reset en efecto mostraría un frame con el índice del producto anterior).
+  const [foto, setFoto] = useState<{ productoId?: number; idx: number }>({ idx: 0 })
+  // Desplazamiento en vivo del dedo sobre la galería (px), sumado al paso de foto (%).
+  const arrastreFoto = useMotionValue(0)
+  // El gesto sobre la foto se decide en el primer movimiento: horizontal recorre fotos/productos,
+  // vertical queda para el scroll y para bajar el drawer.
+  const panHorizontal = useRef(false)
+  // Hubo arrastre en el gesto actual: el click con que termina no cuenta como toque.
+  const huboPan = useRef(false)
 
   useEffect(() => {
     if (open && productId !== undefined) {
@@ -258,7 +275,10 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
     ? (product?.tituloExtrasSecundarios || 'Extras')
     : (product?.tituloExtrasPrimarios || 'Extras')
   // Producto sin foto → diseño plano (espeja el card text-only del menú).
-  const sinImagen = !product?.imagenUrl
+  const fotos = fotosDeProducto(product)
+  const sinImagen = fotos.length === 0
+  const multiFoto = fotos.length > 1
+  const fotoIdx = foto.productoId === productId ? Math.min(foto.idx, fotos.length - 1) : 0
 
   // ── Navegación entre productos ──
   const lista = siblings ?? []
@@ -273,7 +293,13 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
     const target = lista[currentIndex + dir]
     if (!target) return
     setNavDir(dir)
+    arrastreFoto.set(0)
     onNavigate?.(target)
+  }
+
+  const irAFoto = (idx: number) => {
+    if (idx < 0 || idx >= fotos.length) return
+    setFoto({ productoId: productId, idx })
   }
 
   // Flechas del teclado en desktop.
@@ -287,6 +313,39 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
     return () => window.removeEventListener('keydown', onKey)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, puedeNavegar, currentIndex, lista])
+
+  // ── Galería ──
+  // Con varias fotos, el swipe sobre la foto las recorre (la tira sigue al dedo) y, pasada la
+  // última o antes de la primera, salta al producto vecino, como en las historias. Los toques en
+  // los bordes de la foto también la cambian.
+  const onFotoPanStart = (_e: unknown, info: PanInfo) => {
+    huboPan.current = true
+    panHorizontal.current = Math.abs(info.offset.x) > Math.abs(info.offset.y)
+  }
+  const onFotoPan = (_e: unknown, info: PanInfo) => {
+    if (!panHorizontal.current) return
+    const dx = info.offset.x
+    const enBorde = (dx > 0 && fotoIdx === 0) || (dx < 0 && fotoIdx === fotos.length - 1)
+    arrastreFoto.set(enBorde ? dx * BORDE_ELASTICO : dx)
+  }
+  const onFotoPanEnd = (_e: unknown, info: PanInfo) => {
+    if (!panHorizontal.current) return
+    panHorizontal.current = false
+    const off = info.offset.x
+    const vel = info.velocity.x
+    const dir = off < -55 || vel < -450 ? 1 : off > 55 || vel > 450 ? -1 : 0
+    const destino = fotoIdx + dir
+    if (dir !== 0 && destino >= 0 && destino < fotos.length) irAFoto(destino)
+    else if (puedeNavegar && ((dir === 1 && hasNext) || (dir === -1 && hasPrev))) return irA(dir)
+    animate(arrastreFoto, 0, FOTO_SPRING)
+  }
+  const onFotoClick = (e: ReactMouseEvent<HTMLDivElement>) => {
+    if (huboPan.current) return
+    const rect = e.currentTarget.getBoundingClientRect()
+    const x = (e.clientX - rect.left) / rect.width
+    if (x < 0.3) irAFoto(fotoIdx - 1)
+    else if (x > 0.7) irAFoto(fotoIdx + 1)
+  }
 
   // Swipe horizontal sobre la foto (área del header) para saltar de producto.
   const onHeaderDragEnd = (_e: unknown, info: PanInfo) => {
@@ -482,12 +541,27 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                   {/* CAPA DE IMAGEN — altura fija en ambas etapas (sólo con foto) */}
                   {!sinImagen && (
                     <div className="absolute inset-x-0 top-0 z-0 overflow-hidden bg-secondary" style={{ height: IMG_H }}>
-                      <img
-                        src={product.imagenUrl!}
-                        alt={product.nombre}
-                        draggable={false}
-                        className="h-full w-full select-none object-cover"
-                      />
+                      {/* Tira de fotos: el contenedor externo avanza de a una foto y el interno
+                          suma el arrastre del dedo, así el paso arranca donde lo soltó. */}
+                      <motion.div
+                        className="flex h-full"
+                        initial={false}
+                        animate={{ x: `${-fotoIdx * 100}%` }}
+                        transition={FOTO_SPRING}
+                      >
+                        <motion.div className="flex h-full w-full shrink-0" style={{ x: arrastreFoto }}>
+                          {fotos.map((src, i) => (
+                            <img
+                              key={src}
+                              src={src}
+                              alt={i === 0 ? product.nombre : `${product.nombre} (foto ${i + 1})`}
+                              draggable={false}
+                              decoding="async"
+                              className="h-full w-full shrink-0 select-none object-cover"
+                            />
+                          ))}
+                        </motion.div>
+                      </motion.div>
                       {/* Gradiente inferior — separa el nombre/precio de la imagen. */}
                       <div
                         aria-hidden
@@ -523,17 +597,65 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                         la fuente del sistema. */}
                     <motion.div
                       className={cn(
-                        'menu-delivery relative shrink-0 select-none',
-                        puedeNavegar && 'cursor-grab touch-pan-y active:cursor-grabbing'
+                        'menu-delivery group/galeria relative shrink-0 select-none',
+                        (puedeNavegar || multiFoto) && 'cursor-grab touch-pan-y active:cursor-grabbing'
                       )}
                       style={sinImagen ? undefined : { height: IMG_H }}
-                      drag={puedeNavegar ? 'x' : false}
-                      dragDirectionLock
-                      dragConstraints={{ left: 0, right: 0 }}
-                      dragElastic={0.18}
-                      dragSnapToOrigin
-                      onDragEnd={onHeaderDragEnd}
+                      // Con galería, el gesto mueve la tira de fotos (no el header) y decide entre
+                      // foto y producto al soltar; sin galería, el header entero salta de producto.
+                      {...(multiFoto
+                        ? {
+                            onPointerDown: () => { huboPan.current = false },
+                            onPanStart: onFotoPanStart,
+                            onPan: onFotoPan,
+                            onPanEnd: onFotoPanEnd,
+                            onClick: onFotoClick,
+                          }
+                        : {
+                            drag: puedeNavegar ? 'x' as const : false,
+                            dragDirectionLock: true,
+                            dragConstraints: { left: 0, right: 0 },
+                            dragElastic: 0.18,
+                            dragSnapToOrigin: true,
+                            onDragEnd: onHeaderDragEnd,
+                          })}
                     >
+                      {multiFoto && (
+                        <>
+                          {/* Indicador de fotos — centrado bajo el asa, como en las historias. */}
+                          <div aria-hidden className="pointer-events-none absolute inset-x-0 top-[26px] z-20 flex justify-center gap-1">
+                            {fotos.map((src, i) => (
+                              <span
+                                key={src}
+                                className={cn(
+                                  'h-1.5 rounded-full shadow-[0_0_4px_rgba(0,0,0,0.35)] transition-all duration-300',
+                                  i === fotoIdx ? 'w-4 bg-white' : 'w-1.5 bg-white/55'
+                                )}
+                              />
+                            ))}
+                          </div>
+                          {/* Flechas de foto — sólo con mouse, al pasar sobre la imagen. */}
+                          {[-1, 1].map(paso => {
+                            const destino = fotoIdx + paso
+                            if (destino < 0 || destino >= fotos.length) return null
+                            return (
+                              <button
+                                key={paso}
+                                type="button"
+                                aria-label={paso < 0 ? 'Foto anterior' : 'Foto siguiente'}
+                                onPointerDown={e => e.stopPropagation()}
+                                onClick={e => { e.stopPropagation(); irAFoto(destino) }}
+                                className={cn(
+                                  'absolute top-[78px] z-20 hidden h-8 w-8 items-center justify-center rounded-full bg-black/35 text-white opacity-0 backdrop-blur-md transition-opacity hover:bg-black/50 group-hover/galeria:opacity-100 focus-visible:opacity-100 [@media(hover:hover)]:flex',
+                                  paso < 0 ? 'left-3' : 'right-3'
+                                )}
+                              >
+                                {paso < 0 ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                              </button>
+                            )
+                          })}
+                        </>
+                      )}
                       {sinImagen ? (
                         <div className="px-6 pt-9">
                           {/* Botón volver del diseño plano — al ras, no sobre foto. Su hueco crece con

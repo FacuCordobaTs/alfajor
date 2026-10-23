@@ -17,6 +17,7 @@ import { CheckoutDeliveryGrupal } from '@/components/CheckoutDeliveryGrupal'
 import { guardarDireccionCliente, sincronizarDireccionesCliente, buscarDomicilioCliente, datosDomicilio, notasConDomicilio } from '@/lib/direccionesCliente'
 import { codigoPromocionalMarketing, configurarGtm, configurarMetaPixel, contextoParaPedidoMarketing, guardarContextoTracking, registrarEventoPixel, registrarEventoPixelUnaVez, registrarEventoTrackingUnaVez } from '@/lib/tracking'
 import { formatPrecio } from '@/lib/formatPrecio'
+import { fotosDeProducto } from '@/lib/fotosProducto'
 
 type PedidoHistorico = {
     id: number
@@ -1784,10 +1785,11 @@ const CampanaProductoHero = ({ campana, producto, onClick }: { campana: CampanaP
     const precioOriginal = Number(producto.precio || 0)
     const descuento = Math.max(0, Number(producto.descuento || campana.descuentoPorcentaje || 0))
     const precioFinal = precioOriginal * (1 - descuento / 100)
+    const portada = fotosDeProducto(producto)[0]
     return (
         <section className="overflow-hidden rounded-3xl border border-primary/25 bg-gradient-to-br from-primary/15 via-primary/5 to-background shadow-lg lg:mx-auto lg:max-w-3xl">
             <button type="button" onClick={onClick} className="grid w-full text-left sm:grid-cols-[minmax(220px,0.9fr)_1.1fr]">
-                {producto.imagenUrl ? <img src={producto.imagenUrl} alt={producto.nombre} className="h-56 w-full object-cover sm:h-full sm:min-h-64" /> : <div className="flex min-h-44 items-center justify-center bg-primary/10"><Utensils className="h-14 w-14 text-primary/50" /></div>}
+                {portada ? <img src={portada} alt={producto.nombre} className="h-56 w-full object-cover sm:h-full sm:min-h-64" /> : <div className="flex min-h-44 items-center justify-center bg-primary/10"><Utensils className="h-14 w-14 text-primary/50" /></div>}
                 <div className="flex flex-col justify-center p-6 sm:p-8">
                     <div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-primary px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-primary-foreground">Oferta especial</span>{campana.usosRestantes != null && <span className="text-xs font-semibold text-muted-foreground">Quedan {campana.usosRestantes}</span>}</div>
                     <p className="mt-4 text-xs font-semibold uppercase tracking-[0.16em] text-primary">{campana.nombre}</p>
@@ -1808,6 +1810,9 @@ const ProductoCard = ({ producto, onClick }: { producto: any, onClick: () => voi
     const nombreLength = String(producto.nombre ?? '').trim().length
     // El nombre va en Eastman, que es ancha: un punto más chica que la letra anterior.
     const nombreClass = nombreLength > 70 ? 'text-base' : nombreLength > 48 ? 'text-[17px]' : nombreLength > 30 ? 'text-lg' : 'text-xl'
+    // Portada + galería opcional: la tarjeta muestra la portada y avisa que hay más fotos (el
+    // detalle las recorre). Con mouse, al pasar por encima se cruza a la segunda.
+    const fotos = fotosDeProducto(producto)
 
     // Diseño sólido (único): el glassmorphism quedó discontinuado.
     return (
@@ -1818,12 +1823,42 @@ const ProductoCard = ({ producto, onClick }: { producto: any, onClick: () => voi
             {/* La foto va `absolute`: así no estira el recuadro 3:2 cuando es más alta (botellas, etc.) y
                 todas las tarjetas tienen la misma foto y el mismo alto. */}
             <div className="w-full aspect-[3/2] shrink-0 bg-zinc-900 relative overflow-hidden">
-                {producto.imagenUrl ? (
-                    <img
-                        src={producto.imagenUrl}
-                        alt={producto.nombre}
-                        className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
-                    />
+                {fotos.length > 0 ? (
+                    <>
+                        <img
+                            src={fotos[0]}
+                            alt={producto.nombre}
+                            className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
+                        />
+                        {fotos[1] && (
+                            <img
+                                src={fotos[1]}
+                                alt=""
+                                aria-hidden
+                                loading="lazy"
+                                className="absolute inset-0 w-full h-full object-cover opacity-0 transition-[opacity,transform] duration-700 ease-out group-hover:scale-105 [@media(hover:hover)]:group-hover:opacity-100"
+                            />
+                        )}
+                        {fotos.length > 1 && (
+                            <div
+                                aria-label={`${fotos.length} fotos`}
+                                className="absolute bottom-2.5 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1 rounded-full bg-black/35 px-1.5 py-1 backdrop-blur-md"
+                            >
+                                {fotos.map((src, i) => (
+                                    <span
+                                        key={src}
+                                        className={`h-1 rounded-full transition-all duration-500 ${
+                                            i === 0
+                                                ? 'w-3 bg-white [@media(hover:hover)]:group-hover:w-1 [@media(hover:hover)]:group-hover:bg-white/55'
+                                                : i === 1
+                                                    ? 'w-1 bg-white/55 [@media(hover:hover)]:group-hover:w-3 [@media(hover:hover)]:group-hover:bg-white'
+                                                    : 'w-1 bg-white/55'
+                                        }`}
+                                    />
+                                ))}
+                            </div>
+                        )}
+                    </>
                 ) : (
                     <div className="w-full h-full flex items-center justify-center bg-linear-to-br from-zinc-800 to-zinc-900">
                         <Utensils className="w-10 h-10 text-primary" />
