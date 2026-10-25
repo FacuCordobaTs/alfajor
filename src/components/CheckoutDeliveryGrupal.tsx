@@ -127,7 +127,8 @@ export function CheckoutDeliveryGrupal({
   const [fueraDeZona, setFueraDeZona] = useState(false)
   const [codigoInput, setCodigoInput] = useState('')
   const [codigoDescuentoId, setCodigoDescuentoId] = useState<number | null>(checkoutData?.codigoDescuentoId ?? null)
-  const [montoDescuento, setMontoDescuento] = useState(checkoutData?.montoDescuento ?? 0)
+  const [montoDescuentoGuardado, setMontoDescuento] = useState(checkoutData?.montoDescuento ?? 0)
+  const [cuponEnvioGratis, setCuponEnvioGratis] = useState(checkoutData?.cuponEnvioGratis ?? false)
   const [validandoCodigo, setValidandoCodigo] = useState(false)
   const [codigoError, setCodigoError] = useState<string | null>(null)
   // El cupón del link se auto-aplica una sola vez por código; sin esta marca el
@@ -146,6 +147,16 @@ export function CheckoutDeliveryGrupal({
   const codigoDescuentoEnabled = !restauranteData || restauranteData.codigoDescuentoEnabled === true
   const deliveryFee = zonaDeliveryFee !== null ? zonaDeliveryFee : 0
   const itemsTotalNum = parseFloat(itemsTotal)
+  const montoDescuento = codigoDescuentoId && cuponEnvioGratis
+    ? (tipoPedido === 'delivery' ? deliveryFee : 0) : montoDescuentoGuardado
+  const cambiarTipoPedido = (nuevoTipo: 'delivery' | 'takeaway') => {
+    setTipoPedido(nuevoTipo)
+    if (cuponEnvioGratis && nuevoTipo !== 'delivery') {
+      setCodigoDescuentoId(null)
+      setMontoDescuento(0)
+      setCuponEnvioGratis(false)
+    }
+  }
   const subtotalConEnvio = tipoPedido === 'delivery' ? itemsTotalNum + deliveryFee : itemsTotalNum
   const total = Math.max(0, subtotalConEnvio - montoDescuento)
 
@@ -246,6 +257,7 @@ export function CheckoutDeliveryGrupal({
     setZonaNombre(checkoutData.zonaNombre)
     setCodigoDescuentoId(checkoutData.codigoDescuentoId ?? null)
     setMontoDescuento(checkoutData.montoDescuento ?? 0)
+    setCuponEnvioGratis(checkoutData.cuponEnvioGratis ?? false)
     if (checkoutData.metodoPago) setMetodoPago(checkoutData.metodoPago)
     if (checkoutData.horarioProgramado) {
       setProgramarPedido(true)
@@ -257,7 +269,7 @@ export function CheckoutDeliveryGrupal({
     setPiso(domicilio.piso || '')
     setNumeroDepartamento(domicilio.numeroDepartamento || '')
     if (checkoutData.sucursalId) setSucursalSeleccionada(checkoutData.sucursalId)
-  }, [checkoutData?.nombre, checkoutData?.telefono, checkoutData?.direccion, checkoutData?.tipoPedido, checkoutData?.notas, checkoutData?.deliveryFee, checkoutData?.zonaNombre, checkoutData?.codigoDescuentoId, checkoutData?.montoDescuento, checkoutData?.metodoPago, checkoutData?.horarioProgramado, checkoutData?.tipoDomicilio, checkoutData?.piso, checkoutData?.numeroDepartamento, checkoutData?.sucursalId])
+  }, [checkoutData?.nombre, checkoutData?.telefono, checkoutData?.direccion, checkoutData?.tipoPedido, checkoutData?.notas, checkoutData?.deliveryFee, checkoutData?.zonaNombre, checkoutData?.codigoDescuentoId, checkoutData?.montoDescuento, checkoutData?.cuponEnvioGratis, checkoutData?.metodoPago, checkoutData?.horarioProgramado, checkoutData?.tipoDomicilio, checkoutData?.piso, checkoutData?.numeroDepartamento, checkoutData?.sucursalId])
 
   useEffect(() => {
     if (lat === null || lng === null || !restauranteId) {
@@ -337,16 +349,17 @@ export function CheckoutDeliveryGrupal({
       const res = await fetch(`${url}/public/descuentos/validar`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ restauranteId, codigo: codigo.trim().toUpperCase(), totalCarrito: subtotalConEnvio }),
+        body: JSON.stringify({ restauranteId, codigo: codigo.trim().toUpperCase(), totalCarrito: subtotalConEnvio, tipoPedido, costoEnvio: tipoPedido === 'delivery' ? deliveryFee : 0 }),
       })
       const data = await res.json()
       if (data.success && data.data) {
+        setCuponEnvioGratis(data.data.tipo === 'envio_gratis')
         const cuponId = data.data.codigoDescuentoId
         const monto = parseFloat(data.data.montoDescuento)
         setCodigoDescuentoId(cuponId)
         setMontoDescuento(monto)
         setCodigoInput(data.data.codigo)
-        toast.success(`${automatico ? 'Beneficio de la campaña aplicado' : 'Código aplicado'}: -$${monto.toFixed(0)}`)
+        toast.success(data.data.tipo === 'envio_gratis' ? 'Envío gratis aplicado' : `${automatico ? 'Beneficio de la campaña aplicado' : 'Código aplicado'}: -$${monto.toFixed(0)}`)
         // El checkout cerró con ese código: hay que devolverle el total ya rebajado,
         // si no el pedido se cobra al precio de lista.
         if (checkoutData && sendMessage) {
@@ -360,6 +373,7 @@ export function CheckoutDeliveryGrupal({
               updates: {
                 ...checkoutData,
                 codigoDescuentoId: cuponId,
+                cuponEnvioGratis: data.data.tipo === 'envio_gratis',
                 montoDescuento: monto,
                 total: nuevoTotal.toFixed(2),
               },
@@ -378,7 +392,7 @@ export function CheckoutDeliveryGrupal({
     } finally {
       setValidandoCodigo(false)
     }
-  }, [restauranteId, subtotalConEnvio, checkoutData, sendMessage, clienteId, itemsTotal])
+  }, [restauranteId, subtotalConEnvio, tipoPedido, deliveryFee, checkoutData, sendMessage, clienteId, itemsTotal])
 
   const handleValidarCodigo = () => void validarCodigo(codigoInput)
 
@@ -408,6 +422,7 @@ export function CheckoutDeliveryGrupal({
           updates: {
             ...checkoutData,
             codigoDescuentoId: null,
+            cuponEnvioGratis: false,
             montoDescuento: 0,
             total: nuevoTotal.toFixed(2),
           },
@@ -472,6 +487,7 @@ export function CheckoutDeliveryGrupal({
       itemsTotal,
       total: total.toFixed(2),
       codigoDescuentoId: codigoDescuentoId ?? null,
+      cuponEnvioGratis,
       montoDescuento,
       metodoPago: metodoPago ?? null,
       horarioProgramado: usarFranjas ? horarioProgramado : ((programacionObligatoria || programarPedido) ? horarioProgramado : ''),
@@ -543,7 +559,7 @@ export function CheckoutDeliveryGrupal({
 
     const fee = checkoutData.tipoPedido === 'delivery' ? deliveryFee : 0
     const itemsTot = parseFloat(itemsTotal)
-    const descEfectivo = checkoutData.montoDescuento ?? montoDescuento
+    const descEfectivo = cuponEnvioGratis ? montoDescuento : (checkoutData.montoDescuento ?? montoDescuento)
     // El cupón del link ya está aplicado: recalcular el total sin él mostraría el
     // precio de lista y terminaría cobrando de más.
     const nuevoTotal = Math.max(0, itemsTot + fee - descEfectivo)
@@ -562,6 +578,7 @@ export function CheckoutDeliveryGrupal({
       metodoPago,
       itemsTotal,
       codigoDescuentoId: checkoutData.codigoDescuentoId ?? codigoDescuentoId ?? null,
+      cuponEnvioGratis,
       montoDescuento: descEfectivo,
       total: nuevoTotal.toFixed(2),
     }
@@ -706,7 +723,7 @@ export function CheckoutDeliveryGrupal({
                 ? 'opacity-40 cursor-not-allowed'
                 : `cursor-pointer ${tipoPedido === 'delivery' ? 'bg-background shadow-sm' : ''}`
             }`}
-            onClick={() => (!restauranteData || delEn) && setTipoPedido('delivery')}
+            onClick={() => (!restauranteData || delEn) && cambiarTipoPedido('delivery')}
           >
             <MapPin className={`w-4 h-4 ${tipoPedido === 'delivery' ? 'text-primary' : 'text-muted-foreground'}`} />
             <span className={`text-sm font-semibold ${tipoPedido === 'delivery' ? 'text-foreground' : 'text-muted-foreground'}`}>Delivery</span>
@@ -718,7 +735,7 @@ export function CheckoutDeliveryGrupal({
                 ? 'opacity-40 cursor-not-allowed'
                 : `cursor-pointer ${tipoPedido === 'takeaway' ? 'bg-background shadow-sm' : ''}`
             }`}
-            onClick={() => (!restauranteData || tkEn) && setTipoPedido('takeaway')}
+            onClick={() => (!restauranteData || tkEn) && cambiarTipoPedido('takeaway')}
           >
             <Store className={`w-4 h-4 ${tipoPedido === 'takeaway' ? 'text-primary' : 'text-muted-foreground'}`} />
             <span className={`text-sm font-semibold ${tipoPedido === 'takeaway' ? 'text-foreground' : 'text-muted-foreground'}`}>Take Away</span>
@@ -965,7 +982,7 @@ export function CheckoutDeliveryGrupal({
             <div className="flex items-center justify-between px-4 py-3 rounded-2xl bg-secondary/60">
               <div className="flex items-center gap-2.5">
                 <Tag className="w-3.5 h-3.5 text-muted-foreground" />
-                <span className="text-sm font-semibold">Descuento aplicado · -${montoDescuento.toFixed(0)}</span>
+                <span className="text-sm font-semibold">{cuponEnvioGratis ? 'Envío gratis' : 'Descuento aplicado'} · -${montoDescuento.toFixed(0)}</span>
               </div>
               <button type="button" onClick={quitarCodigo} className="p-1.5 rounded-lg hover:bg-secondary/80 text-muted-foreground transition-colors">
                 <X className="w-3.5 h-3.5" />
