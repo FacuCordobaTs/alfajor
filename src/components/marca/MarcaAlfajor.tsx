@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 import { ArrowDown, ArrowRight, ArrowUp, Instagram, MapPin, RotateCcw } from 'lucide-react'
-import { DIAS, INSTAGRAM_URL, SEMANA, hhmm, minutos, type Turno } from '@/lib/marcaAlfajor'
+import { DIAS, INSTAGRAM_URL, PIRU_URL, SEMANA, hhmm, minutos, type Turno } from '@/lib/marcaAlfajor'
 
 // Piezas de la identidad de Alfajor que comparten la carta (MenuDelivery) y el pedido en grupo (Menu):
 // el hero con el video del alfajor que se arma, la cinta de sabores, los títulos de sección, las
@@ -372,7 +372,17 @@ export function FooterMarca({ horarios, direccion, onPedir }: { horarios: Turno[
 
                 <div className="relative mx-auto mt-14 flex max-w-2xl flex-wrap justify-between gap-2 px-5 text-xs text-[#f2eee2]/45 lg:max-w-5xl xl:max-w-6xl">
                     <span>© {new Date().getFullYear()} Alfajor · Santa Fe</span>
-                    <span>Pedidos online con Piru</span>
+                    <span>
+                        Pedidos online con{' '}
+                        <a
+                            href={PIRU_URL}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="underline decoration-[#f2eee2]/30 underline-offset-4 transition-colors hover:text-[#eb623a] hover:decoration-[#eb623a]"
+                        >
+                            Piru
+                        </a>
+                    </span>
                 </div>
             </div>
         </footer>
