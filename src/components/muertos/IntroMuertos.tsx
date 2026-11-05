@@ -1,6 +1,6 @@
-import { useEffect, useId, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { ArrowRight } from 'lucide-react'
-import { HUECO_QUEMADO, M, PETALOS } from '@/lib/muertos'
+import { HUECO_QUEMADO, M, PETALOS, introMuertos } from '@/lib/muertos'
 import { Calavera, Cempasuchil, Floritura, PapelPicado, Vela } from './Decoraciones'
 
 // La bienvenida de /muertosdehambre: reemplaza al "Armando los alfajores" y dura bastante más (~4,5 s).
@@ -28,7 +28,37 @@ const COMPLETA = 3100
 const DURA_SALIDA = 420
 const DURA_QUEMA = 1300
 
-const escalaHueco = (s: number) => `translate(50 50) scale(${s.toFixed(4)}) translate(-50 -50)`
+/** Pinta la noche en el lienzo con el agujero quemado de tamaño `escala` (0 = sin agujero). La mancha
+ * vive en un cuadro de 100×100 que cubre la pantalla (como un SVG con `slice`), centrado. El brillo de
+ * la brasa son trazos anchos y translúcidos uno encima del otro: un shadowBlur o un filtro de desenfoque
+ * por cuadro es lo que hacía trabar la quema. */
+function pintarNoche(lienzo: HTMLCanvasElement, hueco: Path2D, escala: number, dpr: number) {
+    const ctx = lienzo.getContext('2d')
+    if (!ctx) return
+    const { width: w, height: h } = lienzo
+    ctx.globalCompositeOperation = 'source-over'
+    ctx.fillStyle = M.noche
+    ctx.fillRect(0, 0, w, h)
+    if (escala <= 0) return
+    const u = (Math.max(w, h) / 100) * escala
+    ctx.save()
+    ctx.translate(w / 2, h / 2)
+    ctx.scale(u, u)
+    ctx.translate(-50, -50)
+    ctx.globalCompositeOperation = 'destination-out'
+    ctx.fill(hueco)
+    ctx.globalCompositeOperation = 'source-over'
+    ctx.lineJoin = 'round'
+    // Anchos en píxeles de pantalla, aunque el agujero crezca.
+    const px = dpr / u
+    for (const [color, alfa, ancho] of [[M.flor, 0.14, 30], [M.flor, 0.26, 16], [M.naranja, 0.9, 6], ['#2a140a', 1, 2.5]] as const) {
+        ctx.globalAlpha = alfa
+        ctx.strokeStyle = color
+        ctx.lineWidth = ancho * px
+        ctx.stroke(hueco)
+    }
+    ctx.restore()
+}
 
 // Corona de flores alrededor de la calavera.
 const CORONA = Array.from({ length: 11 }, (_, i) => {
@@ -38,23 +68,41 @@ const CORONA = Array.from({ length: 11 }, (_, i) => {
 
 type Etapa = 'altar' | 'sale' | 'quema'
 
-/** `onRevelar` avisa cuando empieza a verse la página (para que el hero entre mientras se quema). */
-export function IntroMuertos({ listo, onFin, onRevelar }: { listo: boolean; onFin: () => void; onRevelar?: () => void }) {
-    const mascara = useId()
+/** Avisa por `introMuertos` cuando empieza a verse la página (el hero entra mientras se quema) y
+ * cuando terminó; terminada, se saca sola. */
+export function IntroMuertos({ listo }: { listo: boolean }) {
     const [sinMovimiento] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches)
     const [etapa, setEtapa] = useState<Etapa>('altar')
     const [completa, setCompleta] = useState(false)
-    const onFinRef = useRef(onFin)
-    const onRevelarRef = useRef(onRevelar)
+    const [terminada, setTerminada] = useState(false)
+    const terminar = () => {
+        setTerminada(true)
+        introMuertos.set('terminada')
+    }
+    const lienzoRef = useRef<HTMLCanvasElement>(null)
+    const huecoRef = useRef<Path2D | null>(null)
+    const dprRef = useRef(1)
+
+    // El lienzo de la noche: a la resolución de la pantalla (hasta 1,5× para no pintar de más).
     useEffect(() => {
-        onFinRef.current = onFin
-        onRevelarRef.current = onRevelar
-    })
-    const huecoRef = useRef<SVGGElement>(null)
-    const bordeRef = useRef<SVGGElement>(null)
+        const lienzo = lienzoRef.current
+        if (!lienzo) return
+        huecoRef.current = new Path2D(HUECO_QUEMADO)
+        const ajustar = () => {
+            const dpr = Math.min(window.devicePixelRatio || 1, 1.5)
+            dprRef.current = dpr
+            lienzo.width = Math.round(window.innerWidth * dpr)
+            lienzo.height = Math.round(window.innerHeight * dpr)
+            pintarNoche(lienzo, huecoRef.current!, 0, dpr)
+        }
+        ajustar()
+        window.addEventListener('resize', ajustar)
+        return () => window.removeEventListener('resize', ajustar)
+    }, [])
 
     // La página queda quieta y arriba mientras dura la bienvenida.
     useEffect(() => {
+        introMuertos.set('corriendo')
         window.scrollTo(0, 0)
         const html = document.documentElement
         const previo = html.style.overflow
@@ -78,21 +126,19 @@ export function IntroMuertos({ listo, onFin, onRevelar }: { listo: boolean; onFi
     // de un <mask>, y el agujero y su borde tienen que crecer juntos.
     useEffect(() => {
         if (etapa === 'sale') {
-            onRevelarRef.current?.()
-            const t = window.setTimeout(() => onFinRef.current(), DURA_SALIDA)
+            introMuertos.set('revelando')
+            const t = window.setTimeout(terminar, DURA_SALIDA)
             return () => window.clearTimeout(t)
         }
         if (etapa !== 'quema') return
-        onRevelarRef.current?.()
+        introMuertos.set('revelando')
         const inicio = performance.now()
         let frame = 0
         const paso = (ahora: number) => {
             const p = Math.min(1, Math.max(0, (ahora - inicio) / DURA_QUEMA))
-            const transform = escalaHueco(5.4 * Math.pow(p, 2.1))
-            huecoRef.current?.setAttribute('transform', transform)
-            bordeRef.current?.setAttribute('transform', transform)
+            if (lienzoRef.current && huecoRef.current) pintarNoche(lienzoRef.current, huecoRef.current, 5.4 * Math.pow(p, 2.1), dprRef.current)
             if (p < 1) frame = requestAnimationFrame(paso)
-            else onFinRef.current()
+            else terminar()
         }
         frame = requestAnimationFrame(paso)
         return () => cancelAnimationFrame(frame)
@@ -103,34 +149,15 @@ export function IntroMuertos({ listo, onFin, onRevelar }: { listo: boolean; onFi
         setEtapa(e => e !== 'altar' ? e : sinMovimiento ? 'sale' : 'quema')
     }
 
+    if (terminada) return null
+
     // Sin movimiento todo aparece de una.
     const demora = (ms: number): CSSProperties => ({ animationDelay: sinMovimiento ? '0ms' : `${ms}ms` })
 
     return (
-        <div className="menu-delivery fixed inset-0 z-[100] overflow-hidden text-[#f2ede0]" role="dialog" aria-label="Día de los muertos de hambre">
-            {/* La noche: un rectángulo de tinta con la mancha quemada como agujero de la máscara. */}
-            <svg aria-hidden className="absolute inset-0 size-full" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice">
-                <defs>
-                    <mask id={mascara} maskUnits="userSpaceOnUse" x="-200" y="-200" width="500" height="500">
-                        <rect x="-200" y="-200" width="500" height="500" fill="#fff" />
-                        <g ref={huecoRef} transform={escalaHueco(0)}>
-                            <path d={HUECO_QUEMADO} fill="#000" />
-                        </g>
-                    </mask>
-                    <filter id={`${mascara}b`} x="-50%" y="-50%" width="200%" height="200%">
-                        <feGaussianBlur stdDeviation="1.1" />
-                    </filter>
-                </defs>
-                <rect x="-200" y="-200" width="500" height="500" fill={M.noche} mask={`url(#${mascara})`} />
-                {etapa === 'quema' && (
-                    <g ref={bordeRef} transform={escalaHueco(0)}>
-                        {/* Brasa naranja difusa y el borde chamuscado. */}
-                        <path d={HUECO_QUEMADO} fill="none" stroke={M.flor} strokeWidth="2.2" filter={`url(#${mascara}b)`} />
-                        <path d={HUECO_QUEMADO} fill="none" stroke={M.naranja} strokeWidth="0.9" />
-                        <path d={HUECO_QUEMADO} fill="none" stroke="#2a140a" strokeWidth="0.5" />
-                    </g>
-                )}
-            </svg>
+        <div className={`menu-delivery fixed inset-0 z-[100] overflow-hidden text-[#f2ede0] ${etapa === 'sale' ? 'muertos-sale' : ''}`} role="dialog" aria-label="Día de los muertos de hambre">
+            {/* La noche, con la mancha quemada que se abre al final (ver pintarNoche). */}
+            <canvas ref={lienzoRef} aria-hidden className="absolute inset-0 size-full" />
 
             <div className={`absolute inset-0 ${etapa !== 'altar' ? 'muertos-sale' : ''}`}>
                 {/* Luz de velas desde abajo y un resplandor detrás de la calavera. */}

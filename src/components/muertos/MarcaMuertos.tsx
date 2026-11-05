@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { ArrowDown, ArrowRight, ArrowUp, Instagram, MapPin, RotateCcw } from 'lucide-react'
 import { DIAS, INSTAGRAM_URL, PIRU_URL, SEMANA, hhmm, minutos, type Turno } from '@/lib/marcaAlfajor'
-import { FRASES_CINTA, M, eventoVigente, sinTildes } from '@/lib/muertos'
+import { FRASES_CINTA, M, eventoVigente, sinTildes, useEtapaIntro } from '@/lib/muertos'
 import { BandaRombos, Calavera, Cempasuchil, Estrella, Floritura, Huesos, Medallon, PapelPicado, Vela } from './Decoraciones'
 
 // Las piezas de /muertosdehambre: la misma estructura que components/marca/MarcaAlfajor (hero con el
@@ -53,15 +53,19 @@ const T_TAPA = 1.85
  * relleno, DIA DE LOS / MUERTOS; abajo, sobre el piso, DE HAMBRE, la noche y las acciones: el alfajor
  * queda literalmente entre "muertos" y "de hambre". En escritorio el video va a la derecha.
  *
- * El video arranca cuando `listo` (al abrirse el agujero de la bienvenida), se reproduce una vez y
- * queda en el último cuadro; se puede volver a armar. Sin movimiento se ve la foto final. */
-export function HeroMuertos({ arriba, abajo, nombreVideo, onClickVideo, listo }: {
+ * El texto entra cuando se empieza a abrir el agujero de la bienvenida y el video arranca cuando la
+ * quema terminó (decodificar el video durante la quema la trababa); las dos cosas salen de
+ * useEtapaIntro. Se reproduce una vez y queda en el último cuadro; se puede volver a armar. Sin
+ * movimiento se ve la foto final. */
+export function HeroMuertos({ arriba, abajo, nombreVideo, onClickVideo }: {
     arriba: ReactNode
     abajo: ReactNode
     nombreVideo: string
     onClickVideo?: () => void
-    listo: boolean
 }) {
+    const etapaIntro = useEtapaIntro()
+    const listo = etapaIntro !== 'corriendo'
+    const reproducir = etapaIntro === 'terminada'
     const videoRef = useRef<HTMLVideoElement>(null)
     const [sinMovimiento] = useState(() => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches)
     const [fase, setFase] = useState<FaseArmado>(sinMovimiento ? 'armado' : 'cayendo')
@@ -70,7 +74,7 @@ export function HeroMuertos({ arriba, abajo, nombreVideo, onClickVideo, listo }:
 
     useEffect(() => {
         const video = videoRef.current
-        if (!video || sinMovimiento || !listo) return
+        if (!video || sinMovimiento || !reproducir) return
         let frame = 0
         const leer = () => {
             const t = video.currentTime
@@ -95,7 +99,7 @@ export function HeroMuertos({ arriba, abajo, nombreVideo, onClickVideo, listo }:
             video.removeEventListener('timeupdate', leer)
             video.removeEventListener('ended', alTerminar)
         }
-    }, [sinMovimiento, listo])
+    }, [sinMovimiento, reproducir])
 
     const rearmar = () => {
         const video = videoRef.current

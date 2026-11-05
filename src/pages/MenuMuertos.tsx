@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useDeferredValue } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
@@ -217,9 +217,6 @@ const GRILLA_PRODUCTOS = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid
 
 const MenuMuertos = ({ campana = null }: { campana?: CampanaPublica | null }) => {
     const navigate = useNavigate()
-    // La bienvenida tapa la página hasta terminar; recién ahí entra el hero.
-    const [introTerminada, setIntroTerminada] = useState(false)
-    const [revelado, setRevelado] = useState(false)
     const username = 'alfajor'
     const [searchParams, setSearchParams] = useSearchParams()
     const productoAplicadoRef = useRef(false)
@@ -265,6 +262,9 @@ const MenuMuertos = ({ campana = null }: { campana?: CampanaPublica | null }) =>
     const [productos, setProductos] = useState<any[]>([])
     const [sucursales, setSucursales] = useState<{ id: number }[]>([])
     const [loading, setLoading] = useState(true)
+    // La carta (pesada) se dibuja en segundo plano y en tramos chicos, para no congelar la bienvenida
+    // que corre encima mientras carga.
+    const cargando = useDeferredValue(loading)
     const [horarios, setHorarios] = useState<HorarioTurno[]>([])
     const [estadoAbierto, setEstadoAbierto] = useState<{ abierto: boolean; proximaApertura: string | null }>({ abierto: true, proximaApertura: null })
 
@@ -1296,11 +1296,12 @@ const MenuMuertos = ({ campana = null }: { campana?: CampanaPublica | null }) =>
         <style dangerouslySetInnerHTML={{ __html: `:root, .dark {${varsMuertos}\n            color-scheme: light;\n            }` }} />
     );
 
-    const intro = !introTerminada && <IntroMuertos listo={!loading} onRevelar={() => setRevelado(true)} onFin={() => setIntroTerminada(true)} />
+    // La bienvenida se saca sola al terminar y le avisa al hero por su store (useEtapaIntro).
+    const intro = <IntroMuertos listo={!cargando} />
 
     // La bienvenida va siempre en el mismo lugar del árbol (después de themeStyles) para que no se
     // reinicie cuando termina de cargar la carta.
-    if (loading) {
+    if (cargando) {
         return <div className="menu-delivery min-h-screen bg-[#161413]">{themeStyles}{intro}</div>
     }
 
@@ -1332,7 +1333,6 @@ const MenuMuertos = ({ campana = null }: { campana?: CampanaPublica | null }) =>
 
             {/* HERO: el flyer del Día de los muertos de hambre con el alfajor en el nicho del altar. */}
             <HeroMuertos
-                listo={revelado}
                 nombreVideo={productoHeroVideo?.nombre ?? 'Alfajor'}
                 onClickVideo={productoHeroVideo ? () => abrirDetalleProducto(productoHeroVideo) : undefined}
                 arriba={

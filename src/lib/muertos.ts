@@ -1,3 +1,5 @@
+import { useSyncExternalStore } from 'react'
+
 // Datos y geometría de la edición temporal "Día de los muertos de hambre" (/muertosdehambre).
 // Separado de components/muertos/ para que Fast Refresh no se queje de exports que no son componentes.
 
@@ -84,3 +86,27 @@ export const PETALOS = (() => {
         color: [M.flor, M.florClara, M.florOscura, M.naranja][i % 4],
     }))
 })()
+
+// ── Etapa de la bienvenida ──────────────────────────────────────────────────────────────────────
+// La bienvenida avisa cuándo se empieza a ver la página y cuándo terminó. Va en un store aparte (y no
+// en un estado de MenuMuertos) para que esos avisos sólo vuelvan a dibujar el hero: re-renderizar la
+// carta entera en medio de la quema era lo que la trababa.
+
+export type EtapaIntro = 'corriendo' | 'revelando' | 'terminada'
+let etapaIntro: EtapaIntro = 'corriendo'
+const oyentes = new Set<() => void>()
+
+export const introMuertos = {
+    get: () => etapaIntro,
+    set: (etapa: EtapaIntro) => {
+        if (etapa === etapaIntro) return
+        etapaIntro = etapa
+        oyentes.forEach(o => o())
+    },
+    subscribe: (oyente: () => void) => {
+        oyentes.add(oyente)
+        return () => { oyentes.delete(oyente) }
+    },
+}
+
+export const useEtapaIntro = () => useSyncExternalStore(introMuertos.subscribe, introMuertos.get)

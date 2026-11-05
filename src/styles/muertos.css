@@ -39,8 +39,8 @@
 /* Grano de papel impreso sobre toda la página. */
 .muertos-grano {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .14 0 0 0 0 .13 0 0 0 0 .12 0 0 0 .55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  opacity: 0.35;
-  mix-blend-mode: multiply;
+  /* Sin mix-blend-mode: una capa fija mezclada obliga a recomponer todo lo que se mueve debajo. */
+  opacity: 0.3;
 }
 
 /* ── Papel picado ─────────────────────────────────────────────────────────── */
@@ -137,9 +137,9 @@
 .muertos-nicho-abre { animation: muertos-nicho 900ms cubic-bezier(.6,0,.2,1) both; }
 
 @keyframes muertos-sale {
-  to { opacity: 0; transform: scale(0.94); filter: blur(4px); }
+  to { opacity: 0; transform: scale(0.96); visibility: hidden; }
 }
-.muertos-sale { animation: muertos-sale 420ms ease-in both; }
+.muertos-sale { animation: muertos-sale 360ms ease-in both; will-change: opacity, transform; }
 
 /* ── Página ───────────────────────────────────────────────────────────────── */
 @keyframes muertos-baile {
