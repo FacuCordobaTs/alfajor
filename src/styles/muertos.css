@@ -97,14 +97,6 @@
 @keyframes muertos-giro-lento { to { rotate: 360deg; } }
 .muertos-giro-lento { animation: muertos-giro-lento 40s linear infinite; }
 
-@keyframes muertos-golpe {
-  0% { transform: scale(2.4) rotate(-14deg); opacity: 0; filter: blur(6px); }
-  55% { transform: scale(0.94) rotate(-6deg); opacity: 1; filter: blur(0); }
-  75% { transform: scale(1.04) rotate(-8deg); }
-  100% { transform: scale(1) rotate(-7deg); opacity: 1; }
-}
-.muertos-sello-golpe { animation: muertos-golpe 520ms cubic-bezier(.2,.8,.3,1) both; }
-
 @keyframes muertos-titulo-entra {
   0% { transform: translateY(40%) scaleY(1.9); opacity: 0; clip-path: inset(0 0 100% 0); }
   60% { transform: translateY(-4%) scaleY(1.32); opacity: 1; clip-path: inset(0 0 0 0); }
@@ -130,7 +122,7 @@
 .muertos-temblor { animation: muertos-temblor 260ms linear both; }
 
 @keyframes muertos-escribe { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
-.muertos-escribe { animation: muertos-escribe 900ms steps(18) both; }
+.muertos-escribe { animation: muertos-escribe 700ms steps(18) both; }
 
 @keyframes muertos-aparece {
   from { opacity: 0; transform: translateY(10px); }

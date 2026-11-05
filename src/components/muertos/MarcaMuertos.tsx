@@ -318,54 +318,59 @@ export function BotonPedidoMuertos({ cantidad, total, visible, onClick, pulso = 
     )
 }
 
-/** La noche del evento (sólo hasta que pasa) y el ritual del altar de la tarjeta DDM. */
-export function NocheYAltar() {
-    const evento = eventoVigente()
+/** La noche del evento, a todo el ancho entre el hero y la carta, con la ronda de esqueletos de la
+ * bandeja bailando. Pasado el evento no se muestra. */
+export function NocheMuertos() {
+    if (!eventoVigente()) return null
     return (
-        <section aria-label="La noche de muertos" className={`grid gap-5 ${evento ? 'md:grid-cols-[1.1fr_0.9fr]' : 'mx-auto max-w-xl'}`}>
-            {evento && (
-                <article className="relative overflow-hidden rounded-2xl border-2 border-[#242526] bg-[#161413] p-6 text-[#f2ede0] sm:p-8">
-                    <div aria-hidden className="absolute -right-10 -top-10 size-64 rounded-full bg-[radial-gradient(circle,rgba(238,162,51,0.28),transparent_65%)]" />
-                    <p className="font-twin relative flex items-center gap-2 text-[11px] text-[#eea233]">
-                        Sabado 07 de noviembre <Estrella className="size-3" /> 20:00
+        <section aria-label="La noche de muertos" className="relative overflow-hidden bg-[#161413] pb-12 text-[#f2ede0]">
+            <PapelPicado colores={[M.naranja, M.hueso, M.flor]} hilo={M.hueso} cantidad={7} comba={8} className="md:hidden" />
+            <PapelPicado colores={[M.naranja, M.hueso, M.flor]} hilo={M.hueso} cantidad={14} comba={12} className="hidden md:block" />
+            <div aria-hidden className="absolute -right-24 top-10 size-[520px] rounded-full bg-[radial-gradient(circle,rgba(238,162,51,0.2),transparent_65%)]" />
+            <div className="relative mx-auto grid max-w-2xl items-center gap-8 px-5 pt-8 md:grid-cols-[0.9fr_1.1fr] lg:max-w-5xl xl:max-w-6xl">
+                <div>
+                    <p className="font-twin flex items-center gap-2 text-[11px] text-[#eea233]">
+                        Sabado 07 de noviembre <Estrella className="size-3" /> Desde las 20:00
                     </p>
-                    <h2 className="font-muertos relative mt-5 origin-bottom-left scale-y-[1.3] whitespace-nowrap text-[min(calc((100vw-100px)/6.3),64px)] uppercase leading-[0.85]">La noche</h2>
-                    <div className="relative mt-6 grid grid-cols-[1fr_auto] gap-5">
-                        <div className="min-w-0">
-                            <p className="max-w-[30ch] text-[15px] leading-snug text-[#f2ede0]/75">
-                                Vení a Alfajor a celebrar a los que ya no están, con la panza llena.
-                            </p>
-                            <ul className="font-twin mt-5 space-y-2 text-[13px]">
-                                {['Mariachis', 'Alfajores picantes', 'Tequilazo'].map(x => (
-                                    <li key={x} className="flex items-center gap-2.5"><Estrella className="size-3.5 text-[#d3532b]" />{x}</li>
-                                ))}
-                            </ul>
-                        </div>
-                        <a href="/muertos/flyer.webp" target="_blank" rel="noopener noreferrer" className="relative -mt-2 block w-[min(30vw,150px)] rotate-3 transition-transform hover:rotate-0" aria-label="Ver el flyer de la noche">
-                            <img src="/muertos/flyer.webp" alt="Flyer: Día de los muertos de hambre, sábado 7 de noviembre desde las 20:00" loading="lazy" className="w-full rounded-sm border-[5px] border-[#f2ede0] shadow-[0_18px_40px_-10px_rgba(0,0,0,0.8)]" />
-                            <span className="absolute -top-3 left-1/2 h-5 w-14 -translate-x-1/2 -rotate-6 bg-[#eea233]/80" />
-                        </a>
+                    <h2 className="font-muertos mt-5 origin-bottom-left scale-y-[1.3] whitespace-nowrap text-[min(calc((100vw-40px)/6.3),88px)] uppercase leading-[0.85] md:text-[clamp(56px,6vw,88px)]">La noche</h2>
+                    <p className="mt-6 max-w-[34ch] text-[16px] leading-snug text-[#f2ede0]/75">
+                        Vení a Alfajor a celebrar a los que ya no están, con la panza llena.
+                    </p>
+                    <ul className="font-twin mt-6 flex flex-wrap gap-x-5 gap-y-2.5 text-[13px]">
+                        {['Mariachis', 'Alfajores picantes', 'Tequilazo'].map(x => (
+                            <li key={x} className="flex items-center gap-2.5"><Estrella className="size-3.5 text-[#d3532b]" />{x}</li>
+                        ))}
+                    </ul>
+                </div>
+                <div className="relative">
+                    <img
+                        src="/muertos/esqueletos-hueso.svg"
+                        alt="Esqueletos bailando en ronda"
+                        className="muertos-baile relative mx-auto w-full max-w-[560px]"
+                    />
+                    <div aria-hidden className="mt-2 flex items-end justify-center gap-1">
+                        <Vela alto={1.1} className="w-9" />
+                        <Vela alto={0.7} className="w-7" demora={250} />
+                        <Vela alto={0.9} className="w-8" demora={500} />
                     </div>
-                    <div aria-hidden className="relative mt-6 flex items-end gap-1">
-                        <Vela alto={1.1} className="w-10" demora={0} />
-                        <Vela alto={0.7} className="w-8" demora={250} />
-                        <Vela alto={0.9} className="w-9" demora={500} />
-                        <img src="/muertos/chile.webp" alt="" loading="lazy" className="ml-auto w-16 -rotate-12" />
-                    </div>
-                </article>
-            )}
-
-            <article className="relative overflow-hidden rounded-2xl border-2 border-[#242526] bg-[#f2ede0] p-6 text-center sm:p-8">
-                <Calavera className="mx-auto w-16 -rotate-6" />
-                <p className="font-salient mt-5 text-[clamp(26px,7.4vw,36px)] leading-[1.02] text-[#d3532b]">
-                    Todos cargamos con algo que nos pesa. Esta es tu oportunidad para dejarlo ir.
-                </p>
-                <p className="font-twin mx-auto mt-6 max-w-sm border-2 border-dotted border-[#d3532b] px-4 py-3 text-[11px] leading-relaxed text-[#d3532b]">
-                    Escribilo, llevalo al altar y sella el ritual con un shot de tequila.
-                </p>
-                <img src="/muertos/sello-naranja.webp" alt="" loading="lazy" className="mx-auto mt-6 w-36 -rotate-6 mix-blend-multiply" />
-            </article>
+                </div>
+            </div>
         </section>
+    )
+}
+
+/** El ritual del altar de la tarjeta DDM. */
+export function AltarMuertos() {
+    return (
+        <article className="relative mx-auto max-w-xl overflow-hidden rounded-2xl border-2 border-[#242526] bg-[#f2ede0] p-6 text-center sm:p-8">
+            <Calavera className="mx-auto w-16 -rotate-6" />
+            <p className="font-salient mt-5 text-[clamp(26px,7.4vw,36px)] leading-[1.02] text-[#d3532b]">
+                Todos cargamos con algo que nos pesa. Esta es tu oportunidad para dejarlo ir.
+            </p>
+            <p className="font-twin mx-auto mt-6 max-w-sm border-2 border-dotted border-[#d3532b] px-4 py-3 text-[11px] leading-relaxed text-[#d3532b]">
+                Escribilo, llevalo al altar y sella el ritual con un shot de tequila.
+            </p>
+        </article>
     )
 }
 
@@ -417,64 +422,6 @@ function ListaHorarios({ horarios }: { horarios: Turno[] }) {
                 )
             })}
         </ul>
-    )
-}
-
-/** Lo del footer que conviene ver antes de pedir, entre el hero y la carta: dónde estamos, el horario
- * de hoy (con la semana desplegable) e Instagram, sobre la misma noche con papel picado. */
-export function InfoLocalMuertos({ horarios, direccion }: { horarios: Turno[]; direccion?: string | null }) {
-    const calle = direccion?.trim() || 'Necochea 3601'
-    const hoy = turnosDelDia(horarios, new Date().getDay())
-    return (
-        <section aria-label="Dónde y cuándo" className="relative overflow-hidden bg-[#161413] pb-10 text-[#f2ede0]">
-            <PapelPicado colores={[M.naranja, M.hueso, M.flor]} hilo={M.hueso} cantidad={7} comba={8} className="md:hidden" />
-            <PapelPicado colores={[M.naranja, M.hueso, M.flor]} hilo={M.hueso} cantidad={14} comba={12} className="hidden md:block" />
-            <img src="/muertos/esqueletos-hueso.svg" alt="" aria-hidden loading="lazy" className="pointer-events-none absolute -left-20 bottom-0 w-[360px] opacity-[0.06]" />
-            <div className="relative mx-auto grid max-w-2xl gap-8 px-5 pt-8 md:grid-cols-[1fr_1fr_auto] md:items-start lg:max-w-5xl xl:max-w-6xl">
-                <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0">
-                        <p className="font-twin text-[11px] text-[#eea233]">Donde estamos</p>
-                        <a href={mapaDe(calle)} target="_blank" rel="noopener noreferrer" className="group mt-3 block">
-                            <span className="font-muertos block text-[30px] uppercase leading-[0.95] transition-colors group-hover:text-[#d3532b]">
-                                {sinTildes(calle)}
-                                <br />
-                                Santa Fe
-                            </span>
-                            <span className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-[#f2ede0]/70 underline decoration-[#f2ede0]/30 underline-offset-4 group-hover:decoration-[#f2ede0]">
-                                <MapPin className="size-4" /> Cómo llegar
-                            </span>
-                        </a>
-                    </div>
-                    <img src="/muertos/sello-hueso.webp" alt="" aria-hidden className="w-28 shrink-0 rotate-6 md:hidden" />
-                </div>
-
-                {horarios.length > 0 && (
-                    <div>
-                        <p className="font-twin text-[11px] text-[#eea233]">Hoy</p>
-                        <p className="font-muertos mt-3 text-[30px] leading-[0.95] tabular-nums">{hoy || 'Cerrado'}</p>
-                        <details className="group mt-3">
-                            <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 text-sm font-semibold text-[#f2ede0]/70 underline decoration-[#f2ede0]/30 underline-offset-4 hover:decoration-[#f2ede0] [&::-webkit-details-marker]:hidden">
-                                <ArrowDown className="size-4 transition-transform group-open:rotate-180" /> Todos los horarios
-                            </summary>
-                            <div className="mt-3 max-w-sm"><ListaHorarios horarios={horarios} /></div>
-                        </details>
-                    </div>
-                )}
-
-                <div className="flex flex-wrap items-center gap-3 md:flex-col md:items-end">
-                    <img src="/muertos/sello-hueso.webp" alt="" aria-hidden className="hidden w-32 rotate-6 md:block" />
-                    <a
-                        href={INSTAGRAM_URL}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="font-twin inline-flex h-11 items-center gap-2 rounded-lg border-2 border-[#f2ede0]/25 px-4 text-[12px] transition-colors hover:border-[#f2ede0]/60"
-                    >
-                        <Instagram className="size-4" /> @alfajorconpapas
-                    </a>
-                    <span className="text-sm text-[#f2ede0]/60">Delivery y take away.</span>
-                </div>
-            </div>
-        </section>
     )
 }
 

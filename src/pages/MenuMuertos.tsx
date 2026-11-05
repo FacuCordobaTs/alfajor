@@ -9,7 +9,7 @@ import {
     BadgePercent, Users, Sparkles, Check, ArrowRight
 } from 'lucide-react'
 import { LogoAlfajor } from '@/components/marca/MarcaAlfajor'
-import { BaileEsqueletos, BotonPedidoMuertos, BotonTicketMuertos, CintasMuertos, EstadoLocalMuertos, FooterMuertos, HeroMuertos, InfoLocalMuertos, NavCategoriasMuertos, NocheYAltar, TituloSeccionMuertos } from '@/components/muertos/MarcaMuertos'
+import { BaileEsqueletos, BotonPedidoMuertos, BotonTicketMuertos, CintasMuertos, EstadoLocalMuertos, FooterMuertos, HeroMuertos, NavCategoriasMuertos, NocheMuertos, AltarMuertos, TituloSeccionMuertos } from '@/components/muertos/MarcaMuertos'
 import { Calavera } from '@/components/muertos/Decoraciones'
 import { IntroMuertos } from '@/components/muertos/IntroMuertos'
 import { sinTildes } from '@/lib/muertos'
@@ -1383,7 +1383,7 @@ const MenuMuertos = ({ campana = null }: { campana?: CampanaPublica | null }) =>
                 }
             />
             <CintasMuertos palabras={palabrasCinta} className="-mt-16 md:-mt-20" />
-            <InfoLocalMuertos horarios={horarios} direccion={restaurante.direccion} />
+            <NocheMuertos />
 
             <div className="max-w-2xl lg:max-w-5xl xl:max-w-6xl mx-auto px-5 pt-6 space-y-8">
                 {productoCampana && campana && (
@@ -1489,7 +1489,7 @@ const MenuMuertos = ({ campana = null }: { campana?: CampanaPublica | null }) =>
             </div>
 
             <div className="mx-auto mt-24 max-w-2xl px-5 lg:max-w-5xl xl:max-w-6xl">
-                <NocheYAltar />
+                <AltarMuertos />
             </div>
             <BaileEsqueletos />
 

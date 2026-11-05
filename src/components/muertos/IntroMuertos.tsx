@@ -3,33 +3,30 @@ import { ArrowRight } from 'lucide-react'
 import { HUECO_QUEMADO, M, PETALOS } from '@/lib/muertos'
 import { Calavera, Cempasuchil, Floritura, PapelPicado, Vela } from './Decoraciones'
 
-// La bienvenida de /muertosdehambre: reemplaza al "Armando los alfajores" y dura bastante más (~7 s).
+// La bienvenida de /muertosdehambre: reemplaza al "Armando los alfajores" y dura bastante más (~4,5 s).
 //
 // De noche cae el papel picado y se prenden las velas una por una. Aparece el logo de Alfajor, la
 // calavera de azúcar con su corona de cempasúchil, y el póster se arma palabra por palabra como el
-// flyer: DIA DE LOS / MUERTOS / DE HAMBRE, cada una golpeando; después el sello de la tradición, el
-// chile y la firma a mano. Al final la noche se quema desde el centro, como el agujero del flyer, y
+// flyer: DIA DE LOS / MUERTOS / DE HAMBRE, cada una golpeando; después la firma a mano. Al final la noche se quema desde el centro, como el agujero del flyer, y
 // deja ver la página. No sale antes de que la carta haya cargado (`listo`).
 //
 // Casi todo corre con animation-delay de CSS (los tiempos de abajo, en ms); el estado sólo decide
 // cuándo salir.
 
 const T = {
-    velas: [500, 750, 1000, 1250, 1500],
-    logo: 450,
-    calavera: 850,
-    flores: 1050,
-    dia: 1650,
-    muertos: 2150,
-    hambre: 2650,
-    sello: 3050,
-    chile: 3350,
-    tradicion: 3650,
+    velas: [300, 450, 600, 750, 900],
+    logo: 250,
+    calavera: 500,
+    flores: 650,
+    dia: 1000,
+    muertos: 1320,
+    hambre: 1640,
+    tradicion: 1950,
 }
-// Cuándo la composición queda completa (después se quema).
-const COMPLETA = 5500
+// Cuándo la composición queda completa (después se quema): ~4,4 s en total con la quema.
+const COMPLETA = 3100
 const DURA_SALIDA = 420
-const DURA_QUEMA = 1500
+const DURA_QUEMA = 1300
 
 const escalaHueco = (s: number) => `translate(50 50) scale(${s.toFixed(4)}) translate(-50 -50)`
 
@@ -193,18 +190,6 @@ export function IntroMuertos({ listo, onFin, onRevelar }: { listo: boolean; onFi
                         <span className="font-muertos muertos-titulo-entra mt-[2.4svh] block origin-bottom whitespace-nowrap text-[min(calc((100vw-40px)/7.1),66px,6svh)] uppercase leading-[0.8] tracking-[-0.02em] text-[#eea233]" style={demora(T.hambre)}>
                             De hambre
                         </span>
-                        <img
-                            src="/muertos/sello-hueso.webp"
-                            alt=""
-                            className="muertos-sello-golpe absolute -bottom-[44%] -right-[3%] w-[min(25vw,130px)] drop-shadow-[0_6px_10px_rgba(0,0,0,0.5)]"
-                            style={demora(T.sello)}
-                        />
-                        <img
-                            src="/muertos/chile.webp"
-                            alt=""
-                            className="muertos-sello-golpe absolute -bottom-[34%] -left-[2%] w-[min(17vw,86px)] drop-shadow-[0_6px_10px_rgba(0,0,0,0.5)]"
-                            style={demora(T.chile)}
-                        />
                     </div>
 
                     <p className="font-salient muertos-escribe mt-[3.4svh] text-[clamp(24px,6.4vw,36px)] leading-none text-[#f2ede0]" style={demora(T.tradicion)}>
