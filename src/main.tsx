@@ -1,4 +1,4 @@
-import { StrictMode } from 'react'
+import { StrictMode, Suspense, lazy } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import { createBrowserRouter } from "react-router";
@@ -19,10 +19,18 @@ import TiendaRopa from './pages/TiendaRopa'
 import ProductoRopaDetalle from './pages/ProductoRopaDetalle'
 import PedidoRopa from './pages/PedidoRopa'
 
+// Página temporal: se baja aparte para no sumarle peso a la carta de siempre.
+const MenuMuertos = lazy(() => import('./pages/MenuMuertos'))
+
 const rutas = [
   {
     path: "/",
     element: <MenuDelivery />,
+  },
+  {
+    // Edición temporal del Día de los muertos de hambre (noviembre 2026).
+    path: "/muertosdehambre",
+    element: <Suspense fallback={<div className="min-h-screen bg-[#161413]" />}><MenuMuertos /></Suspense>,
   },
   {
     path: "/ropa",
