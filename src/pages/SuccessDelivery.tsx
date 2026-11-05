@@ -360,7 +360,7 @@ const SuccessDelivery = () => {
         }
     }
 
-    const { items, tipoPedido, total, pedidoId, deliveryFee, direccion, aliasDinamico, cvuDinamico, nombreCliente } = orderInfo
+    const { items, tipoPedido, total, pedidoId, deliveryFee, direccion, zonaEspecialNombre, aliasDinamico, cvuDinamico, nombreCliente } = orderInfo
     const effectiveMetodo = getEffectiveMetodo(orderInfo)
     const isManualTransferMetodo = effectiveMetodo === 'manual_transfer'
     const isAutoTransferMetodo = effectiveMetodo === 'transferencia_automatica_cucuru' || effectiveMetodo === 'transferencia_automatica_talo'
@@ -763,15 +763,17 @@ const SuccessDelivery = () => {
                             {tipoPedido === 'delivery' && direccion ? (
                                 <div className="space-y-3">
                                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
-                                        {isDispatched ? 'En camino' : 'Dirección de entrega'}
+                                        {isDispatched ? 'En camino' : zonaEspecialNombre ? 'Country de entrega' : 'Dirección de entrega'}
                                     </p>
                                     <div className="space-y-1 px-0.5">
                                         <p className="text-sm text-foreground font-medium flex items-center gap-1.5">
                                             <MapPin className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                                            {direccion}
+                                            {zonaEspecialNombre || direccion}
                                         </p>
                                         {isDispatched && (
-                                            <p className="text-xs text-muted-foreground pl-5">El repartidor se dirige a tu dirección.</p>
+                                            <p className="text-xs text-muted-foreground pl-5">
+                                                {zonaEspecialNombre ? 'El repartidor se dirige a la zona especial.' : 'El repartidor se dirige a tu dirección.'}
+                                            </p>
                                         )}
                                     </div>
                                 </div>

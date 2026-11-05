@@ -34,6 +34,9 @@ export interface CheckoutDeliveryData {
   notas: string
   deliveryFee: number
   zonaNombre: string | null
+  /** Zona especial (country/barrio cerrado) elegida en el checkout. */
+  zonaEspecialId?: number | null
+  zonaEspecialNombre?: string | null
   itemsTotal: string
   total: string
   codigoDescuentoId?: number | null

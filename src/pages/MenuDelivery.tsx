@@ -28,6 +28,8 @@ type PedidoHistorico = {
     notas?: string | null
     latitud: string | null
     longitud: string | null
+    zonaEspecialId: number | null
+    zonaEspecialNombre?: string | null
     sucursalId: number | null
     metodoPago: string | null
     items: {
@@ -337,7 +339,16 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                 }
                 const data = await res.json()
                 if (data.success) {
-                    setRestaurante(data.data.restaurante)
+                    // El backend devuelve las zonas especiales dentro del perfil y
+                    // también como hermanas por compatibilidad. El estado local las
+                    // necesita en `restaurante` para abrir el checkout con el local
+                    // cerrado y para reconstruir un pedido habitual a un country.
+                    setRestaurante({
+                        ...data.data.restaurante,
+                        zonasEspeciales: Array.isArray(data.data.restaurante?.zonasEspeciales)
+                            ? data.data.restaurante.zonasEspeciales
+                            : (Array.isArray(data.data.zonasEspeciales) ? data.data.zonasEspeciales : []),
+                    })
                     setProductos(data.data.productos)
                     configurarGtm(data.data.restaurante?.gtmContainerId)
                     configurarMetaPixel(data.data.restaurante?.metaPixelId)
@@ -682,17 +693,33 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
 
                 let deliveryFee = 0
                 let zonaNombre: string | null = null
+                let zonaEspecialId: number | null = null
+                let zonaEspecialNombre: string | null = null
                 let sucursalId = pedido.sucursalId ?? null
                 const lat = pedido.latitud == null ? null : Number(pedido.latitud)
                 const lng = pedido.longitud == null ? null : Number(pedido.longitud)
                 if (pedido.tipo === 'delivery') {
-                    if (!pedido.direccion?.trim() || !Number.isFinite(lat) || !Number.isFinite(lng)) return
-                    const zonaRes = await fetch(`${url}/public/restaurante/${restaurante.id}/check-zona?lat=${lat}&lng=${lng}`)
-                    const zona = await zonaRes.json()
-                    if (!zonaRes.ok || !zona.success || zona.code === 'FUERA_DE_ZONA') return
-                    deliveryFee = Number(zona.deliveryFee || 0)
-                    zonaNombre = zona.zonaNombre || null
-                    sucursalId = zona.sucursalId ?? null
+                    const zonasEspeciales: any[] = Array.isArray(restaurante.zonasEspeciales) ? restaurante.zonasEspeciales : []
+                    const zonaEspecial = pedido.zonaEspecialId
+                        ? zonasEspeciales.find((zona) => zona.id === pedido.zonaEspecialId)
+                        : null
+                    if (zonaEspecial) {
+                        // El pedido anterior fue a un country: se repite el flujo sin
+                        // dirección, con el fee y la ventana de la zona.
+                        zonaEspecialId = zonaEspecial.id
+                        zonaEspecialNombre = zonaEspecial.nombre
+                        zonaNombre = zonaEspecial.nombre
+                        deliveryFee = Number(zonaEspecial.precio || 0)
+                        sucursalId = null
+                    } else {
+                        if (!pedido.direccion?.trim() || !Number.isFinite(lat) || !Number.isFinite(lng)) return
+                        const zonaRes = await fetch(`${url}/public/restaurante/${restaurante.id}/check-zona?lat=${lat}&lng=${lng}`)
+                        const zona = await zonaRes.json()
+                        if (!zonaRes.ok || !zona.success || zona.code === 'FUERA_DE_ZONA') return
+                        deliveryFee = Number(zona.deliveryFee || 0)
+                        zonaNombre = zona.zonaNombre || null
+                        sucursalId = zona.sucursalId ?? null
+                    }
                 } else if (sucursales.length > 0) {
                     const sucursal = sucursales.find(s => s.id === pedido.sucursalId) || (sucursales.length === 1 ? sucursales[0] : null)
                     if (!sucursal) return
@@ -750,15 +777,19 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                     tipoPedido: pedido.tipo,
                     nombre: pedido.nombreCliente.trim(),
                     telefono,
-                    direccion: pedido.tipo === 'delivery' ? pedido.direccion!.trim() : '',
-                    lat: pedido.tipo === 'delivery' ? lat : null,
-                    lng: pedido.tipo === 'delivery' ? lng : null,
+                    direccion: pedido.tipo === 'delivery' && !zonaEspecialId ? (pedido.direccion || '').trim() : '',
+                    lat: pedido.tipo === 'delivery' && !zonaEspecialId ? lat : null,
+                    lng: pedido.tipo === 'delivery' && !zonaEspecialId ? lng : null,
                     notas: '',
-                    ...(buscarDomicilioCliente(restaurante.id, telefono, pedido.direccion || '').tipoDomicilio
-                        ? buscarDomicilioCliente(restaurante.id, telefono, pedido.direccion || '')
-                        : datosDomicilio({ notas: pedido.notas || '' })),
+                    ...(zonaEspecialId
+                        ? {}
+                        : buscarDomicilioCliente(restaurante.id, telefono, pedido.direccion || '').tipoDomicilio
+                            ? buscarDomicilioCliente(restaurante.id, telefono, pedido.direccion || '')
+                            : datosDomicilio({ notas: pedido.notas || '' })),
                     deliveryFee,
                     zonaNombre,
+                    zonaEspecialId,
+                    zonaEspecialNombre,
                     itemsTotal: itemsTotal.toFixed(2),
                     total: (itemsTotal + deliveryFee).toFixed(2),
                     codigoDescuentoId: null,
@@ -796,11 +827,14 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
         if (!data || !restaurante) return
 
         const estadoActual = checkIsOpen(horarios)
-        if (!estadoActual.abierto && !restaurante?.permitirPedidosProgramados) {
+        const preOrdenCountry = !!data.zonaEspecialId && restaurante?.permitirPrePedidosZonasEspeciales === true
+        if (!estadoActual.abierto && !restaurante?.permitirPedidosProgramados && !preOrdenCountry) {
             toast.error('El restaurante está cerrado', {
-                description: estadoActual.proximaApertura
-                    ? `Abre ${estadoActual.proximaApertura}`
-                    : 'El restaurante no está disponible en este momento.',
+                description: data.zonaEspecialId
+                    ? 'El local todavía no habilitó los pre-pedidos para countries.'
+                    : estadoActual.proximaApertura
+                        ? `Abre ${estadoActual.proximaApertura}`
+                        : 'El restaurante no está disponible en este momento.',
                 duration: 5000
             })
             isSubmittingRef.current = false
@@ -830,7 +864,12 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                 ...contextoParaPedidoMarketing(username),
             }
             if (data.codigoDescuentoId) payload.codigoDescuentoId = data.codigoDescuentoId
-            if (tipoPedido === 'delivery') {
+            if (tipoPedido === 'delivery' && data.zonaEspecialId) {
+                // Flujo country: no hay dirección ni coordenadas; el backend valida
+                // la zona, cobra su precio y guarda la ventana de entrega.
+                payload.zonaEspecialId = data.zonaEspecialId
+                payload.direccion = `Country · ${data.zonaEspecialNombre || 'Zona especial'}`
+            } else if (tipoPedido === 'delivery') {
                 payload.direccion = data.direccion
                 payload.lat = data.lat
                 payload.lng = data.lng
@@ -854,7 +893,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                 localStorage.setItem('cliente_nombre', data.nombre)
                 localStorage.setItem('cliente_telefono', data.telefono)
                 setTelefonoCliente(data.telefono)
-                if (tipoPedido === 'delivery') {
+                if (tipoPedido === 'delivery' && !data.zonaEspecialId) {
                     localStorage.setItem('cliente_direccion', data.direccion || '')
                     if (data.lat != null) localStorage.setItem('cliente_lat', String(data.lat))
                     if (data.lng != null) localStorage.setItem('cliente_lng', String(data.lng))
@@ -879,7 +918,11 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                     cvuDinamico: result.data.cvuDinamico,
                     deliveryFee: result.data.deliveryFee,
                     zonaNombre: result.data.zonaNombre,
-                    direccion: tipoPedido === 'delivery' ? data.direccion : null,
+                    zonaEspecialId: result.data.zonaEspecialId ?? null,
+                    zonaEspecialNombre: result.data.zonaEspecialNombre ?? null,
+                    direccion: tipoPedido === 'delivery'
+                        ? (data.zonaEspecialId ? `Country · ${data.zonaEspecialNombre || ''}` : data.direccion)
+                        : null,
                     montoDescuento: data.montoDescuento > 0 ? data.montoDescuento : undefined,
                     horarioProgramado: data.horarioProgramado || undefined,
                     notas: data.notas || undefined,
@@ -1164,7 +1207,12 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
 
     // En desarrollo se puede entrar al checkout con el local cerrado, para probarlo a cualquier hora.
     // Mandar el pedido sigue bloqueado (submitOrder): la API de desarrollo es la de producción.
-    const checkoutCerrado = !import.meta.env.DEV && !estadoAbierto.abierto && !restaurante?.permitirPedidosProgramados
+    // Con pre-pedidos de countries habilitados, el local cerrado igual deja abrir el checkout:
+    // el flujo country se entrega en la próxima ventana de la zona.
+    const puedePreOrdenarCountry = restaurante?.permitirPrePedidosZonasEspeciales === true
+        && Array.isArray(restaurante?.zonasEspeciales)
+        && restaurante.zonasEspeciales.length > 0
+    const checkoutCerrado = !import.meta.env.DEV && !estadoAbierto.abierto && !restaurante?.permitirPedidosProgramados && !puedePreOrdenarCountry
 
     const alturaCarrito = (() => {
         const n = cartItems.length
@@ -1283,13 +1331,15 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
             {themeStyles}
 
             {!estadoAbierto.abierto && (
-                <div className={restaurante?.permitirPedidosProgramados ? "bg-[#eb623a] text-[#083821]" : "bg-[#efeae7] text-[#083821]"}>
+                <div className={restaurante?.permitirPedidosProgramados || puedePreOrdenarCountry ? "bg-[#eb623a] text-[#083821]" : "bg-[#efeae7] text-[#083821]"}>
                     <div className="max-w-2xl lg:max-w-5xl xl:max-w-6xl mx-auto px-5 py-2.5 flex items-center justify-center gap-2">
                         <Clock className="w-4 h-4 shrink-0" />
                         <p className="text-sm text-center">
                             {restaurante?.permitirPedidosProgramados
                                 ? 'Arma tu pedido y programa el horario al que quieres recibirlo.'
-                                : `Estamos cerrados${estadoAbierto.proximaApertura ? `. Abrimos ${estadoAbierto.proximaApertura}` : ''}`
+                                : puedePreOrdenarCountry
+                                    ? 'Estamos cerrados. Podés pre ordenar para un country y lo entregamos en la próxima ventana.'
+                                    : `Estamos cerrados${estadoAbierto.proximaApertura ? `. Abrimos ${estadoAbierto.proximaApertura}` : ''}`
                             }
                         </p>
                     </div>
@@ -1653,7 +1703,11 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                                         setExpandido(false)
                                     }}
                                 >
-                                    {checkoutCerrado ? 'Cerrado' : <>Continuar <ArrowRight className="size-4" /></>}
+                                    {checkoutCerrado
+                                        ? 'Cerrado'
+                                        : puedePreOrdenarCountry && !estadoAbierto.abierto && !restaurante?.permitirPedidosProgramados
+                                            ? 'Pre ordenar para un country'
+                                            : <>Continuar <ArrowRight className="size-4" /></>}
                                 </Button>
                             </div>
                         </>

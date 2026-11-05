@@ -4,7 +4,7 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from 'sonner'
-import { MapPin, Store, Truck, AlertTriangle, Loader2, Pencil, X, Tag, Home, Building2, Clock, CreditCard, Wallet, Banknote, ChevronLeft, Check, Zap, UserRound, ArrowRight } from 'lucide-react'
+import { MapPin, Store, Truck, AlertTriangle, Loader2, Pencil, X, Tag, Home, Building2, Clock, CreditCard, Wallet, Banknote, ChevronLeft, Check, Zap, UserRound, ArrowRight, Fence } from 'lucide-react'
 import { AddressAutocomplete } from '@/components/AddressAutocomplete'
 import { AddressMapPreview } from '@/components/AddressMapPreview'
 import { etiquetaVarianteMedallon } from '@/components/ProductDetailDrawer'
@@ -18,7 +18,17 @@ import { leerDireccionesCliente, guardarDireccionCliente, sincronizarDirecciones
 type MetodoPublico = { id: string; label: string; automatico: boolean }
 type FranjaHorario = { id: number; nombre: string; horaInicio: string; horaFin: string }
 
-type PasoCheckout = 'tipo' | 'datos' | 'ubicacion' | 'domicilio' | 'extras'
+type PasoCheckout = 'tipo' | 'datos' | 'ubicacion' | 'domicilio' | 'zona' | 'extras'
+
+type ZonaEspecialPublica = {
+  id: number
+  nombre: string
+  precio: string
+  horaInicio: string
+  horaFin: string
+  enVentana: boolean
+  proximaVentana: string
+}
 
 // Los cupones que emite el SISTEMA por destinatario —`VOLVE*` de un toque del Motor de Recompra,
 // `CRECE-*` de una micro-campaña, `GROWTH-*` de un Smart Link— no son códigos que el local haya
@@ -123,6 +133,11 @@ export function CheckoutDeliveryGrupal({
 
   const [zonaDeliveryFee, setZonaDeliveryFee] = useState<number | null>(checkoutData ? checkoutData.deliveryFee : null)
   const [zonaNombre, setZonaNombre] = useState<string | null>(checkoutData?.zonaNombre ?? null)
+  // Flujo especial de countries/barrios cerrados. Se distingue del delivery normal
+  // porque no pide dirección: el cliente elige la zona y el pedido va a su puerta.
+  const [modoCountry, setModoCountry] = useState(!!checkoutData?.zonaEspecialId)
+  const [zonaEspecialId, setZonaEspecialId] = useState<number | null>(checkoutData?.zonaEspecialId ?? null)
+  const [zonaEspecialNombre, setZonaEspecialNombre] = useState<string | null>(checkoutData?.zonaEspecialNombre ?? null)
   const [isCheckingZona, setIsCheckingZona] = useState(false)
   const [fueraDeZona, setFueraDeZona] = useState(false)
   const [codigoInput, setCodigoInput] = useState('')
@@ -138,11 +153,22 @@ export function CheckoutDeliveryGrupal({
   const [paso, setPaso] = useState(0)
   const [editandoHabitual, setEditandoHabitual] = useState(false)
   const pasos: PasoCheckout[] = tipoPedido === 'delivery'
-    ? ['tipo', 'datos', 'ubicacion', 'domicilio', 'extras']
+    ? (modoCountry
+        ? ['tipo', 'datos', 'zona', 'extras']
+        : ['tipo', 'datos', 'ubicacion', 'domicilio', 'extras'])
     : ['tipo', 'datos', 'ubicacion', 'extras']
 
   const estoyEditando = editSemaphore?.clienteId === clienteId
   const alguienEditando = editSemaphore && !estoyEditando
+
+  const zonasEspeciales: ZonaEspecialPublica[] = Array.isArray(restauranteData?.zonasEspeciales)
+    ? restauranteData.zonasEspeciales
+    : []
+  const permitirPrePedidosZonas = restauranteData?.permitirPrePedidosZonasEspeciales === true
+  const zonaEspecialSeleccionada = zonasEspeciales.find((zona) => zona.id === zonaEspecialId) ?? null
+  const zonaDisponible = (zona: ZonaEspecialPublica) => (zona.enVentana && !localCerrado) || permitirPrePedidosZonas
+  const hayZonaDisponible = zonasEspeciales.some(zonaDisponible)
+  const esCountry = tipoPedido === 'delivery' && modoCountry
 
   const codigoDescuentoEnabled = !restauranteData || restauranteData.codigoDescuentoEnabled === true
   const deliveryFee = zonaDeliveryFee !== null ? zonaDeliveryFee : 0
@@ -151,12 +177,56 @@ export function CheckoutDeliveryGrupal({
     ? (tipoPedido === 'delivery' ? deliveryFee : 0) : montoDescuentoGuardado
   const cambiarTipoPedido = (nuevoTipo: 'delivery' | 'takeaway') => {
     setTipoPedido(nuevoTipo)
+    // Volver a delivery normal abandona el country: la dirección vuelve a pedirse.
+    if (nuevoTipo !== 'delivery' || modoCountry) {
+      setModoCountry(false)
+      setZonaEspecialId(null)
+      setZonaEspecialNombre(null)
+      setZonaDeliveryFee(null)
+      setZonaNombre(null)
+      setFueraDeZona(false)
+    }
     if (cuponEnvioGratis && nuevoTipo !== 'delivery') {
       setCodigoDescuentoId(null)
       setMontoDescuento(0)
       setCuponEnvioGratis(false)
     }
   }
+
+  const elegirCountry = () => {
+    setTipoPedido('delivery')
+    setModoCountry(true)
+    setZonaEspecialId(null)
+    setZonaEspecialNombre(null)
+    setZonaDeliveryFee(null)
+    setZonaNombre(null)
+    setDireccion('')
+    setLat(null)
+    setLng(null)
+    setFueraDeZona(false)
+    setSucursalDelivery(null)
+    setTipoDomicilio(null)
+    setPiso('')
+    setNumeroDepartamento('')
+  }
+
+  const seleccionarZonaEspecial = (zona: ZonaEspecialPublica) => {
+    setTipoPedido('delivery')
+    setModoCountry(true)
+    setZonaEspecialId(zona.id)
+    setZonaEspecialNombre(zona.nombre)
+    setZonaNombre(zona.nombre)
+    setZonaDeliveryFee(Number(zona.precio) || 0)
+    setDireccion('')
+    setLat(null)
+    setLng(null)
+    setFueraDeZona(false)
+    setSucursalDelivery(null)
+    setTipoDomicilio(null)
+    setPiso('')
+    setNumeroDepartamento('')
+  }
+
   const subtotalConEnvio = tipoPedido === 'delivery' ? itemsTotalNum + deliveryFee : itemsTotalNum
   const total = Math.max(0, subtotalConEnvio - montoDescuento)
 
@@ -169,7 +239,12 @@ export function CheckoutDeliveryGrupal({
         const response = await fetch(`${url}/public/restaurante/${restauranteUsername}`)
         const data = await response.json()
         if (data.success && data.data?.restaurante) {
-          const r = data.data.restaurante
+          const r = {
+            ...data.data.restaurante,
+            zonasEspeciales: Array.isArray(data.data.restaurante?.zonasEspeciales)
+              ? data.data.restaurante.zonasEspeciales
+              : (Array.isArray(data.data.zonasEspeciales) ? data.data.zonasEspeciales : []),
+          }
           setAvailablePaymentMethods(Array.isArray(r.metodosPago) ? r.metodosPago : [])
           setRestauranteData(r)
           const s = Array.isArray(data.data.sucursales) ? data.data.sucursales : []
@@ -255,6 +330,9 @@ export function CheckoutDeliveryGrupal({
     setNotas(notasSinDomicilio(checkoutData.notas))
     setZonaDeliveryFee(checkoutData.deliveryFee)
     setZonaNombre(checkoutData.zonaNombre)
+    setModoCountry(!!checkoutData.zonaEspecialId)
+    setZonaEspecialId(checkoutData.zonaEspecialId ?? null)
+    setZonaEspecialNombre(checkoutData.zonaEspecialNombre ?? null)
     setCodigoDescuentoId(checkoutData.codigoDescuentoId ?? null)
     setMontoDescuento(checkoutData.montoDescuento ?? 0)
     setCuponEnvioGratis(checkoutData.cuponEnvioGratis ?? false)
@@ -269,16 +347,19 @@ export function CheckoutDeliveryGrupal({
     setPiso(domicilio.piso || '')
     setNumeroDepartamento(domicilio.numeroDepartamento || '')
     if (checkoutData.sucursalId) setSucursalSeleccionada(checkoutData.sucursalId)
-  }, [checkoutData?.nombre, checkoutData?.telefono, checkoutData?.direccion, checkoutData?.tipoPedido, checkoutData?.notas, checkoutData?.deliveryFee, checkoutData?.zonaNombre, checkoutData?.codigoDescuentoId, checkoutData?.montoDescuento, checkoutData?.cuponEnvioGratis, checkoutData?.metodoPago, checkoutData?.horarioProgramado, checkoutData?.tipoDomicilio, checkoutData?.piso, checkoutData?.numeroDepartamento, checkoutData?.sucursalId])
+  }, [checkoutData?.nombre, checkoutData?.telefono, checkoutData?.direccion, checkoutData?.tipoPedido, checkoutData?.notas, checkoutData?.deliveryFee, checkoutData?.zonaNombre, checkoutData?.zonaEspecialId, checkoutData?.zonaEspecialNombre, checkoutData?.codigoDescuentoId, checkoutData?.montoDescuento, checkoutData?.cuponEnvioGratis, checkoutData?.metodoPago, checkoutData?.horarioProgramado, checkoutData?.tipoDomicilio, checkoutData?.piso, checkoutData?.numeroDepartamento, checkoutData?.sucursalId])
 
   useEffect(() => {
     if (lat === null || lng === null || !restauranteId) {
-      if (!checkoutData?.deliveryFee) {
+      // El country no usa coordenadas: su fee y su nombre los fija la zona elegida.
+      if (!modoCountry && !checkoutData?.deliveryFee) {
         setZonaDeliveryFee(null)
         setZonaNombre(null)
       }
-      setFueraDeZona(false)
-      setSucursalDelivery(null)
+      if (!modoCountry) {
+        setFueraDeZona(false)
+        setSucursalDelivery(null)
+      }
       return
     }
     const checkZona = async () => {
@@ -308,7 +389,7 @@ export function CheckoutDeliveryGrupal({
       }
     }
     checkZona()
-  }, [lat, lng, restauranteId])
+  }, [lat, lng, restauranteId, modoCountry])
 
   // AddressAutocomplete conserva el callback inicial: leer siempre la identidad y dirección actuales.
   const direccionActualRef = useRef({ restauranteId, telefono, direccion })
@@ -432,65 +513,85 @@ export function CheckoutDeliveryGrupal({
   }
 
   const handleGuardarEdicion = () => {
-    if (tipoPedido === 'delivery' && (!nombre.trim() || !telefono.trim() || !direccion.trim())) {
-      toast.error('Completa nombre, celular y dirección')
-      return
-    }
-    if (tipoPedido === 'takeaway' && (!nombre.trim() || !telefono.trim())) {
+    if (!nombre.trim() || !telefono.trim()) {
       toast.error('Completa nombre y celular')
       return
     }
-    if (tipoPedido === 'delivery' && (lat === null || lng === null)) {
-      toast.error('Selecciona una dirección de las sugerencias')
-      return
-    }
-    if (tipoPedido === 'delivery' && fueraDeZona) {
-      toast.error('La dirección está fuera del área de delivery')
-      return
-    }
-    if (tipoPedido === 'delivery' && !tipoDomicilio) {
-      toast.error('Indicá si es casa o departamento')
-      return
-    }
-    if (tipoPedido === 'delivery' && tipoDomicilio === 'departamento' && (!piso.trim() || !numeroDepartamento.trim())) {
-      toast.error('Ingresá el piso y el número de departamento')
-      return
+    if (esCountry) {
+      if (!zonaEspecialId || !zonaEspecialSeleccionada) {
+        toast.error('Seleccioná el country de entrega')
+        return
+      }
+      if (!zonaDisponible(zonaEspecialSeleccionada)) {
+        toast.error('El country no está disponible en este horario')
+        return
+      }
+    } else if (tipoPedido === 'delivery') {
+      if (!direccion.trim()) {
+        toast.error('Completa la dirección')
+        return
+      }
+      if (lat === null || lng === null) {
+        toast.error('Selecciona una dirección de las sugerencias')
+        return
+      }
+      if (fueraDeZona) {
+        toast.error('La dirección está fuera del área de delivery')
+        return
+      }
+      if (!tipoDomicilio) {
+        toast.error('Indicá si es casa o departamento')
+        return
+      }
+      if (tipoDomicilio === 'departamento' && (!piso.trim() || !numeroDepartamento.trim())) {
+        toast.error('Ingresá el piso y el número de departamento')
+        return
+      }
     }
     if (tipoPedido === 'takeaway' && sucursales.length > 1 && !sucursalSeleccionada) {
       toast.error('Seleccioná un local de retiro')
       return
     }
-    const requiereHorarioProgramado = usarFranjas ? franjaObligatoria : (programacionObligatoria || programarPedido)
+    const requiereHorarioProgramado = !esCountry && (usarFranjas ? franjaObligatoria : (programacionObligatoria || programarPedido))
     if (requiereHorarioProgramado && !horarioProgramado.trim()) {
       toast.error(usarFranjas ? 'Seleccioná un horario de entrega' : (localCerrado ? 'El local está cerrado, indicá a qué hora querés tu pedido' : 'Ingresa el horario para tu pedido'))
       return
     }
 
     const notasLimpias = notas.replace(/[^\x20-\x7E\xA0-\xFF\n]/g, '').trim()
-    const notasFinal = notasConDomicilio(notasLimpias, tipoPedido === 'delivery' ? { tipoDomicilio, piso, numeroDepartamento } : {})
+    const domicilio = esCountry ? null : (tipoPedido === 'delivery' ? { tipoDomicilio, piso, numeroDepartamento } : null)
+    const notasFinal = notasConDomicilio(notasLimpias, domicilio || {})
 
-    const sucursalId = tipoPedido === 'delivery'
-      ? (sucursalDelivery ?? null)
-      : (sucursales.length === 1 ? sucursales[0].id : sucursalSeleccionada) ?? null
+    const sucursalId = esCountry
+      ? null
+      : tipoPedido === 'delivery'
+        ? (sucursalDelivery ?? null)
+        : (sucursales.length === 1 ? sucursales[0].id : sucursalSeleccionada) ?? null
 
     const updates: Record<string, unknown> = {
       tipoPedido,
       nombre: nombre.trim(),
       telefono: telefono.trim(),
-      direccion: tipoPedido === 'delivery' ? direccion.trim() : '',
-      lat: tipoPedido === 'delivery' ? lat : null,
-      lng: tipoPedido === 'delivery' ? lng : null,
+      direccion: esCountry
+        ? `Country · ${zonaEspecialNombre}`
+        : tipoPedido === 'delivery' ? direccion.trim() : '',
+      lat: esCountry ? null : (tipoPedido === 'delivery' ? lat : null),
+      lng: esCountry ? null : (tipoPedido === 'delivery' ? lng : null),
       notas: notasFinal,
-      ...datosDomicilio(tipoPedido === 'delivery' ? { tipoDomicilio, piso, numeroDepartamento } : {}),
-      deliveryFee,
-      zonaNombre,
+      ...datosDomicilio(domicilio || {}),
+      deliveryFee: esCountry ? (zonaEspecialSeleccionada ? Number(zonaEspecialSeleccionada.precio) : 0) : deliveryFee,
+      zonaNombre: esCountry ? zonaEspecialNombre : zonaNombre,
+      zonaEspecialId: esCountry ? zonaEspecialId : null,
+      zonaEspecialNombre: esCountry ? zonaEspecialNombre : null,
       itemsTotal,
       total: total.toFixed(2),
       codigoDescuentoId: codigoDescuentoId ?? null,
       cuponEnvioGratis,
       montoDescuento,
       metodoPago: metodoPago ?? null,
-      horarioProgramado: usarFranjas ? horarioProgramado : ((programacionObligatoria || programarPedido) ? horarioProgramado : ''),
+      horarioProgramado: esCountry && zonaEspecialSeleccionada
+        ? `${zonaEspecialSeleccionada.horaInicio}-${zonaEspecialSeleccionada.horaFin}`
+        : (usarFranjas ? horarioProgramado : ((programacionObligatoria || programarPedido) ? horarioProgramado : '')),
       sucursalId,
       ...contextoMarketing,
       trackingClienteId: clienteId,
@@ -501,7 +602,7 @@ export function CheckoutDeliveryGrupal({
 
     localStorage.setItem('cliente_nombre', nombre.trim())
     localStorage.setItem('cliente_telefono', telefono.trim())
-    if (tipoPedido === 'delivery') guardarDireccionCliente(restauranteId, telefono, direccion, lat, lng, { tipoDomicilio, piso, numeroDepartamento })
+    if (!esCountry && tipoPedido === 'delivery') guardarDireccionCliente(restauranteId, telefono, direccion, lat, lng, { tipoDomicilio, piso, numeroDepartamento })
   }
 
   const handleConfirmarPedido = () => {
@@ -513,11 +614,16 @@ export function CheckoutDeliveryGrupal({
       toast.error('Faltan nombre o celular')
       return
     }
-    if (checkoutData.tipoPedido === 'delivery' && !checkoutData.direccion?.trim()) {
+    const confirmaCountry = !!checkoutData.zonaEspecialId
+    if (checkoutData.tipoPedido === 'delivery' && !confirmaCountry && !checkoutData.direccion?.trim()) {
       toast.error('Falta la dirección de entrega')
       return
     }
-    if (pedidoHabitual && checkoutData.tipoPedido === 'delivery') {
+    if (confirmaCountry && !checkoutData.zonaEspecialNombre) {
+      toast.error('Falta el country de entrega')
+      return
+    }
+    if (pedidoHabitual && checkoutData.tipoPedido === 'delivery' && !confirmaCountry) {
       if (!validarDomicilio()) return
       const domicilio = datosDomicilio({ tipoDomicilio, piso, numeroDepartamento })
       const updates = { ...checkoutData, ...domicilio, notas: notasConDomicilio(notas, domicilio) }
@@ -541,7 +647,8 @@ export function CheckoutDeliveryGrupal({
       toast.error('Completa nombre y celular')
       return
     }
-    if (checkoutData.tipoPedido === 'delivery') {
+    const country = modoCountry && !!zonaEspecialId
+    if (checkoutData.tipoPedido === 'delivery' && !country) {
       if (!validarDomicilio()) return
       if (!direccion.trim() || lat === null || lng === null) {
         toast.error('Selecciona una dirección válida')
@@ -557,7 +664,9 @@ export function CheckoutDeliveryGrupal({
       return
     }
 
-    const fee = checkoutData.tipoPedido === 'delivery' ? deliveryFee : 0
+    const fee = checkoutData.tipoPedido === 'delivery'
+      ? (country ? Number(zonaEspecialSeleccionada?.precio ?? checkoutData.deliveryFee ?? 0) : deliveryFee)
+      : 0
     const itemsTot = parseFloat(itemsTotal)
     const descEfectivo = cuponEnvioGratis ? montoDescuento : (checkoutData.montoDescuento ?? montoDescuento)
     // El cupón del link ya está aplicado: recalcular el total sin él mostraría el
@@ -565,16 +674,23 @@ export function CheckoutDeliveryGrupal({
     const nuevoTotal = Math.max(0, itemsTot + fee - descEfectivo)
     const updates: CheckoutDeliveryData = {
       ...checkoutData,
-      ...datosDomicilio(checkoutData.tipoPedido === 'delivery' ? { tipoDomicilio, piso, numeroDepartamento } : {}),
-      notas: notasConDomicilio(notas, checkoutData.tipoPedido === 'delivery' ? { tipoDomicilio, piso, numeroDepartamento } : {}),
+      ...datosDomicilio(!country && checkoutData.tipoPedido === 'delivery' ? { tipoDomicilio, piso, numeroDepartamento } : {}),
+      notas: notasConDomicilio(notas, !country && checkoutData.tipoPedido === 'delivery' ? { tipoDomicilio, piso, numeroDepartamento } : {}),
       nombre: nombre.trim(),
       telefono: telefono.trim(),
-      direccion: checkoutData.tipoPedido === 'delivery' ? direccion.trim() : '',
-      lat: checkoutData.tipoPedido === 'delivery' ? lat : null,
-      lng: checkoutData.tipoPedido === 'delivery' ? lng : null,
-      deliveryFee: checkoutData.tipoPedido === 'delivery' ? deliveryFee : 0,
-      zonaNombre: checkoutData.tipoPedido === 'delivery' ? zonaNombre : null,
-      sucursalId: checkoutData.tipoPedido === 'delivery' ? (sucursalDelivery ?? checkoutData.sucursalId) : checkoutData.sucursalId,
+      direccion: country
+        ? `Country · ${zonaEspecialNombre}`
+        : checkoutData.tipoPedido === 'delivery' ? direccion.trim() : '',
+      lat: country ? null : (checkoutData.tipoPedido === 'delivery' ? lat : null),
+      lng: country ? null : (checkoutData.tipoPedido === 'delivery' ? lng : null),
+      deliveryFee: checkoutData.tipoPedido === 'delivery' ? fee : 0,
+      zonaNombre: country ? zonaEspecialNombre : (checkoutData.tipoPedido === 'delivery' ? zonaNombre : null),
+      zonaEspecialId: country ? zonaEspecialId : null,
+      zonaEspecialNombre: country ? zonaEspecialNombre : null,
+      horarioProgramado: country && zonaEspecialSeleccionada
+        ? `${zonaEspecialSeleccionada.horaInicio}-${zonaEspecialSeleccionada.horaFin}`
+        : checkoutData.horarioProgramado,
+      sucursalId: country ? null : (checkoutData.tipoPedido === 'delivery' ? (sucursalDelivery ?? checkoutData.sucursalId) : checkoutData.sucursalId),
       metodoPago,
       itemsTotal,
       codigoDescuentoId: checkoutData.codigoDescuentoId ?? codigoDescuentoId ?? null,
@@ -585,7 +701,7 @@ export function CheckoutDeliveryGrupal({
     sendMessage({ type: 'MODIFICAR_CHECKOUT', payload: { clienteId, updates } })
     localStorage.setItem('cliente_nombre', updates.nombre)
     localStorage.setItem('cliente_telefono', updates.telefono)
-    if (updates.tipoPedido === 'delivery') {
+    if (updates.tipoPedido === 'delivery' && !country) {
       guardarDireccionCliente(restauranteId, updates.telefono, updates.direccion, updates.lat, updates.lng, updates)
       localStorage.setItem('cliente_direccion', updates.direccion)
       if (updates.lat != null) localStorage.setItem('cliente_lat', String(updates.lat))
@@ -619,11 +735,15 @@ export function CheckoutDeliveryGrupal({
         if (sucursales.length > 1 && !sucursalSeleccionada) { toast.error('Seleccioná un local de retiro'); return false }
       }
     }
+    if (k === 'zona') {
+      if (!zonaEspecialId || !zonaEspecialSeleccionada) { toast.error('Seleccioná el country de entrega'); return false }
+      if (!zonaDisponible(zonaEspecialSeleccionada)) { toast.error('El country no está disponible en este horario'); return false }
+    }
     if (k === 'domicilio') {
       if (!tipoDomicilio) { toast.error('Indicá si es casa o departamento'); return false }
       if (tipoDomicilio === 'departamento' && (!piso.trim() || !numeroDepartamento.trim())) { toast.error('Ingresá el piso y el número de departamento'); return false }
     }
-    if (k === 'extras') {
+    if (k === 'extras' && !esCountry) {
       const requiere = usarFranjas ? franjaObligatoria : (programacionObligatoria || programarPedido)
       if (requiere && !horarioProgramado.trim()) { toast.error(usarFranjas ? 'Seleccioná un horario de entrega' : (localCerrado ? 'El local está cerrado, indicá a qué hora querés tu pedido' : 'Ingresa el horario para tu pedido')); return false }
     }
@@ -665,7 +785,9 @@ export function CheckoutDeliveryGrupal({
   const datosCompletos = checkoutData &&
     checkoutData.nombre?.trim() &&
     checkoutData.telefono?.trim() &&
-    (checkoutData.tipoPedido === 'takeaway' || (checkoutData.direccion?.trim() && checkoutData.lat != null && checkoutData.lng != null))
+    (checkoutData.tipoPedido === 'takeaway'
+      || !!checkoutData.zonaEspecialId
+      || (checkoutData.direccion?.trim() && checkoutData.lat != null && checkoutData.lng != null))
 
   const delEn = restauranteData ? restauranteData.deliveryEnabled !== false : true
   const tkEn = restauranteData ? restauranteData.takeawayEnabled !== false : true
@@ -675,6 +797,16 @@ export function CheckoutDeliveryGrupal({
   // el cliente está obligado a elegir un horario (no puede pedir "para ahora"), igual que con soloPedidosProgramados.
   const programacionObligatoria = permitirProgramar && (!!restauranteData?.soloPedidosProgramados || localCerrado)
   const franjaObligatoria = usarFranjas && programacionObligatoria
+  // Local cerrado, sin pedidos programados y con countries disponibles: la única
+  // forma de pedir es el flujo country. Se preselecciona para que la tercera
+  // opción no quede escondida detrás de Delivery/Takeaway.
+  const soloCountry = localCerrado && !permitirProgramar && hayZonaDisponible
+
+  useEffect(() => {
+    if (!soloCountry || modoCountry) return
+    setTipoPedido('delivery')
+    setModoCountry(true)
+  }, [soloCountry, modoCountry])
 
   const inputCls = "h-12 rounded-2xl bg-secondary/60 border-0 shadow-none ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 text-base px-4"
 
@@ -715,32 +847,62 @@ export function CheckoutDeliveryGrupal({
           <p className="text-sm text-destructive font-medium">El local no está aceptando pedidos ahora.</p>
         </div>
       ) : (
+        <>
         <div className="bg-secondary/60 rounded-2xl p-1 grid grid-cols-2 gap-1">
           <button
             type="button"
             className={`flex items-center justify-center gap-2 py-4 rounded-xl transition-all duration-200 ${
-              restauranteData && !delEn
+              (restauranteData && !delEn) || soloCountry
                 ? 'opacity-40 cursor-not-allowed'
-                : `cursor-pointer ${tipoPedido === 'delivery' ? 'bg-background shadow-sm' : ''}`
+                : `cursor-pointer ${tipoPedido === 'delivery' && !modoCountry ? 'bg-background shadow-sm' : ''}`
             }`}
-            onClick={() => (!restauranteData || delEn) && cambiarTipoPedido('delivery')}
+            onClick={() => (!restauranteData || delEn) && !soloCountry && cambiarTipoPedido('delivery')}
           >
-            <MapPin className={`w-4 h-4 ${tipoPedido === 'delivery' ? 'text-primary' : 'text-muted-foreground'}`} />
-            <span className={`text-sm font-semibold ${tipoPedido === 'delivery' ? 'text-foreground' : 'text-muted-foreground'}`}>Delivery</span>
+            <MapPin className={`w-4 h-4 ${tipoPedido === 'delivery' && !modoCountry ? 'text-primary' : 'text-muted-foreground'}`} />
+            <span className={`text-sm font-semibold ${tipoPedido === 'delivery' && !modoCountry ? 'text-foreground' : 'text-muted-foreground'}`}>Delivery</span>
           </button>
           <button
             type="button"
             className={`flex items-center justify-center gap-2 py-4 rounded-xl transition-all duration-200 ${
-              restauranteData && !tkEn
+              (restauranteData && !tkEn) || soloCountry
                 ? 'opacity-40 cursor-not-allowed'
                 : `cursor-pointer ${tipoPedido === 'takeaway' ? 'bg-background shadow-sm' : ''}`
             }`}
-            onClick={() => (!restauranteData || tkEn) && cambiarTipoPedido('takeaway')}
+            onClick={() => (!restauranteData || tkEn) && !soloCountry && cambiarTipoPedido('takeaway')}
           >
             <Store className={`w-4 h-4 ${tipoPedido === 'takeaway' ? 'text-primary' : 'text-muted-foreground'}`} />
             <span className={`text-sm font-semibold ${tipoPedido === 'takeaway' ? 'text-foreground' : 'text-muted-foreground'}`}>Take Away</span>
           </button>
         </div>
+
+        {zonasEspeciales.length > 0 && delEn && (
+          <button
+            type="button"
+            onClick={() => hayZonaDisponible && !modoCountry && elegirCountry()}
+            disabled={!hayZonaDisponible}
+            className={`mt-2 w-full flex items-center gap-3 rounded-2xl px-4 py-3.5 text-left transition-all duration-200 ${
+              modoCountry
+                ? 'bg-primary/10'
+                : hayZonaDisponible
+                  ? 'bg-secondary/50 hover:bg-secondary/80'
+                  : 'bg-secondary/40 opacity-60 cursor-not-allowed'
+            }`}
+          >
+            <span className={`flex size-9 shrink-0 items-center justify-center rounded-full ${modoCountry ? 'bg-primary/15 text-primary' : 'bg-background text-muted-foreground'}`}>
+              <Fence className="w-4 h-4" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className={`block text-sm font-semibold ${modoCountry ? 'text-primary' : 'text-foreground'}`}>Country</span>
+              <span className="block text-xs text-muted-foreground">
+                {hayZonaDisponible
+                  ? 'Pre ordenar para un country'
+                  : 'El local todavía no habilitó los pre-pedidos'}
+              </span>
+            </span>
+            {modoCountry && <Check className="w-4 h-4 text-primary shrink-0" />}
+          </button>
+        )}
+        </>
       )}
     </section>
   )
@@ -821,6 +983,79 @@ export function CheckoutDeliveryGrupal({
         <div className="flex items-center gap-2.5 px-4 py-3 bg-secondary/50 rounded-2xl">
           <MapPin className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
           <span className="text-sm text-muted-foreground">Retirás en <span className="font-semibold text-foreground">{restauranteDireccion}</span></span>
+        </div>
+      )}
+    </div>
+  )
+
+  const secZona = (
+    <div className="space-y-4 animate-in fade-in slide-in-from-right-2">
+      <div className="flex items-start gap-2.5 rounded-2xl bg-primary/10 px-4 py-3">
+        <Fence className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-foreground">Pre ordenar para un country</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Elegí la zona: el pedido se entrega en su puerta dentro del horario del country.</p>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">¿A qué country lo enviamos?</Label>
+        <div className="space-y-2">
+          {zonasEspeciales.map((zona) => {
+            const disponible = zonaDisponible(zona)
+            const selected = zonaEspecialId === zona.id
+            const esPreOrden = !zona.enVentana || localCerrado
+            const precio = Number(zona.precio) || 0
+            return (
+              <button
+                key={zona.id}
+                type="button"
+                disabled={!disponible}
+                onClick={() => disponible && seleccionarZonaEspecial(zona)}
+                className={`w-full flex items-center gap-3 rounded-2xl px-4 py-3.5 text-left transition-all duration-200 ${
+                  selected
+                    ? 'bg-primary/10'
+                    : disponible
+                      ? 'bg-secondary/50 hover:bg-secondary/80'
+                      : 'bg-secondary/40 opacity-55 cursor-not-allowed'
+                }`}
+              >
+                <span className={`flex size-9 shrink-0 items-center justify-center rounded-full ${selected ? 'bg-primary/15 text-primary' : 'bg-background text-muted-foreground'}`}>
+                  <Fence className="w-4 h-4" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    <span className={`truncate text-sm font-semibold ${selected ? 'text-primary' : 'text-foreground'}`}>{zona.nombre}</span>
+                    {esPreOrden && permitirPrePedidosZonas && (
+                      <span className="rounded-full bg-[#eb623a]/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#c94a27]">Pre orden</span>
+                    )}
+                  </span>
+                  <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                    <span className="inline-flex items-center gap-1"><Clock className="w-3 h-3" />{zona.horaInicio} a {zona.horaFin}</span>
+                    <span>·</span>
+                    <span>{precio === 0 ? 'Envío gratis' : `Envío $${precio.toFixed(0)}`}</span>
+                  </span>
+                  {!disponible && (
+                    <span className="mt-1 block text-[11px] text-muted-foreground">No está en su horario de entrega. El local todavía no habilitó los pre-pedidos.</span>
+                  )}
+                </span>
+                {selected && <Check className="w-4 h-4 text-primary shrink-0" />}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {zonaEspecialSeleccionada && (
+        <div className="flex items-start gap-2.5 px-4 py-3 bg-secondary/50 rounded-2xl">
+          <Clock className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-foreground">
+              {localCerrado || !zonaEspecialSeleccionada.enVentana ? 'Pre orden para ' : 'Entrega '}
+              {zonaEspecialSeleccionada.proximaVentana}
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">Te esperamos en la puerta de {zonaEspecialSeleccionada.nombre}.</p>
+          </div>
         </div>
       )}
     </div>
@@ -1045,6 +1280,7 @@ export function CheckoutDeliveryGrupal({
     datos: 'Tus datos',
     ubicacion: tipoPedido === 'delivery' ? 'Dirección de entrega' : 'Retiro',
     domicilio: '¿Casa o departamento?',
+    zona: 'Pre ordenar para un country',
     extras: 'Pago y detalles',
   }
 
@@ -1056,10 +1292,12 @@ export function CheckoutDeliveryGrupal({
       onTituloChange(tituloPaso[pasos[paso]])
     } else if (checkoutData && !estoyEditando) {
       onTituloChange('Revisá tu pedido')
+    } else if (esCountry) {
+      onTituloChange('Pre ordenar para un country')
     } else {
       onTituloChange('Datos de envío')
     }
-  }, [onTituloChange, estoyEditando, modo, paso, checkoutData, tipoPedido, pedidoHabitual])
+  }, [onTituloChange, estoyEditando, modo, paso, checkoutData, tipoPedido, pedidoHabitual, esCountry])
 
   const readOnlyHabitual = (
     <div className="space-y-4">
@@ -1108,7 +1346,7 @@ export function CheckoutDeliveryGrupal({
         })}
       </div>
 
-      {checkoutData?.tipoPedido === 'delivery' && (editandoHabitual || !datosDomicilio(checkoutData).tipoDomicilio || (checkoutData.tipoDomicilio === 'departamento' && (!checkoutData.piso || !checkoutData.numeroDepartamento))) && (
+      {checkoutData?.tipoPedido === 'delivery' && !checkoutData.zonaEspecialId && (editandoHabitual || !datosDomicilio(checkoutData).tipoDomicilio || (checkoutData.tipoDomicilio === 'departamento' && (!checkoutData.piso || !checkoutData.numeroDepartamento))) && (
         <div className="px-4 space-y-2">
           <p className="text-sm font-semibold">¿Casa o departamento?</p>
           {secDomicilio}
@@ -1122,17 +1360,21 @@ export function CheckoutDeliveryGrupal({
               <Input aria-label="Celular" type="tel" value={telefono} onChange={e => setTelefono(e.target.value.replace(/\D/g, ''))} placeholder="Celular" className="h-10 rounded-xl bg-secondary/50 border-0" />
             </div>
             {checkoutData?.tipoPedido === 'delivery' && (
-              <div className="space-y-2">
-                <AddressAutocomplete value={direccion} onChange={handleAddressChange} placeholder="Dirección de entrega" />
-                {renderDireccionesGuardadas(true)}
-                {isCheckingZona ? (
-                  <p className="text-xs text-muted-foreground flex items-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin" /> Verificando dirección...</p>
-                ) : fueraDeZona ? (
-                  <p className="text-xs font-semibold text-destructive">Esta dirección está fuera de la zona de delivery.</p>
-                ) : zonaDeliveryFee !== null ? (
-                  <p className="text-xs text-muted-foreground">Envío ${deliveryFee.toFixed(0)}{zonaNombre ? ` · ${zonaNombre}` : ''}</p>
-                ) : null}
-              </div>
+              checkoutData.zonaEspecialId ? (
+                <div className="space-y-2">{secZona}</div>
+              ) : (
+                <div className="space-y-2">
+                  <AddressAutocomplete value={direccion} onChange={handleAddressChange} placeholder="Dirección de entrega" />
+                  {renderDireccionesGuardadas(true)}
+                  {isCheckingZona ? (
+                    <p className="text-xs text-muted-foreground flex items-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin" /> Verificando dirección...</p>
+                  ) : fueraDeZona ? (
+                    <p className="text-xs font-semibold text-destructive">Esta dirección está fuera de la zona de delivery.</p>
+                  ) : zonaDeliveryFee !== null ? (
+                    <p className="text-xs text-muted-foreground">Envío ${deliveryFee.toFixed(0)}{zonaNombre ? ` · ${zonaNombre}` : ''}</p>
+                  ) : null}
+                </div>
+              )
             )}
             {availablePaymentMethods.length > 0 && (
               <div className="flex flex-wrap gap-2">
@@ -1167,12 +1409,14 @@ export function CheckoutDeliveryGrupal({
                 Cambiar
               </button>
             </div>
-            {checkoutData?.tipoPedido === 'delivery' && checkoutData.direccion && (
+            {checkoutData?.tipoPedido === 'delivery' && (checkoutData.zonaEspecialId || checkoutData.direccion) && (
               <div className="flex items-start gap-3 pt-1">
-                <MapPin className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+                {checkoutData.zonaEspecialId ? <Fence className="w-4 h-4 text-primary mt-0.5 shrink-0" /> : <MapPin className="w-4 h-4 text-primary mt-0.5 shrink-0" />}
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold leading-snug">{checkoutData.direccion}</p>
-                  {checkoutData.tipoDomicilio === 'departamento' && checkoutData.piso && checkoutData.numeroDepartamento && (
+                  <p className="text-sm font-semibold leading-snug">
+                    {checkoutData.zonaEspecialId ? `Country · ${checkoutData.zonaEspecialNombre || checkoutData.direccion}` : checkoutData.direccion}
+                  </p>
+                  {!checkoutData.zonaEspecialId && checkoutData.tipoDomicilio === 'departamento' && checkoutData.piso && checkoutData.numeroDepartamento && (
                     <p className="text-xs text-muted-foreground mt-1">Piso {checkoutData.piso} · Depto {checkoutData.numeroDepartamento}</p>
                   )}
                   {(checkoutData.deliveryFee ?? 0) > 0 && (
@@ -1205,7 +1449,9 @@ export function CheckoutDeliveryGrupal({
       <div className="bg-secondary/40 rounded-2xl overflow-hidden">
         <div className="px-4 py-3.5">
           <p className="text-xs text-muted-foreground mb-0.5">Tipo</p>
-          <p className="text-sm font-semibold">{checkoutData?.tipoPedido === 'delivery' ? 'Delivery' : 'Take Away'}</p>
+          <p className="text-sm font-semibold">
+            {checkoutData?.zonaEspecialId ? 'Country' : checkoutData?.tipoPedido === 'delivery' ? 'Delivery' : 'Take Away'}
+          </p>
         </div>
         <div className="h-px bg-background mx-4" />
         <div className="px-4 py-3.5">
@@ -1217,13 +1463,13 @@ export function CheckoutDeliveryGrupal({
           <p className="text-xs text-muted-foreground mb-0.5">Celular</p>
           <p className="text-sm font-semibold">{checkoutData?.telefono}</p>
         </div>
-        {checkoutData?.tipoPedido === 'delivery' && checkoutData.direccion && (
+        {checkoutData?.tipoPedido === 'delivery' && (checkoutData.zonaEspecialId || checkoutData.direccion) && (
           <>
             <div className="h-px bg-background mx-4" />
             <div className="px-4 py-3.5">
-              <p className="text-xs text-muted-foreground mb-0.5">Dirección</p>
-              <p className="text-sm font-semibold">{checkoutData.direccion}</p>
-              {checkoutData.tipoDomicilio && (
+              <p className="text-xs text-muted-foreground mb-0.5">{checkoutData.zonaEspecialId ? 'Country' : 'Dirección'}</p>
+              <p className="text-sm font-semibold">{checkoutData.zonaEspecialNombre || checkoutData.direccion}</p>
+              {!checkoutData.zonaEspecialId && checkoutData.tipoDomicilio && (
                 <p className="text-xs text-muted-foreground capitalize mt-0.5">{checkoutData.tipoDomicilio}</p>
               )}
               {(checkoutData.deliveryFee ?? 0) > 0 && (
@@ -1282,7 +1528,7 @@ export function CheckoutDeliveryGrupal({
       </div>
       {checkoutData?.tipoPedido === 'delivery' && (checkoutData.deliveryFee ?? 0) > 0 && (
         <div className="flex justify-between text-sm">
-          <span className="text-muted-foreground">Delivery</span>
+          <span className="text-muted-foreground">{checkoutData?.zonaEspecialId ? 'Country' : 'Delivery'}</span>
           <span className="font-semibold">${formatPrecio(checkoutData.deliveryFee)}</span>
         </div>
       )}
@@ -1299,12 +1545,20 @@ export function CheckoutDeliveryGrupal({
     </div>
   )
 
-  const accionDisabled = tipoPedido === 'delivery' && (fueraDeZona || (isCheckingZona && (modo === 'completo' || pasos[paso] === 'ubicacion')))
+  const accionDisabled = tipoPedido === 'delivery' && (
+    esCountry
+      ? (!zonaEspecialId || !zonaEspecialSeleccionada || !zonaDisponible(zonaEspecialSeleccionada))
+      : (fueraDeZona || (isCheckingZona && (modo === 'completo' || pasos[paso] === 'ubicacion')))
+  )
 
   let footerButton: React.ReactNode
   if (pedidoHabitual && editandoHabitual) {
     footerButton = (
-      <Button className="font-alfajor w-full h-13 rounded-2xl text-base" onClick={guardarCambiosHabituales} disabled={isCheckingZona || fueraDeZona}>
+      <Button
+        className="font-alfajor w-full h-13 rounded-2xl text-base"
+        onClick={guardarCambiosHabituales}
+        disabled={modoCountry ? !zonaEspecialId : (isCheckingZona || fueraDeZona)}
+      >
         Guardar cambios
       </Button>
     )
@@ -1397,8 +1651,12 @@ export function CheckoutDeliveryGrupal({
             <>
               {secTipo}
               {secDatos}
-              {secUbicacion}
-              {tipoPedido === 'delivery' && secDomicilio}
+              {esCountry ? secZona : (
+                <>
+                  {secUbicacion}
+                  {tipoPedido === 'delivery' && secDomicilio}
+                </>
+              )}
               {secExtras}
               {totalSummary}
             </>
@@ -1408,6 +1666,7 @@ export function CheckoutDeliveryGrupal({
               {pasos[paso] === 'datos' && secDatos}
               {pasos[paso] === 'ubicacion' && secUbicacion}
               {pasos[paso] === 'domicilio' && secDomicilio}
+              {pasos[paso] === 'zona' && secZona}
               {pasos[paso] === 'extras' && secExtras}
             </>
           )
