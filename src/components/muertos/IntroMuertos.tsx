@@ -100,15 +100,20 @@ export function IntroMuertos({ listo }: { listo: boolean }) {
         return () => window.removeEventListener('resize', ajustar)
     }, [])
 
-    // La página queda quieta y arriba mientras dura la bienvenida.
     useEffect(() => {
         introMuertos.set('corriendo')
         window.scrollTo(0, 0)
+    }, [])
+
+    // La página queda quieta mientras dura la bienvenida. Depende de `terminada` y no sólo del montaje:
+    // al terminar, la bienvenida se oculta sin desmontarse, y el scroll tiene que volver igual.
+    useEffect(() => {
+        if (terminada) return
         const html = document.documentElement
         const previo = html.style.overflow
         html.style.overflow = 'hidden'
         return () => { html.style.overflow = previo }
-    }, [])
+    }, [terminada])
 
     useEffect(() => {
         const t = window.setTimeout(() => setCompleta(true), sinMovimiento ? 1400 : COMPLETA)
