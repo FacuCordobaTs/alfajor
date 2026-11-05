@@ -47,6 +47,8 @@ type FaseArmado = 'cayendo' | 'relleno' | 'armado'
 // Momentos del video /hero-alfajor (los mismos que HeroVideo): relleno a 1,25 s y tapa a 1,85 s.
 const T_RELLENO = 1.25
 const T_TAPA = 1.85
+// Cuánto después de empezar a abrirse el agujero de la bienvenida arranca el video.
+const DEMORA_VIDEO = 450
 
 /** El hero, como el de la carta de siempre: el video del alfajor que se arma ocupa el fondo (se funde
  * en los bordes) y el titular del flyer se enciende al compás. Arriba, en el aire por donde cae el
@@ -54,7 +56,7 @@ const T_TAPA = 1.85
  * queda literalmente entre "muertos" y "de hambre". En escritorio el video va a la derecha.
  *
  * El texto entra cuando se empieza a abrir el agujero de la bienvenida y el video arranca cuando la
- * quema terminó (decodificar el video durante la quema la trababa); las dos cosas salen de
+ * quema va por la mitad (arrancarlo junto con la quema la trababa); las dos cosas salen de
  * useEtapaIntro. Se reproduce una vez y queda en el último cuadro; se puede volver a armar. Sin
  * movimiento se ve la foto final. */
 export function HeroMuertos({ arriba, abajo, nombreVideo, onClickVideo }: {
@@ -65,7 +67,7 @@ export function HeroMuertos({ arriba, abajo, nombreVideo, onClickVideo }: {
 }) {
     const etapaIntro = useEtapaIntro()
     const listo = etapaIntro !== 'corriendo'
-    const reproducir = etapaIntro === 'terminada'
+    const reproducir = etapaIntro !== 'corriendo'
     const videoRef = useRef<HTMLVideoElement>(null)
     const [sinMovimiento] = useState(() => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches)
     const [fase, setFase] = useState<FaseArmado>(sinMovimiento ? 'armado' : 'cayendo')
@@ -90,11 +92,14 @@ export function HeroMuertos({ arriba, abajo, nombreVideo, onClickVideo }: {
         video.addEventListener('timeupdate', leer)
         video.addEventListener('ended', alTerminar)
         // Si no arranca solo (modo ahorro, autoplay bloqueado) o tarda, el titular no queda apagado.
-        const respaldo = window.setTimeout(() => { if (video.paused) alTerminar() }, 2500)
-        video.play().catch(alTerminar)
+        const respaldo = window.setTimeout(() => { if (video.paused) alTerminar() }, 2500 + DEMORA_VIDEO)
+        // Arranca con el agujero ya abierto a medias: se ve armarse desde el principio sin cargar el
+        // arranque del video sobre los primeros cuadros de la quema.
+        const arranque = window.setTimeout(() => video.play().catch(alTerminar), DEMORA_VIDEO)
         return () => {
             cancelAnimationFrame(frame)
             window.clearTimeout(respaldo)
+            window.clearTimeout(arranque)
             video.removeEventListener('playing', alReproducir)
             video.removeEventListener('timeupdate', leer)
             video.removeEventListener('ended', alTerminar)
