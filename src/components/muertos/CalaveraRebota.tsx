@@ -1,17 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { M, useEtapaIntro } from '@/lib/muertos'
-import { Calavera } from './Decoraciones'
 
-// Pedido de uno de los dueños: la calavera de azúcar rebotando por la pantalla como el logo del
-// protector de pantalla del DVD. Cambia de color en cada choque y, si pega justo en una esquina, lo
-// festeja. Arranca cuando termina la bienvenida, no captura toques y no aparece con movimiento
-// reducido. Se mueve con transform en cada cuadro (sin re-render): sólo el color pasa por React.
+// Pedido de uno de los dueños: la calavera con sombrero de los stickers rebotando por la pantalla como
+// el logo del protector de pantalla del DVD. Cambia de color en cada pared que toca y, si pega justo en
+// una esquina, lo festeja. El dibujo (public/muertos/sombrero.webp) se usa de máscara y se pinta con el
+// color de turno; un contorno crema lo hace leer también sobre las secciones oscuras. Arranca cuando
+// termina la bienvenida, no captura toques y no aparece con movimiento reducido. Se mueve con transform en cada cuadro (sin re-render): sólo el color pasa por React.
 
-const COLORES = [
-    { color: M.hueso, acento: M.naranja },
-    { color: M.naranja, acento: M.tinta },
-    { color: M.hueso, acento: M.tinta },
-]
+// Naranja y tinta de la edición, el verde de la marca y un rosa mexicano.
+const COLORES = [M.naranja, M.tinta, '#083821', '#d6457a']
 // Píxeles por segundo en cada eje.
 const VELOCIDAD = 110
 
@@ -59,13 +56,17 @@ export function CalaveraRebota() {
     }, [etapa])
 
     if (etapa !== 'terminada') return null
-    const { color, acento } = COLORES[tono]
 
     return (
-        <div ref={ref} aria-hidden className="pointer-events-none fixed left-0 top-0 z-[35] w-16 will-change-transform md:w-20">
+        <div ref={ref} aria-hidden className="pointer-events-none fixed left-0 top-0 z-[35] w-20 will-change-transform md:w-24">
             {/* La key reinicia el festejo en cada esquina. */}
             <div key={esquinas} className={esquinas ? 'muertos-esquina' : ''}>
-                <Calavera color={color} acento={acento} className="w-full drop-shadow-[0_6px_10px_rgba(0,0,0,0.35)] transition-colors" />
+                <div className="aspect-[342/326] w-full [filter:drop-shadow(0_0_1px_#f2ede0)_drop-shadow(0_0_1px_#f2ede0)_drop-shadow(0_6px_8px_rgba(0,0,0,0.3))]">
+                    <div
+                        style={{ backgroundColor: COLORES[tono] }}
+                        className="size-full transition-colors duration-150 [mask-image:url(/muertos/sombrero.webp)] [mask-size:contain] [mask-repeat:no-repeat] [-webkit-mask-image:url(/muertos/sombrero.webp)] [-webkit-mask-size:contain] [-webkit-mask-repeat:no-repeat]"
+                    />
+                </div>
             </div>
         </div>
     )
