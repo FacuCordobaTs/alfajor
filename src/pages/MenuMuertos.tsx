@@ -1333,7 +1333,7 @@ const MenuMuertos = ({ campana = null }: { campana?: CampanaPublica | null }) =>
             <HeroMuertos
                 arriba={
                     <div className="flex items-center justify-between gap-3">
-                        <a href="/muertosdehambre" aria-label="Alfajor, Día de los muertos de hambre" className="flex shrink-0 items-center gap-2">
+                        <a href="/" aria-label="Alfajor, Día de los muertos de hambre" className="flex shrink-0 items-center gap-2">
                             <LogoAlfajor className="h-10 -rotate-3 !bg-[#242526]" />
                         </a>
                         <EstadoLocalMuertos abierto={estadoAbierto.abierto} texto={textoEstado(horarios, estadoAbierto)} corto={estadoAbierto.abierto ? 'Abierto' : 'Cerrado'} />

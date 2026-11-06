@@ -24,13 +24,18 @@ const MenuMuertos = lazy(() => import('./pages/MenuMuertos'))
 
 const rutas = [
   {
+    // Edición temporal del Día de los muertos de hambre (noviembre 2026): ocupa la raíz. La carta de
+    // siempre queda en /carta; para volver, "/" vuelve a ser <MenuDelivery />.
     path: "/",
-    element: <MenuDelivery />,
+    element: <Suspense fallback={<div className="min-h-screen bg-[#161413]" />}><MenuMuertos /></Suspense>,
   },
   {
-    // Edición temporal del Día de los muertos de hambre (noviembre 2026).
     path: "/muertosdehambre",
     element: <Suspense fallback={<div className="min-h-screen bg-[#161413]" />}><MenuMuertos /></Suspense>,
+  },
+  {
+    path: "/carta",
+    element: <MenuDelivery />,
   },
   {
     path: "/ropa",
