@@ -8,8 +8,8 @@ import {
     UtensilsCrossed, Utensils, Clock, Share2, User, Plus,
     BadgePercent, Users, Sparkles, Check, ArrowRight
 } from 'lucide-react'
-import { LogoAlfajor } from '@/components/marca/MarcaAlfajor'
-import { BaileEsqueletos, BotonPedidoMuertos, BotonTicketMuertos, CintasMuertos, EstadoLocalMuertos, FooterMuertos, HeroMuertos, NavCategoriasMuertos, NocheMuertos, AltarMuertos, TituloSeccionMuertos } from '@/components/muertos/MarcaMuertos'
+import { LogoAlfajor, NavCategorias, TituloSeccion } from '@/components/marca/MarcaAlfajor'
+import { BotonPedidoMuertos, BotonTicketMuertos, CintasMuertos, EstadoLocalMuertos, FooterMuertos, HeroMuertos, NocheMuertos, SelloMuertos } from '@/components/muertos/MarcaMuertos'
 import { Calavera } from '@/components/muertos/Decoraciones'
 import { IntroMuertos } from '@/components/muertos/IntroMuertos'
 import { sinTildes } from '@/lib/muertos'
@@ -1430,7 +1430,7 @@ const MenuMuertos = ({ campana = null }: { campana?: CampanaPublica | null }) =>
 
                 <div ref={cartaRef} className="scroll-mt-4">
                     {categorias.length > 1 && (
-                        <NavCategoriasMuertos categorias={categorias} activa={selectedCategory} onChange={elegirCategoria} />
+                        <NavCategorias categorias={categorias} activa={selectedCategory} onChange={elegirCategoria} />
                     )}
 
                     <section className="mt-6 space-y-14 min-h-[50vh]">
@@ -1442,7 +1442,8 @@ const MenuMuertos = ({ campana = null }: { campana?: CampanaPublica | null }) =>
 
                                     return (
                                         <div key={categoriaNombre} className="space-y-5">
-                                            <TituloSeccionMuertos
+                                            <TituloSeccion
+                                                recto
                                                 indice={indice + 1}
                                                 titulo={categoriaNombre}
                                                 detalle={`${productosDeCategoria.length} ${productosDeCategoria.length === 1 ? 'opción' : 'opciones'}`}
@@ -1465,7 +1466,8 @@ const MenuMuertos = ({ campana = null }: { campana?: CampanaPublica | null }) =>
                         ) : (
                             productosFiltrados.length > 0 ? (
                                 <div className="space-y-5">
-                                    <TituloSeccionMuertos
+                                    <TituloSeccion
+                                        recto
                                         indice={categoriasOrdenadas.indexOf(selectedCategory) + 1}
                                         titulo={selectedCategory}
                                         detalle={`${productosFiltrados.length} ${productosFiltrados.length === 1 ? 'opción' : 'opciones'}`}
@@ -1488,10 +1490,7 @@ const MenuMuertos = ({ campana = null }: { campana?: CampanaPublica | null }) =>
                 </div>
             </div>
 
-            <div className="mx-auto mt-24 max-w-2xl px-5 lg:max-w-5xl xl:max-w-6xl">
-                <AltarMuertos />
-            </div>
-            <BaileEsqueletos />
+            <SelloMuertos />
 
             <FooterMuertos
                 horarios={horarios}
@@ -1840,21 +1839,21 @@ const ProductoCard = ({ producto, onClick }: { producto: any, onClick: () => voi
     const precioOriginal = parseFloat(producto.precio)
     const precioFinal = tieneDescuento ? precioOriginal * (1 - producto.descuento / 100) : precioOriginal
     const nombreLength = String(producto.nombre ?? '').trim().length
-    // El nombre va en Twinable (mayúsculas anchas): más chico cuanto más largo.
-    const nombreClass = nombreLength > 70 ? 'text-[13px]' : nombreLength > 48 ? 'text-[14px]' : nombreLength > 30 ? 'text-[15px]' : 'text-[17px]'
+    // El nombre va en Eastman, que es ancha: un punto más chica que la letra anterior.
+    const nombreClass = nombreLength > 70 ? 'text-base' : nombreLength > 48 ? 'text-[17px]' : nombreLength > 30 ? 'text-lg' : 'text-xl'
     // Portada + galería opcional: la tarjeta muestra la portada y avisa que hay más fotos (el
     // detalle las recorre). Con mouse, al pasar por encima se cruza a la segunda.
     const fotos = fotosDeProducto(producto)
 
-    // Una etiqueta impresa: borde de tinta, sombra dura y la foto enmarcada en papel.
+    // La tarjeta original de la carta, con el borde de tinta de la edición.
     return (
         <div
-            className="group relative flex min-h-[260px] w-full cursor-pointer flex-col overflow-hidden rounded-[18px] border-2 border-[#242526] bg-card p-2 shadow-[5px_5px_0_#242526] transition-all duration-300 hover:-translate-y-0.5 hover:-rotate-[0.6deg] hover:shadow-[7px_8px_0_#d3532b] active:translate-x-[3px] active:translate-y-[3px] active:shadow-[2px_2px_0_#242526]"
+            className="group relative flex min-h-[260px] flex-col w-full rounded-[24px] bg-card border-2 border-[#242526] shadow-md hover:shadow-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] overflow-hidden"
             onClick={onClick}
         >
             {/* La foto va `absolute`: así no estira el recuadro 3:2 cuando es más alta (botellas, etc.) y
                 todas las tarjetas tienen la misma foto y el mismo alto. */}
-            <div className="relative aspect-[3/2] w-full shrink-0 overflow-hidden rounded-[11px] border-2 border-[#242526] bg-[#242526]">
+            <div className="w-full aspect-[3/2] shrink-0 bg-zinc-900 relative overflow-hidden">
                 {fotos.length > 0 ? (
                     <>
                         <img
@@ -1892,8 +1891,8 @@ const ProductoCard = ({ producto, onClick }: { producto: any, onClick: () => voi
                         )}
                     </>
                 ) : (
-                    <div className="flex h-full w-full items-center justify-center bg-[#161413]">
-                        <Calavera className="w-14 opacity-90" />
+                    <div className="w-full h-full flex items-center justify-center bg-linear-to-br from-zinc-800 to-zinc-900">
+                        <Utensils className="w-10 h-10 text-primary" />
                     </div>
                 )}
                 {tieneDescuento && (
@@ -1905,10 +1904,10 @@ const ProductoCard = ({ producto, onClick }: { producto: any, onClick: () => voi
                 )}
             </div>
 
-            <div className="flex flex-1 flex-col px-1.5 pb-1 pt-3">
+            <div className="p-3.5 flex flex-col flex-1 bg-card">
                 <div className="flex-1">
-                    <h3 aria-label={producto.nombre} className={`font-twin break-words leading-[1.15] text-foreground [overflow-wrap:anywhere] ${nombreClass}`}>
-                        {sinTildes(String(producto.nombre ?? ''))}
+                    <h3 className={`font-alfajor break-words leading-tight text-foreground [overflow-wrap:anywhere] ${nombreClass}`}>
+                        {producto.nombre}
                     </h3>
                     {producto.descripcion && (
                         <p className="mt-1 text-sm text-muted-foreground break-words leading-snug font-medium">
@@ -1917,8 +1916,8 @@ const ProductoCard = ({ producto, onClick }: { producto: any, onClick: () => voi
                     )}
                 </div>
 
-                <div className="mt-3 flex flex-wrap items-baseline justify-start gap-1.5 border-t-2 border-dashed border-[#242526]/25 pt-2.5 text-left">
-                    <span className={`font-muertos text-[24px] leading-none ${tieneDescuento ? 'text-emerald-700' : 'text-[#d3532b]'}`}>
+                <div className="flex flex-wrap items-baseline justify-start gap-1.5 mt-2 text-left">
+                    <span className={`font-bold text-[22px] ${tieneDescuento ? 'text-emerald-600 dark:text-emerald-400' : 'text-primary'}`}>
                         ${precioFinal.toFixed(0)}
                     </span>
                     {tieneDescuento && (

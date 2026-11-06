@@ -2,11 +2,11 @@ import { Fragment, useEffect, useRef, useState, type CSSProperties, type ReactNo
 import { ArrowDown, ArrowRight, ArrowUp, Instagram, MapPin, RotateCcw } from 'lucide-react'
 import { DIAS, INSTAGRAM_URL, PIRU_URL, SEMANA, hhmm, minutos, type Turno } from '@/lib/marcaAlfajor'
 import { FRASES_CINTA, M, eventoVigente, sinTildes, useEtapaIntro } from '@/lib/muertos'
-import { BandaRombos, Calavera, Cempasuchil, Estrella, Floritura, Huesos, Medallon, PapelPicado, Vela } from './Decoraciones'
+import { BandaRombos, Calavera, Estrella, Huesos, PapelPicado } from './Decoraciones'
 
 // Las piezas de /muertosdehambre: la misma estructura que components/marca/MarcaAlfajor (hero con el
-// video, cinta, títulos de sección, categorías, botón del pedido y footer) vestida como el flyer del
-// Día de los muertos de hambre: papel, tinta y naranja, con el cempasúchil de acento.
+// video, cinta, botón del pedido y footer) vestida como el flyer del Día de los muertos de hambre:
+// papel, tinta y naranja. La carta (categorías, títulos y tarjetas) usa las piezas originales de la marca.
 
 export function EstadoLocalMuertos({ abierto, texto, corto }: { abierto: boolean; texto: string; corto?: string }) {
     return (
@@ -125,12 +125,10 @@ export function HeroMuertos({ arriba, abajo, nombreVideo, onClickVideo }: {
             <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 -z-10 h-[34%] bg-gradient-to-t from-[#efeae7] via-[#efeae7]/90 to-transparent md:hidden" />
 
             <div className="relative z-10 mx-auto max-w-2xl px-5 pt-4 md:max-w-5xl xl:max-w-6xl">{arriba}</div>
-            <PapelPicado colores={[M.naranja, M.tinta, M.flor]} cantidad={7} comba={12} className="relative -mt-1 md:hidden" />
-            <PapelPicado colores={[M.naranja, M.tinta, M.flor]} cantidad={14} comba={18} className="relative -mt-1 hidden md:block" />
 
-            <div className={`muertos-entrada pointer-events-none relative mx-auto flex min-h-[calc(100svh-130px)] max-w-2xl flex-col px-5 pb-24 pt-3 md:min-h-[600px] md:max-w-5xl md:justify-center md:pb-28 lg:min-h-[640px] xl:max-w-6xl ${listo ? 'listo' : ''}`}>
+            <div className={`muertos-entrada pointer-events-none relative mx-auto flex min-h-[calc(100svh-130px)] max-w-2xl flex-col px-5 pb-24 pt-8 md:min-h-[600px] md:max-w-5xl md:justify-center md:pb-28 lg:min-h-[640px] xl:max-w-6xl ${listo ? 'listo' : ''}`}>
                 <div className="relative md:max-w-[52%]" style={{ '--d': '60ms' } as CSSProperties}>
-                    <img src="/muertos/sello-naranja.webp" alt="" aria-hidden className="pointer-events-none absolute -bottom-[78px] right-0 z-10 w-[30%] max-w-[140px] rotate-12 mix-blend-multiply md:-right-[18%] md:bottom-auto md:top-0" />
+                    <img src="/muertos/sello-naranja.webp" alt="" aria-hidden className="pointer-events-none absolute -bottom-[26px] -right-[2%] z-10 w-[28%] max-w-[140px] rotate-12 mix-blend-multiply md:-bottom-[34px] md:-right-[10%]" />
                     <BandaRombos className="md:max-w-[440px]" />
                     <h1 className="sr-only">Día de los muertos de hambre · Una tradición de Alfajor</h1>
                     <span aria-hidden className={`${titular} mt-6 text-center text-[min(calc((100vw-40px)/6.75),84px)] md:text-left md:text-[clamp(52px,5.8vw,86px)]`}>
@@ -143,7 +141,7 @@ export function HeroMuertos({ arriba, abajo, nombreVideo, onClickVideo }: {
 
                 {/* El hueco del alfajor: en el celular, entre MUERTOS y DE HAMBRE; en escritorio, la columna
                     de la derecha. El video (9:16, más grande que el hueco) se funde en los bordes. */}
-                <div className="muertos-hueco pointer-events-none relative -z-20 min-h-[78vw] flex-1 sm:min-h-[420px] md:absolute md:inset-y-0 md:right-0 md:min-h-0 md:w-[48%]">
+                <div className="muertos-hueco pointer-events-none relative -z-20 min-h-[100vw] flex-1 sm:min-h-[520px] md:absolute md:inset-y-0 md:right-0 md:min-h-0 md:w-[48%]">
                     <video
                         ref={videoRef}
                         muted
@@ -156,17 +154,6 @@ export function HeroMuertos({ arriba, abajo, nombreVideo, onClickVideo }: {
                         <source src="/hero-alfajor.webm" type="video/webm" />
                         <source src="/hero-alfajor.mp4" type="video/mp4" />
                     </video>
-                    <div aria-hidden className="absolute inset-x-0 top-1/2 h-0">
-                        <Floritura className="absolute -left-1 -top-14 w-[12%] max-w-[54px] opacity-90" />
-                        <Floritura espejo className="absolute -right-1 -top-14 w-[12%] max-w-[54px] opacity-90" />
-                        {[{ x: 2, y: -46, t: 46 }, { x: 86, y: -150, t: 40 }, { x: 4, y: 100, t: 38 }, { x: 84, y: 110, t: 50 }].map((f, i) => (
-                            <Cempasuchil
-                                key={i}
-                                className="muertos-flota absolute"
-                                style={{ left: `${f.x}%`, top: `${f.y}%`, width: f.t, '--giro': `${i * 70}deg`, animationDelay: `${-i * 1.3}s` } as CSSProperties}
-                            />
-                        ))}
-                    </div>
                     {/* El alfajor también se toca: abre el producto. */}
                     {onClickVideo && (
                         <button
@@ -188,7 +175,7 @@ export function HeroMuertos({ arriba, abajo, nombreVideo, onClickVideo }: {
                     {evento && (
                         <div className="mt-5 space-y-2.5 text-center md:text-left">
                             <p className="font-twin inline-flex max-w-full flex-wrap items-center justify-center gap-x-2.5 gap-y-1 rounded-sm bg-[#242526] px-3 py-2 text-[13px] text-[#f2ede0] sm:text-[15px]">
-                                Sabado 07 de noviembre <Estrella className="size-3.5 text-[#eea233]" /> Desde las 20:00
+                                Sabado 07 de noviembre <Estrella className="size-3.5 text-[#d3532b]" /> Desde las 20:00
                             </p>
                             <p className="font-twin flex flex-wrap items-center justify-center gap-x-2.5 gap-y-1 text-[12px] sm:text-[14px] md:justify-start">
                                 Mariachis <Estrella className="size-3 text-[#d3532b]" /> Alfajores picantes <Estrella className="size-3 text-[#d3532b]" /> Tequilazo
@@ -254,50 +241,6 @@ export function CintasMuertos({ palabras, className = '' }: { palabras: string[]
     )
 }
 
-export function TituloSeccionMuertos({ indice, titulo, detalle }: { indice: number; titulo: string; detalle?: string }) {
-    return (
-        <div className="relative px-1 pb-3">
-            <div className="flex items-end gap-3">
-                <Medallon className="mb-0.5 size-12 -rotate-6">
-                    <span className="font-twin text-[17px] tabular-nums tracking-normal text-[#242526]">{String(indice).padStart(2, '0')}</span>
-                </Medallon>
-                <h2 aria-label={titulo} className="font-muertos min-w-0 flex-1 break-words text-[28px] uppercase leading-[0.95] text-[#242526] sm:text-[38px]">{sinTildes(titulo)}</h2>
-                {detalle && <span className="font-twin shrink-0 pb-1 text-[10px] text-[#242526]/60">{sinTildes(detalle)}</span>}
-            </div>
-            <div aria-hidden className="mt-3 h-[5px] border-y-2 border-[#242526]" />
-        </div>
-    )
-}
-
-/** Las categorías, como etiquetas troqueladas. `'All'` se muestra como "Todo". */
-export function NavCategoriasMuertos({ categorias, activa, onChange }: { categorias: string[]; activa: string; onChange: (c: string) => void }) {
-    return (
-        <nav aria-label="Categorías" className="-mx-5">
-            <div className="flex snap-x scroll-px-5 gap-2 overflow-x-auto px-5 py-3 [scrollbar-width:none] lg:flex-wrap lg:justify-center lg:overflow-visible [&::-webkit-scrollbar]:hidden">
-                {categorias.map((c) => {
-                    const sel = activa === c
-                    const nombre = c === 'All' ? 'Todo' : c
-                    return (
-                        <button
-                            key={c}
-                            type="button"
-                            onClick={() => onChange(c)}
-                            aria-pressed={sel}
-                            aria-label={nombre}
-                            className={`font-twin h-10 shrink-0 snap-start whitespace-nowrap rounded-md border-2 border-[#242526] px-4 text-[12px] transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d3532b] active:scale-95 ${sel
-                                ? 'bg-[#242526] text-[#f2ede0] shadow-[3px_3px_0_#d3532b]'
-                                : 'bg-[#f2ede0] text-[#242526] hover:bg-[#eea233]/30'
-                                }`}
-                        >
-                            {sinTildes(nombre)}
-                        </button>
-                    )
-                })}
-            </div>
-        </nav>
-    )
-}
-
 /** Botón flotante del pedido: barra de tinta con el total en una etiqueta naranja. */
 export function BotonPedidoMuertos({ cantidad, total, visible, onClick, pulso = false, className = '' }: {
     cantidad: number
@@ -328,79 +271,37 @@ export function BotonPedidoMuertos({ cantidad, total, visible, onClick, pulso = 
 }
 
 /** La noche del evento, a todo el ancho entre el hero y la carta, con la ronda de esqueletos de la
- * bandeja bailando. Pasado el evento no se muestra. */
+ * bandeja. Fecha, título y lista van con el mismo aire entre renglones. Pasado el evento no se muestra. */
 export function NocheMuertos() {
     if (!eventoVigente()) return null
     return (
-        <section aria-label="La noche de muertos" className="relative overflow-hidden bg-[#161413] pb-12 text-[#f2ede0]">
-            <PapelPicado colores={[M.naranja, M.hueso, M.flor]} hilo={M.hueso} cantidad={7} comba={8} className="md:hidden" />
-            <PapelPicado colores={[M.naranja, M.hueso, M.flor]} hilo={M.hueso} cantidad={14} comba={12} className="hidden md:block" />
-            <div aria-hidden className="absolute -right-24 top-10 size-[520px] rounded-full bg-[radial-gradient(circle,rgba(238,162,51,0.2),transparent_65%)]" />
-            <div className="relative mx-auto grid max-w-2xl items-center gap-8 px-5 pt-8 md:grid-cols-[0.9fr_1.1fr] lg:max-w-5xl xl:max-w-6xl">
+        <section aria-label="La noche de muertos" className="relative overflow-hidden bg-[#161413] pb-14 pt-14 text-[#f2ede0]">
+            <div aria-hidden className="absolute -right-24 top-10 size-[520px] rounded-full bg-[radial-gradient(circle,rgba(211,83,43,0.18),transparent_65%)]" />
+            <div className="relative mx-auto grid max-w-2xl items-center gap-10 px-5 md:grid-cols-[0.9fr_1.1fr] lg:max-w-5xl xl:max-w-6xl">
                 <div>
-                    <p className="font-twin flex items-center gap-2 text-[11px] text-[#eea233]">
+                    <p className="font-twin flex items-center gap-2 text-[11px] text-[#d3532b]">
                         Sabado 07 de noviembre <Estrella className="size-3" /> Desde las 20:00
                     </p>
-                    <h2 className="font-muertos mt-5 origin-bottom-left scale-y-[1.3] whitespace-nowrap text-[min(calc((100vw-40px)/6.3),88px)] uppercase leading-[0.85] md:text-[clamp(56px,6vw,88px)]">La noche</h2>
-                    <p className="mt-6 max-w-[34ch] text-[16px] leading-snug text-[#f2ede0]/75">
-                        Vení a Alfajor a celebrar a los que ya no están, con la panza llena.
-                    </p>
+                    {/* El titular se estira hacia arriba (scale-y 1,3): el margen de arriba suma ese estiramiento
+                        para que el aire quede igual que el de abajo. */}
+                    <h2 className="font-muertos mt-[calc(24px+0.26em)] origin-bottom-left scale-y-[1.3] whitespace-nowrap text-[min(calc((100vw-40px)/6.3),88px)] uppercase leading-[0.85] md:text-[clamp(56px,6vw,88px)]">La noche</h2>
                     <ul className="font-twin mt-6 flex flex-wrap gap-x-5 gap-y-2.5 text-[13px]">
                         {['Mariachis', 'Alfajores picantes', 'Tequilazo'].map(x => (
                             <li key={x} className="flex items-center gap-2.5"><Estrella className="size-3.5 text-[#d3532b]" />{x}</li>
                         ))}
                     </ul>
                 </div>
-                <div className="relative">
-                    <img
-                        src="/muertos/esqueletos-hueso.svg"
-                        alt="Esqueletos bailando en ronda"
-                        className="muertos-baile relative mx-auto w-full max-w-[560px]"
-                    />
-                    <div aria-hidden className="mt-2 flex items-end justify-center gap-1">
-                        <Vela alto={1.1} className="w-9" />
-                        <Vela alto={0.7} className="w-7" demora={250} />
-                        <Vela alto={0.9} className="w-8" demora={500} />
-                    </div>
-                </div>
+                <img src="/muertos/esqueletos-hueso.svg" alt="Esqueletos bailando en ronda" className="mx-auto w-full max-w-[560px]" />
             </div>
         </section>
     )
 }
 
-/** El ritual del altar de la tarjeta DDM. */
-export function AltarMuertos() {
+/** El cierre antes del footer: el sello ovalado de la tradición, solo y centrado sobre el papel. */
+export function SelloMuertos() {
     return (
-        <article className="relative mx-auto max-w-xl overflow-hidden rounded-2xl border-2 border-[#242526] bg-[#f2ede0] p-6 text-center sm:p-8">
-            <Calavera className="mx-auto w-16 -rotate-6" />
-            <p className="font-salient mt-5 text-[clamp(26px,7.4vw,36px)] leading-[1.02] text-[#d3532b]">
-                Todos cargamos con algo que nos pesa. Esta es tu oportunidad para dejarlo ir.
-            </p>
-            <p className="font-twin mx-auto mt-6 max-w-sm border-2 border-dotted border-[#d3532b] px-4 py-3 text-[11px] leading-relaxed text-[#d3532b]">
-                Escribilo, llevalo al altar y sella el ritual con un shot de tequila.
-            </p>
-        </article>
-    )
-}
-
-/** La ronda de esqueletos de la bandeja, bailando sobre una hilera de cempasúchil. */
-export function BaileEsqueletos() {
-    return (
-        <section aria-label="Hasta los muertos vuelven por uno" className="relative mt-20 overflow-hidden">
-            <div className="mx-auto max-w-2xl px-5 text-center lg:max-w-5xl">
-                <p className="font-salient text-balance text-[clamp(30px,8.4vw,52px)] leading-none text-[#242526]">Hasta los muertos vuelven por uno</p>
-                <img
-                    src="/muertos/esqueletos-naranja.svg"
-                    alt="Esqueletos bailando en ronda"
-                    loading="lazy"
-                    className="muertos-baile mx-auto mt-8 w-[min(100%,560px)]"
-                />
-            </div>
-            <div aria-hidden className="relative -mt-6 flex justify-center gap-0 overflow-hidden">
-                {Array.from({ length: 30 }, (_, i) => (
-                    <Cempasuchil key={i} className="-mx-1.5 w-14 shrink-0 sm:w-16" style={{ rotate: `${(i * 53) % 360}deg`, translate: `0 ${i % 2 ? 8 : 0}px` }} />
-                ))}
-            </div>
+        <section aria-label="Una tradición de Alfajor" className="flex justify-center px-5 py-20">
+            <img src="/muertos/sello-naranja.webp" alt="Día de los muertos de hambre · Una tradición de Alfajor" loading="lazy" className="w-[min(64vw,300px)] mix-blend-multiply" />
         </section>
     )
 }
@@ -423,7 +324,7 @@ function ListaHorarios({ horarios }: { horarios: Turno[] }) {
                 return (
                     <li
                         key={dia}
-                        className={`flex items-baseline justify-between gap-4 border-b border-dashed border-[#f2ede0]/15 py-2 text-sm ${esHoy ? 'font-bold text-[#eea233]' : 'text-[#f2ede0]/80'}`}
+                        className={`flex items-baseline justify-between gap-4 border-b border-dashed border-[#f2ede0]/15 py-2 text-sm ${esHoy ? 'font-bold text-[#d3532b]' : 'text-[#f2ede0]/80'}`}
                     >
                         <span>{DIAS[dia]}{esHoy && <span className="ml-1.5 text-[10px] uppercase tracking-widest">· hoy</span>}</span>
                         <span className="tabular-nums">{turnos || 'Cerrado'}</span>
@@ -440,9 +341,8 @@ export function FooterMuertos({ horarios, direccion, onPedir }: { horarios: Turn
     return (
         <footer className="relative text-[#f2ede0]">
             <div className="relative overflow-hidden bg-[#161413] pb-32">
-                <PapelPicado colores={[M.naranja, M.hueso, M.flor]} hilo={M.hueso} cantidad={7} comba={10} className="md:hidden" />
-                <PapelPicado colores={[M.naranja, M.hueso, M.flor]} hilo={M.hueso} cantidad={14} comba={14} className="hidden md:block" />
-                <img src="/muertos/esqueletos-hueso.svg" alt="" aria-hidden loading="lazy" className="pointer-events-none absolute -right-16 bottom-10 w-[420px] opacity-[0.07]" />
+                <PapelPicado colores={[M.naranja, M.hueso]} hilo={M.hueso} cantidad={7} comba={10} className="md:hidden" />
+                <PapelPicado colores={[M.naranja, M.hueso]} hilo={M.hueso} cantidad={14} comba={14} className="hidden md:block" />
                 <div className="relative mx-auto grid max-w-2xl gap-12 px-5 pt-10 lg:max-w-5xl lg:grid-cols-[1.2fr_1fr_1fr] xl:max-w-6xl">
                     <div>
                         <img src="/muertos/sello-hueso.webp" alt="Día de los muertos de hambre · Una tradición de Alfajor" className="w-44 -rotate-6" />
@@ -465,13 +365,13 @@ export function FooterMuertos({ horarios, direccion, onPedir }: { horarios: Turn
                                 <Instagram className="size-4" /> @alfajorconpapas
                             </a>
                         </div>
-                        <a href="/" className="font-twin mt-5 inline-flex items-center gap-2 text-[11px] text-[#f2ede0]/55 underline decoration-[#f2ede0]/25 underline-offset-4 transition-colors hover:text-[#eea233]">
+                        <a href="/" className="font-twin mt-5 inline-flex items-center gap-2 text-[11px] text-[#f2ede0]/55 underline decoration-[#f2ede0]/25 underline-offset-4 transition-colors hover:text-[#d3532b]">
                             Ver la carta de siempre <ArrowRight className="size-3.5" />
                         </a>
                     </div>
 
                     <div>
-                        <p className="font-twin text-[11px] text-[#eea233]">Donde estamos</p>
+                        <p className="font-twin text-[11px] text-[#d3532b]">Donde estamos</p>
                         <a href={mapaDe(calle)} target="_blank" rel="noopener noreferrer" className="group mt-3 block">
                             <span className="font-muertos block text-[34px] uppercase leading-[0.95] transition-colors group-hover:text-[#d3532b]">
                                 {sinTildes(calle)}
@@ -487,14 +387,13 @@ export function FooterMuertos({ horarios, direccion, onPedir }: { horarios: Turn
 
                     {horarios.length > 0 && (
                         <div>
-                            <p className="font-twin text-[11px] text-[#eea233]">Horarios</p>
+                            <p className="font-twin text-[11px] text-[#d3532b]">Horarios</p>
                             <div className="mt-3"><ListaHorarios horarios={horarios} /></div>
                         </div>
                     )}
                 </div>
 
-                <BandaRombos color={M.naranja} className="mx-auto mt-14 max-w-6xl px-5 opacity-60" />
-                <div className="relative mx-auto mt-6 flex max-w-2xl flex-wrap justify-between gap-2 px-5 text-xs text-[#f2ede0]/45 lg:max-w-5xl xl:max-w-6xl">
+                <div className="relative mx-auto mt-14 flex max-w-2xl flex-wrap justify-between gap-2 px-5 text-xs text-[#f2ede0]/45 lg:max-w-5xl xl:max-w-6xl">
                     <span>© {new Date().getFullYear()} Alfajor · Santa Fe</span>
                     <span>
                         Pedidos online con{' '}

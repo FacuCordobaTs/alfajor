@@ -1,4 +1,4 @@
-import { useId, type CSSProperties, type ReactNode } from 'react'
+import { useId, type CSSProperties } from 'react'
 import { M, florPolar } from '@/lib/muertos'
 
 // Ilustraciones propias de la edición Día de los muertos de hambre, dibujadas en SVG con la paleta de
@@ -326,19 +326,6 @@ export function Estrella({ className = 'size-4' }: { className?: string }) {
             </g>
             <circle cx="12" cy="12" r="3.2" fill="currentColor" />
         </svg>
-    )
-}
-
-/** Medallón festoneado (como un sello de cera) para numerar las secciones. */
-export function Medallon({ children, className = '' }: { children: ReactNode; className?: string }) {
-    return (
-        <span className={`relative inline-grid shrink-0 place-items-center ${className}`}>
-            <svg viewBox="0 0 100 100" aria-hidden className="absolute inset-0 size-full">
-                <path d={florPolar(50, 50, 48, 16, 0.1)} fill={M.naranja} stroke={M.tinta} strokeWidth="4" />
-                <circle cx="50" cy="50" r="33" fill="none" stroke={M.tinta} strokeWidth="2.4" strokeDasharray="4 4" />
-            </svg>
-            <span className="relative">{children}</span>
-        </span>
     )
 }
 
