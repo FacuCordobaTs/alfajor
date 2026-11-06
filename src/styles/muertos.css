@@ -50,33 +50,6 @@
 }
 .muertos-bandera { transform-origin: 50% 0; animation: muertos-mecer 3s ease-in-out infinite; }
 
-@keyframes muertos-bandera-cae {
-  0% { transform: translateY(-140%) rotate(-8deg); opacity: 0; }
-  55% { opacity: 1; }
-  75% { transform: translateY(6%) rotate(3deg); }
-  100% { transform: translateY(0) rotate(0); opacity: 1; }
-}
-.muertos-bandera-cae { animation: muertos-bandera-cae 900ms cubic-bezier(.3,1.4,.5,1) both; }
-
-/* ── Velas ────────────────────────────────────────────────────────────────── */
-@keyframes muertos-llama {
-  0%, 100% { transform: scale(1, 1) skewX(0deg); }
-  20% { transform: scale(0.94, 1.08) skewX(3deg); }
-  45% { transform: scale(1.04, 0.95) skewX(-2deg); }
-  70% { transform: scale(0.97, 1.05) skewX(2deg); }
-}
-.muertos-llama { animation: muertos-llama 900ms ease-in-out infinite; }
-
-@keyframes muertos-encender {
-  0% { opacity: 0; transform: scale(0.2); }
-  60% { opacity: 1; transform: scale(1.25); }
-  100% { opacity: 1; transform: scale(1); }
-}
-.muertos-vela-luz { transform-box: fill-box; transform-origin: 50% 100%; animation: muertos-encender 600ms ease-out both; }
-
-@keyframes muertos-halo { 0%, 100% { opacity: 0.85; } 50% { opacity: 0.55; } }
-.muertos-vela-halo { animation: muertos-halo 1.7s ease-in-out infinite; }
-
 /* ── Bienvenida ───────────────────────────────────────────────────────────── */
 @keyframes muertos-petalo {
   0% { transform: translate3d(0, -12vh, 0) rotate(0deg); opacity: 0; }
@@ -87,27 +60,12 @@
 }
 .muertos-petalo { animation: muertos-petalo var(--dura) linear var(--demora) both; }
 
-@keyframes muertos-flor-brota {
-  0% { transform: scale(0) rotate(-90deg); opacity: 0; }
-  70% { transform: scale(1.15) rotate(8deg); opacity: 1; }
-  100% { transform: scale(1) rotate(0); opacity: 1; }
-}
-.muertos-flor-brota { animation: muertos-flor-brota 520ms cubic-bezier(.3,1.5,.6,1) both; }
-
 @keyframes muertos-titulo-entra {
   0% { transform: translateY(40%) scaleY(1.9); opacity: 0; clip-path: inset(0 0 100% 0); }
   60% { transform: translateY(-4%) scaleY(1.32); opacity: 1; clip-path: inset(0 0 0 0); }
   100% { transform: translateY(0) scaleY(1.38); opacity: 1; clip-path: inset(0 0 0 0); }
 }
 .muertos-titulo-entra { animation: muertos-titulo-entra 620ms cubic-bezier(.2,.9,.3,1.2) both; }
-
-@keyframes muertos-calavera-entra {
-  0% { transform: translateY(-60px) scale(0.6) rotate(-20deg); opacity: 0; }
-  55% { transform: translateY(6px) scale(1.06) rotate(6deg); opacity: 1; }
-  75% { transform: translateY(-3px) scale(0.98) rotate(-3deg); }
-  100% { transform: translateY(0) scale(1) rotate(0); opacity: 1; }
-}
-.muertos-calavera-entra { animation: muertos-calavera-entra 760ms cubic-bezier(.3,1.2,.5,1) both; }
 
 @keyframes muertos-temblor {
   0%, 100% { transform: translate(0, 0); }
@@ -148,7 +106,7 @@
 .muertos-entrada.listo > :not(.muertos-hueco) { animation: muertos-aparece 640ms cubic-bezier(.2,.8,.3,1) var(--d, 0ms) both; }
 
 @media (prefers-reduced-motion: reduce) {
-  .muertos-bandera, .muertos-llama, .muertos-vela-halo,
+  .muertos-bandera,
   .muertos-marquesina, .muertos-marquesina-inversa { animation: none; }
   .muertos-petalo { display: none; }
 }

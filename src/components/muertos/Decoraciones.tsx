@@ -2,8 +2,7 @@ import { useId, type CSSProperties } from 'react'
 import { M, florPolar } from '@/lib/muertos'
 
 // Ilustraciones propias de la edición Día de los muertos de hambre, dibujadas en SVG con la paleta de
-// las piezas impresas: papel picado, cempasúchil, velas, la calavera, las florituras y la banda de
-// rombos del flyer. Todas son decorativas (aria-hidden) y no capturan toques.
+// las piezas impresas: papel picado, la calavera, la banda de rombos del flyer y los huesos. Todas son decorativas (aria-hidden) y no capturan toques.
 
 // ── Papel picado ────────────────────────────────────────────────────────────────────────────────
 
@@ -98,13 +97,12 @@ const MOTIVOS: Motivo[] = ['calavera', 'flor', 'rombo']
 
 /** Guirnalda de papel picado colgando de un hilo que se comba. Las banderas se mecen desfasadas.
  * `colores` se reparte en orden; `cantidad` banderas a lo ancho (en el celular conviene ~7). */
-export function PapelPicado({ colores, cantidad = 9, comba = 14, className = '', hilo = M.tinta, caer = false }: {
+export function PapelPicado({ colores, cantidad = 9, comba = 14, className = '', hilo = M.tinta }: {
     colores: string[]
     cantidad?: number
     comba?: number
     className?: string
     hilo?: string
-    caer?: boolean
 }) {
     const medio = (cantidad - 1) / 2
     return (
@@ -117,11 +115,7 @@ export function PapelPicado({ colores, cantidad = 9, comba = 14, className = '',
                     const t = medio === 0 ? 0 : (i - medio) / medio
                     const y = comba * (1 - t * t)
                     return (
-                        <div
-                            key={i}
-                            className={caer ? 'muertos-bandera-cae' : ''}
-                            style={{ marginTop: y, width: `${92 / cantidad}%`, animationDelay: caer ? `${i * 60}ms` : undefined }}
-                        >
+                        <div key={i} style={{ marginTop: y, width: `${92 / cantidad}%` }}>
                             <BanderaPicada
                                 color={colores[i % colores.length]}
                                 motivo={MOTIVOS[i % MOTIVOS.length]}
@@ -133,93 +127,6 @@ export function PapelPicado({ colores, cantidad = 9, comba = 14, className = '',
                 })}
             </div>
         </div>
-    )
-}
-
-// ── Cempasúchil ─────────────────────────────────────────────────────────────────────────────────
-
-const PETALOS_FLOR = [
-    { d: florPolar(50, 50, 48, 13, 0.16), fill: M.florOscura },
-    { d: florPolar(50, 50, 38, 11, 0.2, 0.3), fill: M.flor },
-    { d: florPolar(50, 50, 27, 9, 0.22, 0.1), fill: M.florClara },
-    { d: florPolar(50, 50, 15, 7, 0.25, 0.4), fill: M.flor },
-]
-
-/** La flor de cempasúchil: cuatro rondas de volados con trazo de tinta, como las piezas impresas. */
-export function Cempasuchil({ className = '', style, trazo = M.tinta }: { className?: string; style?: CSSProperties; trazo?: string }) {
-    return (
-        <svg viewBox="-2 -2 104 104" aria-hidden className={className} style={style}>
-            {PETALOS_FLOR.map((p, i) => (
-                <path key={i} d={p.d} fill={p.fill} stroke={trazo} strokeWidth={i === 0 ? 2.6 : 1.8} strokeLinejoin="round" />
-            ))}
-            {/* Nervaduras: rayitas desde el centro que le dan textura de grabado. */}
-            {Array.from({ length: 12 }, (_, i) => {
-                const a = (i / 12) * Math.PI * 2
-                return (
-                    <path
-                        key={i}
-                        d={`M${50 + Math.cos(a) * 30},${50 + Math.sin(a) * 30} L${50 + Math.cos(a) * 42},${50 + Math.sin(a) * 42}`}
-                        stroke={trazo}
-                        strokeWidth="1.4"
-                        strokeLinecap="round"
-                        opacity="0.55"
-                    />
-                )
-            })}
-            <circle cx="50" cy="50" r="5" fill={M.florOscura} stroke={trazo} strokeWidth="1.6" />
-        </svg>
-    )
-}
-
-// ── Vela ────────────────────────────────────────────────────────────────────────────────────────
-
-/** Vela de altar con cera chorreada y llama que titila. `encendida` la prende con un fogonazo. */
-export function Vela({ alto = 1, encendida = true, className = '', style, demora = 0 }: {
-    alto?: number
-    encendida?: boolean
-    className?: string
-    style?: CSSProperties
-    demora?: number
-}) {
-    const id = useId()
-    const h = 70 * alto
-    const top = 150 - h
-    return (
-        <svg viewBox="0 0 60 160" aria-hidden className={className} style={style}>
-            <defs>
-                <radialGradient id={`${id}g`}>
-                    <stop offset="0%" stopColor={M.florClara} stopOpacity="0.85" />
-                    <stop offset="45%" stopColor={M.flor} stopOpacity="0.25" />
-                    <stop offset="100%" stopColor={M.flor} stopOpacity="0" />
-                </radialGradient>
-            </defs>
-            <g className={encendida ? 'muertos-vela-luz' : 'opacity-0'} style={{ animationDelay: `${demora}ms` }}>
-                <circle cx="30" cy={top - 14} r="30" fill={`url(#${id}g)`} className="muertos-vela-halo" />
-            </g>
-            {/* Cuerpo, chorreado y plato. */}
-            <path
-                d={`M14,${top + 6} Q14,${top} 20,${top} H40 Q46,${top} 46,${top + 6} V150 H14Z`}
-                fill={M.hueso}
-                stroke={M.tinta}
-                strokeWidth="2"
-            />
-            <path
-                d={`M14,${top + 6} Q14,${top} 20,${top} H40 Q46,${top} 46,${top + 6} V${top + 12} Q43,${top + 12} 42,${top + 20} Q41,${top + 26} 38,${top + 20} Q37,${top + 12} 33,${top + 12} H26 Q23,${top + 12} 22,${top + 30} Q20,${top + 34} 19,${top + 26} Q18,${top + 12} 14,${top + 12}Z`}
-                fill="#fffaf0"
-                stroke={M.tinta}
-                strokeWidth="1.6"
-                strokeLinejoin="round"
-            />
-            <path d={`M20,${top + 40} V${150 - 8}`} stroke={M.tinta} strokeWidth="1.2" opacity="0.25" strokeLinecap="round" />
-            <path d="M4,150 H56 L52,158 H8Z" fill={M.naranja} stroke={M.tinta} strokeWidth="2" strokeLinejoin="round" />
-            <path d={`M30,${top} V${top - 7}`} stroke={M.tinta} strokeWidth="2" strokeLinecap="round" />
-            <g className={encendida ? 'muertos-vela-luz' : 'opacity-0'} style={{ animationDelay: `${demora}ms` }}>
-                <g className="muertos-llama" style={{ transformOrigin: `30px ${top - 5}px`, animationDelay: `${-demora % 900}ms` }}>
-                    <path d={`M30,${top - 32} C36,${top - 22} 39,${top - 14} 36,${top - 8} C34,${top - 4} 26,${top - 4} 24,${top - 8} C21,${top - 14} 25,${top - 22} 30,${top - 32}Z`} fill={M.flor} />
-                    <path d={`M30,${top - 22} C33,${top - 16} 34,${top - 12} 32.5,${top - 9} C31.5,${top - 7} 28.5,${top - 7} 27.5,${top - 9} C26,${top - 12} 27,${top - 16} 30,${top - 22}Z`} fill="#fff6d8" />
-                </g>
-            </g>
-        </svg>
     )
 }
 
@@ -264,31 +171,6 @@ export function Calavera({ className = '', style, color = M.hueso, tinta = M.tin
             {/* Mejillas en espiral. */}
             <path d="M16,62 q2,-6 7,-3 q3,3 -1,5" fill="none" stroke={acento} strokeWidth="2.2" strokeLinecap="round" />
             <path d="M84,62 q-2,-6 -7,-3 q-3,3 1,5" fill="none" stroke={acento} strokeWidth="2.2" strokeLinecap="round" />
-        </svg>
-    )
-}
-
-// ── Floritura ───────────────────────────────────────────────────────────────────────────────────
-
-/** El adorno de volutas naranja que flanquea la calavera en el flyer. Se espeja con `espejo`. */
-export function Floritura({ className = '', style, color = M.naranja, espejo = false }: { className?: string; style?: CSSProperties; color?: string; espejo?: boolean }) {
-    return (
-        <svg viewBox="0 0 80 160" aria-hidden className={className} style={{ ...style, scale: espejo ? '-1 1' : undefined }}>
-            <g fill="none" stroke={color} strokeWidth="7" strokeLinecap="round" strokeLinejoin="round">
-                {/* Voluta de arriba: baja y se enrosca hacia adentro. */}
-                <path d="M62,14 C30,8 12,30 18,52 C23,70 46,72 50,58 C53,47 42,40 35,47 C30,52 35,59 40,56" />
-                {/* Voluta de abajo, espejada en vertical. */}
-                <path d="M62,146 C30,152 12,130 18,108 C23,90 46,88 50,102 C53,113 42,120 35,113 C30,108 35,101 40,104" />
-                {/* Tallo que las une. */}
-                <path d="M18,62 C8,74 8,86 18,98" strokeWidth="5" />
-            </g>
-            <g fill={color}>
-                <circle cx="70" cy="80" r="7" />
-                <circle cx="54" cy="80" r="4" />
-                <path d="M30,80 C36,72 44,74 46,80 C44,86 36,88 30,80Z" />
-                <circle cx="70" cy="14" r="4.5" />
-                <circle cx="70" cy="146" r="4.5" />
-            </g>
         </svg>
     )
 }
