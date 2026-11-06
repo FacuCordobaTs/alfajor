@@ -9,7 +9,7 @@ import {
     BadgePercent, Users, Sparkles, Check, ArrowRight
 } from 'lucide-react'
 import { LogoAlfajor, NavCategorias, TituloSeccion } from '@/components/marca/MarcaAlfajor'
-import { BotonPedidoMuertos, BotonTicketMuertos, CintasMuertos, EstadoLocalMuertos, FooterMuertos, HeroMuertos, NocheMuertos, SelloMuertos } from '@/components/muertos/MarcaMuertos'
+import { BotonPedidoMuertos, BotonTicketMuertos, CintasMuertos, EstadoLocalMuertos, FooterMuertos, HeroMuertos, SelloMuertos } from '@/components/muertos/MarcaMuertos'
 import { Calavera } from '@/components/muertos/Decoraciones'
 import { IntroMuertos } from '@/components/muertos/IntroMuertos'
 import { CalaveraRebota } from '@/components/muertos/CalaveraRebota'
@@ -1379,7 +1379,6 @@ const MenuMuertos = ({ campana = null }: { campana?: CampanaPublica | null }) =>
                 }
             />
             <CintasMuertos palabras={palabrasCinta} className="-mt-16 md:-mt-20" />
-            <NocheMuertos />
 
             <div className="max-w-2xl lg:max-w-5xl xl:max-w-6xl mx-auto px-5 pt-6 space-y-8">
                 {productoCampana && campana && (

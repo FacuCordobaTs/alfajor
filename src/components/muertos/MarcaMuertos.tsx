@@ -1,8 +1,8 @@
 import { Fragment, type CSSProperties, type ReactNode } from 'react'
 import { ArrowDown, ArrowRight, ArrowUp, Instagram, MapPin } from 'lucide-react'
 import { DIAS, INSTAGRAM_URL, PIRU_URL, SEMANA, hhmm, minutos, type Turno } from '@/lib/marcaAlfajor'
-import { FRASES_CINTA, M, eventoVigente, sinTildes, useEtapaIntro } from '@/lib/muertos'
-import { Calavera, Estrella, Huesos, PapelPicado } from './Decoraciones'
+import { FRASES_CINTA, sinTildes, useEtapaIntro } from '@/lib/muertos'
+import { Calavera, Estrella, Huesos } from './Decoraciones'
 
 // Las piezas de /muertosdehambre: la misma estructura que components/marca/MarcaAlfajor (hero con el
 // video, cinta, botón del pedido y footer) vestida como el flyer del Día de los muertos de hambre:
@@ -152,33 +152,6 @@ export function BotonPedidoMuertos({ cantidad, total, visible, onClick, pulso = 
     )
 }
 
-/** La noche del evento, a todo el ancho entre el hero y la carta, con la ronda de esqueletos de la
- * bandeja. Fecha, título y lista van con el mismo aire entre renglones. Pasado el evento no se muestra. */
-export function NocheMuertos() {
-    if (!eventoVigente()) return null
-    return (
-        <section aria-label="La noche de muertos" className="relative overflow-hidden bg-[#161413] pb-14 pt-14 text-[#f2ede0]">
-            <div aria-hidden className="absolute -right-24 top-10 size-[520px] rounded-full bg-[radial-gradient(circle,rgba(211,83,43,0.18),transparent_65%)]" />
-            <div className="relative mx-auto grid max-w-2xl items-center gap-10 px-5 md:grid-cols-[0.9fr_1.1fr] lg:max-w-5xl xl:max-w-6xl">
-                <div>
-                    <p className="font-twin flex items-center gap-2 text-[11px] text-[#d3532b]">
-                        Sabado 07 de noviembre <Estrella className="size-3" /> Desde las 20:00
-                    </p>
-                    {/* El titular se estira hacia arriba (scale-y 1,3): el margen de arriba suma ese estiramiento
-                        para que el aire quede igual que el de abajo. */}
-                    <h2 className="font-muertos mt-[calc(24px+0.26em)] origin-bottom-left scale-y-[1.3] whitespace-nowrap text-[min(calc((100vw-40px)/6.3),88px)] uppercase leading-[0.85] md:text-[clamp(56px,6vw,88px)]">La noche</h2>
-                    <ul className="font-twin mt-6 flex flex-wrap gap-x-5 gap-y-2.5 text-[13px]">
-                        {['Mariachis', 'Alfajores picantes', 'Tequilazo'].map(x => (
-                            <li key={x} className="flex items-center gap-2.5"><Estrella className="size-3.5 text-[#d3532b]" />{x}</li>
-                        ))}
-                    </ul>
-                </div>
-                <img src="/muertos/esqueletos-hueso.svg" alt="Esqueletos bailando en ronda" className="mx-auto w-full max-w-[560px]" />
-            </div>
-        </section>
-    )
-}
-
 /** El cierre antes del footer: el sello ovalado de la tradición, solo y centrado sobre el papel. */
 export function SelloMuertos() {
     return (
@@ -223,8 +196,6 @@ export function FooterMuertos({ horarios, direccion, onPedir }: { horarios: Turn
     return (
         <footer className="relative text-[#f2ede0]">
             <div className="relative overflow-hidden bg-[#161413] pb-32">
-                <PapelPicado colores={[M.naranja, M.hueso]} hilo={M.hueso} cantidad={7} comba={10} className="md:hidden" />
-                <PapelPicado colores={[M.naranja, M.hueso]} hilo={M.hueso} cantidad={14} comba={14} className="hidden md:block" />
                 <div className="relative mx-auto grid max-w-2xl gap-12 px-5 pt-10 lg:max-w-5xl lg:grid-cols-[1.2fr_1fr_1fr] xl:max-w-6xl">
                     <div>
                         <img src="/logo.webp" alt="Alfajor" className="h-20 w-auto -rotate-3" />

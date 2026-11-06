@@ -106,6 +106,12 @@
 }
 .muertos-esquina { animation: muertos-esquina 700ms cubic-bezier(.3,1.4,.5,1); }
 
+@keyframes muertos-mece {
+  0%, 100% { transform: translateY(0) rotate(-1.2deg); }
+  50% { transform: translateY(-5px) rotate(1.2deg); }
+}
+.muertos-mece { animation: muertos-mece 2.4s ease-in-out infinite; transform-origin: 50% 90%; }
+
 @keyframes muertos-marquesina { to { transform: translateX(-50%); } }
 .muertos-marquesina { animation: muertos-marquesina 38s linear infinite; }
 .muertos-marquesina-inversa { animation: muertos-marquesina 44s linear infinite reverse; }
@@ -115,7 +121,7 @@
 .muertos-entrada.listo > :not(.muertos-hueco) { animation: muertos-aparece 640ms cubic-bezier(.2,.8,.3,1) var(--d, 0ms) both; }
 
 @media (prefers-reduced-motion: reduce) {
-  .muertos-bandera,
+  .muertos-bandera, .muertos-mece,
   .muertos-marquesina, .muertos-marquesina-inversa { animation: none; }
   .muertos-petalo { display: none; }
 }

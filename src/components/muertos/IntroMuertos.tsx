@@ -4,7 +4,8 @@ import { HUECO_QUEMADO, M, PETALOS, introMuertos } from '@/lib/muertos'
 
 // La bienvenida de /muertosdehambre: reemplaza al "Armando los alfajores" y dura bastante más (~4,5 s).
 //
-// De noche aparece el logo de Alfajor, la ronda de esqueletos de la bandeja (quieta), y el póster se
+// De noche aparece el logo de Alfajor y la ronda de esqueletos de la bandeja, que se mece apenas; al
+// final todo se funde y aparece la página (la quema quedó sin usar). Antes el póster se
 // arma palabra por palabra como el
 // flyer: DIA DE LOS / MUERTOS / DE HAMBRE, cada una golpeando; después la firma a mano. Al final la noche se quema desde el centro, como el agujero del flyer, y
 // deja ver la página. No sale antes de que la carta haya cargado (`listo`).
@@ -21,7 +22,7 @@ const T = {
     tradicion: 1950,
 }
 // Cuándo la composición queda completa (después se quema): ~4,4 s en total con la quema.
-const COMPLETA = 3100
+const COMPLETA = 2600
 const DURA_SALIDA = 420
 const DURA_QUEMA = 1300
 
@@ -114,7 +115,7 @@ export function IntroMuertos({ listo }: { listo: boolean }) {
     // Con la composición completa y la carta cargada: se apaga el altar y se quema la noche.
     useEffect(() => {
         if (!completa || !listo || etapa !== 'altar') return
-        const t = window.setTimeout(() => setEtapa(sinMovimiento ? 'sale' : 'quema'), 0)
+        const t = window.setTimeout(() => setEtapa('sale'), 0)
         return () => window.clearTimeout(t)
     }, [completa, listo, etapa, sinMovimiento])
 
@@ -142,7 +143,7 @@ export function IntroMuertos({ listo }: { listo: boolean }) {
 
     const saltar = () => {
         if (!listo) return setCompleta(true)
-        setEtapa(e => e !== 'altar' ? e : sinMovimiento ? 'sale' : 'quema')
+        setEtapa(e => e !== 'altar' ? e : 'sale')
     }
 
     if (terminada) return null
@@ -179,33 +180,14 @@ export function IntroMuertos({ listo }: { listo: boolean }) {
                     </div>
                 )}
 
-                <div className="muertos-temblor relative mx-auto flex h-full max-w-xl flex-col items-center justify-center px-5 py-16 text-center" style={demora(T.muertos + 120)}>
+                <div className="relative mx-auto flex h-full max-w-xl flex-col items-center justify-center px-5 py-16 text-center">
                     <img src="/logo.webp" alt="Alfajor" className="muertos-aparece h-[min(9svh,64px)] w-auto -rotate-3" style={demora(T.logo)} />
 
-                    {/* La ronda de esqueletos de la bandeja, sin animar: sólo aparece. */}
-                    <img
-                        src="/muertos/esqueletos-hueso.svg"
-                        alt=""
-                        className="muertos-aparece mt-[3svh] w-[min(78vw,32svh,360px)]"
-                        style={demora(T.esqueletos)}
-                    />
-
-                    {/* El póster, palabra por palabra. */}
-                    <div className="relative mt-[4svh] w-full">
-                        <span className="font-muertos muertos-titulo-entra block origin-bottom whitespace-nowrap text-[min(calc((100vw-40px)/6.75),78px,7svh)] uppercase leading-[0.8] tracking-[-0.02em]" style={demora(T.dia)}>
-                            Dia de los
-                        </span>
-                        <span className="font-muertos muertos-titulo-entra mt-[2.4svh] block origin-bottom whitespace-nowrap text-[min(calc((100vw-40px)/6.1),90px,8.2svh)] uppercase leading-[0.8] tracking-[-0.02em] text-[#d3532b]" style={demora(T.muertos)}>
-                            Muertos
-                        </span>
-                        <span className="font-muertos muertos-titulo-entra mt-[2.4svh] block origin-bottom whitespace-nowrap text-[min(calc((100vw-40px)/7.1),66px,6svh)] uppercase leading-[0.8] tracking-[-0.02em] text-[#eea233]" style={demora(T.hambre)}>
-                            De hambre
-                        </span>
+                    {/* La ronda de esqueletos de la bandeja: aparece y se mece apenas. */}
+                    <div className="muertos-aparece mt-[4svh]" style={demora(T.esqueletos)}>
+                        <img src="/muertos/esqueletos-hueso.svg" alt="" className="muertos-mece w-[min(84vw,44svh,460px)]" />
                     </div>
 
-                    <p className="font-salient muertos-escribe mt-[3.4svh] text-[clamp(24px,6.4vw,36px)] leading-none text-[#f2ede0]" style={demora(T.tradicion)}>
-                        Una tradición de Alfajor
-                    </p>
                 </div>
 
                 {!sinMovimiento && (

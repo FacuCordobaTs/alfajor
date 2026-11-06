@@ -4,11 +4,11 @@ import { M, useEtapaIntro } from '@/lib/muertos'
 // Pedido de uno de los dueños: la calavera con sombrero de los stickers rebotando por la pantalla como
 // el logo del protector de pantalla del DVD. Cambia de color en cada pared que toca y, si pega justo en
 // una esquina, lo festeja. El dibujo (public/muertos/sombrero.webp) se usa de máscara y se pinta con el
-// color de turno; un contorno crema lo hace leer también sobre las secciones oscuras. Arranca cuando
-// termina la bienvenida, no captura toques y no aparece con movimiento reducido. Se mueve con transform en cada cuadro (sin re-render): sólo el color pasa por React.
+// color de turno. Arranca cuando termina la bienvenida, no captura toques y no aparece con movimiento
+// reducido. Se mueve con transform en cada cuadro (sin re-render): sólo el color pasa por React.
 
-// Naranja y tinta de la edición, el verde de la marca y un rosa mexicano.
-const COLORES = [M.naranja, M.tinta, '#083821', '#d6457a']
+// Sólo el naranja del sticker y la tinta.
+const COLORES = [M.naranja, M.tinta]
 // Píxeles por segundo en cada eje.
 const VELOCIDAD = 110
 
@@ -61,7 +61,7 @@ export function CalaveraRebota() {
         <div ref={ref} aria-hidden className="pointer-events-none fixed left-0 top-0 z-[35] w-20 will-change-transform md:w-24">
             {/* La key reinicia el festejo en cada esquina. */}
             <div key={esquinas} className={esquinas ? 'muertos-esquina' : ''}>
-                <div className="aspect-[342/326] w-full [filter:drop-shadow(0_0_1px_#f2ede0)_drop-shadow(0_0_1px_#f2ede0)_drop-shadow(0_6px_8px_rgba(0,0,0,0.3))]">
+                <div className="aspect-[342/326] w-full">
                     <div
                         style={{ backgroundColor: COLORES[tono] }}
                         className="size-full transition-colors duration-150 [mask-image:url(/muertos/sombrero.webp)] [mask-size:contain] [mask-repeat:no-repeat] [-webkit-mask-image:url(/muertos/sombrero.webp)] [-webkit-mask-size:contain] [-webkit-mask-repeat:no-repeat]"
