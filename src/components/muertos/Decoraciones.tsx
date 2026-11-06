@@ -2,7 +2,7 @@ import { useId, type CSSProperties } from 'react'
 import { M, florPolar } from '@/lib/muertos'
 
 // Ilustraciones propias de la edición Día de los muertos de hambre, dibujadas en SVG con la paleta de
-// las piezas impresas: papel picado, la calavera, la banda de rombos del flyer y los huesos. Todas son decorativas (aria-hidden) y no capturan toques.
+// las piezas impresas: papel picado, la calavera y los huesos. Todas son decorativas (aria-hidden) y no capturan toques.
 
 // ── Papel picado ────────────────────────────────────────────────────────────────────────────────
 
@@ -171,28 +171,6 @@ export function Calavera({ className = '', style, color = M.hueso, tinta = M.tin
             {/* Mejillas en espiral. */}
             <path d="M16,62 q2,-6 7,-3 q3,3 -1,5" fill="none" stroke={acento} strokeWidth="2.2" strokeLinecap="round" />
             <path d="M84,62 q-2,-6 -7,-3 q-3,3 1,5" fill="none" stroke={acento} strokeWidth="2.2" strokeLinecap="round" />
-        </svg>
-    )
-}
-
-// ── Banda de rombos ─────────────────────────────────────────────────────────────────────────────
-
-/** La guarda de rombos que abre y cierra el flyer, repetida a lo ancho. */
-export function BandaRombos({ color = M.naranja, className = '' }: { color?: string; className?: string }) {
-    const id = useId()
-    return (
-        <svg aria-hidden className={`block h-[26px] w-full ${className}`}>
-            <defs>
-                <pattern id={id} width="30" height="26" patternUnits="userSpaceOnUse">
-                    <path d="M15,3 L26,13 L15,23 L4,13Z" fill="none" stroke={color} strokeWidth="2.2" />
-                    <path d="M15,8.5 L20,13 L15,17.5 L10,13Z" fill={color} />
-                    <circle cx="0" cy="13" r="1.8" fill={color} />
-                    <circle cx="30" cy="13" r="1.8" fill={color} />
-                </pattern>
-            </defs>
-            <rect x="0" y="0" width="100%" height="1.6" fill={color} />
-            <rect x="0" y="24.4" width="100%" height="1.6" fill={color} />
-            <rect x="0" y="0" width="100%" height="26" fill={`url(#${id})`} />
         </svg>
     )
 }

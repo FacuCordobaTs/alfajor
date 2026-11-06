@@ -1067,10 +1067,6 @@ const MenuMuertos = ({ campana = null }: { campana?: CampanaPublica | null }) =>
         abrirProductoDrawer()
     }
 
-    // El del video del hero (lechuga, tomate, salsa y doble cheddar) es el American: tocarlo abre ese.
-    // La cinta muestra los sabores de la primera categoría.
-    const productoHeroVideo = productosVenta.find(p => /american/i.test(p.nombre) && /con papas/i.test(p.nombre))
-        ?? productosVenta.find(p => /american/i.test(p.nombre)) ?? null
     // Acá la cinta lleva los sabores de los alfajores (la primera categoría puede ser Ropa).
     const categoriaCinta = categoriasOrdenadas.find(c => /alfajor/i.test(c)) ?? categoriasOrdenadas[0]
     const palabrasCinta = sabores((productosPorCategoria[categoriaCinta] || []).map((p: any) => String(p.nombre)))
@@ -1333,10 +1329,8 @@ const MenuMuertos = ({ campana = null }: { campana?: CampanaPublica | null }) =>
                 </div>
             )}
 
-            {/* HERO: el flyer del Día de los muertos de hambre con el alfajor en el nicho del altar. */}
+            {/* HERO: el flyer del evento sobre su mismo papel, con el logo, el estado y las acciones. */}
             <HeroMuertos
-                nombreVideo={productoHeroVideo?.nombre ?? 'Alfajor'}
-                onClickVideo={productoHeroVideo ? () => abrirDetalleProducto(productoHeroVideo) : undefined}
                 arriba={
                     <div className="flex items-center justify-between gap-3">
                         <a href="/muertosdehambre" aria-label="Alfajor, Día de los muertos de hambre" className="flex shrink-0 items-center gap-2">

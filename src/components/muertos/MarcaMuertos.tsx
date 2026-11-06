@@ -1,8 +1,8 @@
-import { Fragment, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
-import { ArrowDown, ArrowRight, ArrowUp, Instagram, MapPin, RotateCcw } from 'lucide-react'
+import { Fragment, type CSSProperties, type ReactNode } from 'react'
+import { ArrowDown, ArrowRight, ArrowUp, Instagram, MapPin } from 'lucide-react'
 import { DIAS, INSTAGRAM_URL, PIRU_URL, SEMANA, hhmm, minutos, type Turno } from '@/lib/marcaAlfajor'
 import { FRASES_CINTA, M, eventoVigente, sinTildes, useEtapaIntro } from '@/lib/muertos'
-import { BandaRombos, Calavera, Estrella, Huesos, PapelPicado } from './Decoraciones'
+import { Calavera, Estrella, Huesos, PapelPicado } from './Decoraciones'
 
 // Las piezas de /muertosdehambre: la misma estructura que components/marca/MarcaAlfajor (hero con el
 // video, cinta, botón del pedido y footer) vestida como el flyer del Día de los muertos de hambre:
@@ -41,163 +41,45 @@ export function BotonTicketMuertos({ children, onClick, icono }: { children: Rea
     )
 }
 
-/** En qué punto del armado va el video: el relleno todavía cae, ya aterrizó, o cayó la segunda tapa. */
-type FaseArmado = 'cayendo' | 'relleno' | 'armado'
-
-// Momentos del video /hero-alfajor (los mismos que HeroVideo): relleno a 1,25 s y tapa a 1,85 s.
-const T_RELLENO = 1.25
-const T_TAPA = 1.85
-// Cuánto después de empezar a abrirse el agujero de la bienvenida arranca el video.
-const DEMORA_VIDEO = 450
-
-/** El hero, como el de la carta de siempre: el video del alfajor que se arma ocupa el fondo (se funde
- * en los bordes) y el titular del flyer se enciende al compás. Arriba, en el aire por donde cae el
- * relleno, DIA DE LOS / MUERTOS; abajo, sobre el piso, DE HAMBRE, la noche y las acciones: el alfajor
- * queda literalmente entre "muertos" y "de hambre". En escritorio el video va a la derecha.
+/** El hero es el flyer del evento, impreso sobre su mismo papel: el fondo es la textura del flyer
+ * (public/muertos/papel.webp, una franja limpia del flyer espejada para que no tenga costuras, a la
+ * escala en que se ve el flyer) y los bordes del flyer se funden en ella, así que no hay recuadro. Todo
+ * lo que el flyer ya dice (título, fecha, la noche, el sello, "Una tradición de Alfajor") no se repite:
+ * alrededor sólo van el logo, el estado del local y las acciones. En el celular el flyer toma el alto que
+ * deja libre la primera pantalla, para que "Elegí tu ofrenda" se vea sin scrollear; en escritorio, el flyer a la izquierda y las acciones a la derecha.
  *
- * El texto entra cuando se empieza a abrir el agujero de la bienvenida y el video arranca cuando la
- * quema va por la mitad (arrancarlo junto con la quema la trababa); las dos cosas salen de
- * useEtapaIntro. Se reproduce una vez y queda en el último cuadro; se puede volver a armar. Sin
- * movimiento se ve la foto final. */
-export function HeroMuertos({ arriba, abajo, nombreVideo, onClickVideo }: {
-    arriba: ReactNode
-    abajo: ReactNode
-    nombreVideo: string
-    onClickVideo?: () => void
-}) {
-    const etapaIntro = useEtapaIntro()
-    const listo = etapaIntro !== 'corriendo'
-    const reproducir = etapaIntro !== 'corriendo'
-    const videoRef = useRef<HTMLVideoElement>(null)
-    const [sinMovimiento] = useState(() => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches)
-    const [fase, setFase] = useState<FaseArmado>(sinMovimiento ? 'armado' : 'cayendo')
-    const [terminado, setTerminado] = useState(sinMovimiento)
-    const evento = eventoVigente()
-
-    useEffect(() => {
-        const video = videoRef.current
-        if (!video || sinMovimiento || !reproducir) return
-        let frame = 0
-        const leer = () => {
-            const t = video.currentTime
-            setFase(t >= T_TAPA ? 'armado' : t >= T_RELLENO ? 'relleno' : 'cayendo')
-        }
-        const seguir = () => {
-            leer()
-            if (!video.paused && !video.ended) frame = requestAnimationFrame(seguir)
-        }
-        const alReproducir = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(seguir) }
-        const alTerminar = () => { setFase('armado'); setTerminado(true) }
-        video.addEventListener('playing', alReproducir)
-        video.addEventListener('timeupdate', leer)
-        video.addEventListener('ended', alTerminar)
-        // Si no arranca solo (modo ahorro, autoplay bloqueado) o tarda, el titular no queda apagado.
-        const respaldo = window.setTimeout(() => { if (video.paused) alTerminar() }, 2500 + DEMORA_VIDEO)
-        // Arranca con el agujero ya abierto a medias: se ve armarse desde el principio sin cargar el
-        // arranque del video sobre los primeros cuadros de la quema.
-        const arranque = window.setTimeout(() => video.play().catch(alTerminar), DEMORA_VIDEO)
-        return () => {
-            cancelAnimationFrame(frame)
-            window.clearTimeout(respaldo)
-            window.clearTimeout(arranque)
-            video.removeEventListener('playing', alReproducir)
-            video.removeEventListener('timeupdate', leer)
-            video.removeEventListener('ended', alTerminar)
-        }
-    }, [sinMovimiento, reproducir])
-
-    const rearmar = () => {
-        const video = videoRef.current
-        if (!video) return
-        setTerminado(false)
-        video.currentTime = 0
-        video.play().catch(() => { setFase('armado'); setTerminado(true) })
-    }
-
-    // Outlaw es muy ancha (DIA DE LOS ≈ 6,8 em, MUERTOS ≈ 6,2 em): el tamaño sale del ancho disponible
-    // para que las líneas queden justificadas como en el flyer, y se estira en vertical.
-    const titular = 'font-muertos block origin-bottom scale-y-[1.38] whitespace-nowrap uppercase leading-[0.8] tracking-[-0.02em] transition-opacity duration-500'
+ * La bienvenida termina quemando un agujero desde el centro: el flyer queda visible desde el primer
+ * cuadro (no espera la entrada) para que el agujero lo descubra. El resto entra cuando empieza a verse. */
+export function HeroMuertos({ arriba, abajo }: { arriba: ReactNode; abajo: ReactNode }) {
+    const listo = useEtapaIntro() !== 'corriendo'
 
     return (
-        <section className="relative isolate overflow-hidden bg-[#efeae7] text-[#242526]">
-            {/* Velos del color del fondo para que el titular y las acciones se lean sobre el video. */}
-            <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[34%] bg-gradient-to-b from-[#efeae7] via-[#efeae7]/70 to-transparent md:hidden" />
-            <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 -z-10 h-[34%] bg-gradient-to-t from-[#efeae7] via-[#efeae7]/90 to-transparent md:hidden" />
-
+        <section className="relative isolate overflow-hidden bg-[#d4cfc9] bg-[url(/muertos/papel.webp)] bg-[length:800px_auto] text-[#242526]">
+            <h1 className="sr-only">Día de los muertos de hambre · Una tradición de Alfajor · Sábado 7 de noviembre desde las 20:00</h1>
             <div className="relative z-10 mx-auto max-w-2xl px-5 pt-4 md:max-w-5xl xl:max-w-6xl">{arriba}</div>
 
-            <div className={`muertos-entrada pointer-events-none relative mx-auto flex min-h-[calc(100svh-130px)] max-w-2xl flex-col px-5 pb-24 pt-8 md:min-h-[600px] md:max-w-5xl md:justify-center md:pb-28 lg:min-h-[640px] xl:max-w-6xl ${listo ? 'listo' : ''}`}>
-                <div className="relative md:max-w-[52%]" style={{ '--d': '60ms' } as CSSProperties}>
-                    <img src="/muertos/sello-naranja.webp" alt="" aria-hidden className="pointer-events-none absolute -bottom-[26px] -right-[2%] z-10 w-[28%] max-w-[140px] rotate-12 mix-blend-multiply md:-bottom-[34px] md:-right-[10%]" />
-                    <BandaRombos className="md:max-w-[440px]" />
-                    <h1 className="sr-only">Día de los muertos de hambre · Una tradición de Alfajor</h1>
-                    <span aria-hidden className={`${titular} mt-6 text-center text-[min(calc((100vw-40px)/6.75),84px)] md:text-left md:text-[clamp(52px,5.8vw,86px)]`}>
-                        Dia de los
-                    </span>
-                    <span aria-hidden className={`${titular} mt-[0.42em] text-center text-[min(calc((100vw-40px)/6.1),96px)] md:text-left md:text-[clamp(58px,6.4vw,96px)] ${fase === 'cayendo' ? 'opacity-20' : 'opacity-100'}`}>
-                        Muertos
-                    </span>
+            <div className={`muertos-entrada mx-auto flex max-w-2xl flex-col items-center pb-28 md:max-w-5xl md:flex-row md:items-center md:justify-center md:gap-14 md:px-5 md:pb-32 md:pt-4 xl:max-w-6xl ${listo ? 'listo' : ''}`}>
+                <img
+                    src="/muertos/flyer-720.webp"
+                    srcSet="/muertos/flyer-720.webp 720w, /muertos/flyer.webp 1080w"
+                    sizes="(min-width: 768px) 50vh, 100vw"
+                    width={1080}
+                    height={1920}
+                    alt="Día de los muertos de hambre. Una tradición de Alfajor. Sábado 07 de noviembre desde las 20:00: mariachis, alfajores picantes y tequilazo."
+                    fetchPriority="high"
+                    className="muertos-hueco mt-1 h-[min(calc(100svh-200px),177.8vw)] w-auto max-w-full [mask-composite:intersect] [mask-image:linear-gradient(to_bottom,transparent,#000_3%,#000_95%,transparent),linear-gradient(to_right,transparent,#000_3%,#000_97%,transparent)] [-webkit-mask-composite:source-in] [-webkit-mask-image:linear-gradient(to_bottom,transparent,#000_3%,#000_95%,transparent),linear-gradient(to_right,transparent,#000_3%,#000_97%,transparent)] md:mt-0 md:h-[min(calc(100svh-110px),880px)] md:max-w-none"
+                />
+                <div className="mt-2 w-full px-5 text-center md:mt-0 md:w-auto md:max-w-sm md:px-0 md:text-left" style={{ '--d': '200ms' } as CSSProperties}>
+                    <p className="font-twin hidden text-[11px] text-[#d3532b] md:block">Delivery y take away</p>
+                    <h2 className="font-muertos mt-4 hidden origin-bottom-left scale-y-[1.3] whitespace-nowrap text-[clamp(40px,4vw,56px)] uppercase leading-[0.9] md:block">
+                        Hambre<br />de muerto
+                    </h2>
+                    <p className="mx-auto mt-3 hidden max-w-[30ch] text-[15px] leading-snug text-[#242526]/75 md:mx-0 md:mt-6 md:block">
+                        Toda la carta de Alfajor, para pedir a domicilio o pasar a buscar.
+                    </p>
+                    <div className="mt-1 md:mt-6">{abajo}</div>
                 </div>
-
-                {/* El hueco del alfajor: en el celular, entre MUERTOS y DE HAMBRE; en escritorio, la columna
-                    de la derecha. El video (9:16, más grande que el hueco) se funde en los bordes. */}
-                <div className="muertos-hueco pointer-events-none relative -z-20 min-h-[100vw] flex-1 sm:min-h-[520px] md:absolute md:inset-y-0 md:right-0 md:min-h-0 md:w-[48%]">
-                    <video
-                        ref={videoRef}
-                        muted
-                        playsInline
-                        preload="auto"
-                        poster={sinMovimiento ? '/hero-alfajor-final.webp' : '/hero-alfajor-inicio.webp'}
-                        aria-label={nombreVideo}
-                        className="absolute left-1/2 top-[calc(50%+1vw)] aspect-[9/16] h-[172vw] max-h-[1100px] -translate-x-1/2 -translate-y-1/2 object-cover [mask-composite:intersect] [mask-image:linear-gradient(to_bottom,transparent,#000_14%,#000_86%,transparent),linear-gradient(to_right,transparent,#000_8%,#000_92%,transparent)] [-webkit-mask-composite:source-in] [-webkit-mask-image:linear-gradient(to_bottom,transparent,#000_14%,#000_86%,transparent),linear-gradient(to_right,transparent,#000_8%,#000_92%,transparent)] md:top-1/2 md:h-[118%]"
-                    >
-                        <source src="/hero-alfajor.webm" type="video/webm" />
-                        <source src="/hero-alfajor.mp4" type="video/mp4" />
-                    </video>
-                    {/* El alfajor también se toca: abre el producto. */}
-                    {onClickVideo && (
-                        <button
-                            type="button"
-                            onClick={onClickVideo}
-                            aria-label={`Ver ${nombreVideo}`}
-                            className="pointer-events-auto absolute inset-x-[12%] inset-y-[8%] cursor-pointer md:inset-x-[18%] md:inset-y-[30%]"
-                        />
-                    )}
-                </div>
-
-                <div className="md:mt-10 md:max-w-[52%]" style={{ '--d': '240ms' } as CSSProperties}>
-                    <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-3 md:justify-start">
-                        <span aria-hidden className={`font-muertos origin-bottom scale-y-[1.3] whitespace-nowrap text-[clamp(30px,9vw,50px)] uppercase leading-[0.85] transition-opacity duration-500 ${fase === 'armado' ? 'opacity-100' : 'opacity-20'}`}>De hambre</span>
-                        <span className="font-salient -rotate-6 rounded-[50%] border-2 border-[#242526] bg-[#d3532b] px-4 py-1.5 text-center text-[19px] leading-[0.95] text-[#242526]">
-                            Una tradición<br />de Alfajor
-                        </span>
-                    </div>
-                    {evento && (
-                        <div className="mt-5 space-y-2.5 text-center md:text-left">
-                            <p className="font-twin inline-flex max-w-full flex-wrap items-center justify-center gap-x-2.5 gap-y-1 rounded-sm bg-[#242526] px-3 py-2 text-[13px] text-[#f2ede0] sm:text-[15px]">
-                                Sabado 07 de noviembre <Estrella className="size-3.5 text-[#d3532b]" /> Desde las 20:00
-                            </p>
-                            <p className="font-twin flex flex-wrap items-center justify-center gap-x-2.5 gap-y-1 text-[12px] sm:text-[14px] md:justify-start">
-                                Mariachis <Estrella className="size-3 text-[#d3532b]" /> Alfajores picantes <Estrella className="size-3 text-[#d3532b]" /> Tequilazo
-                            </p>
-                        </div>
-                    )}
-                </div>
-
-                <div className="pointer-events-auto mt-7 md:max-w-[52%]" style={{ '--d': '420ms' } as CSSProperties}>{abajo}</div>
             </div>
-
-            {terminado && !sinMovimiento && (
-                <button
-                    type="button"
-                    onClick={rearmar}
-                    aria-label="Armalo de nuevo"
-                    title="Armalo de nuevo"
-                    className="absolute bottom-[92px] right-5 grid size-10 place-items-center rounded-full border-2 border-[#242526] bg-[#f2ede0] text-[#242526] shadow-[3px_3px_0_#242526] transition-transform animate-in fade-in zoom-in-75 duration-500 active:scale-90 md:bottom-28 md:right-8"
-                >
-                    <RotateCcw className="size-4" />
-                </button>
-            )}
         </section>
     )
 }
@@ -345,7 +227,7 @@ export function FooterMuertos({ horarios, direccion, onPedir }: { horarios: Turn
                 <PapelPicado colores={[M.naranja, M.hueso]} hilo={M.hueso} cantidad={14} comba={14} className="hidden md:block" />
                 <div className="relative mx-auto grid max-w-2xl gap-12 px-5 pt-10 lg:max-w-5xl lg:grid-cols-[1.2fr_1fr_1fr] xl:max-w-6xl">
                     <div>
-                        <img src="/muertos/sello-hueso.webp" alt="Día de los muertos de hambre · Una tradición de Alfajor" className="w-44 -rotate-6" />
+                        <img src="/logo.webp" alt="Alfajor" className="h-20 w-auto -rotate-3" />
                         <div className="mt-7 flex flex-wrap gap-2">
                             {onPedir && (
                                 <button
