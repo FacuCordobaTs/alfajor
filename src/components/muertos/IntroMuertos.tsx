@@ -5,7 +5,7 @@ import { HUECO_QUEMADO, M, PETALOS, introMuertos } from '@/lib/muertos'
 // La bienvenida de /muertosdehambre: reemplaza al "Armando los alfajores" y dura bastante más (~4,5 s).
 //
 // De noche aparece la ronda de esqueletos de la bandeja, que se mece apenas; al
-// final todo se funde y aparece la página (la quema quedó sin usar). Antes el póster se
+// final la noche se quema desde el centro y aparece la página. Antes el póster se
 // arma palabra por palabra como el
 // flyer: DIA DE LOS / MUERTOS / DE HAMBRE, cada una golpeando; después la firma a mano. Al final la noche se quema desde el centro, como el agujero del flyer, y
 // deja ver la página. No sale antes de que la carta haya cargado (`listo`).
@@ -115,7 +115,7 @@ export function IntroMuertos({ listo }: { listo: boolean }) {
     // Con la composición completa y la carta cargada: se apaga el altar y se quema la noche.
     useEffect(() => {
         if (!completa || !listo || etapa !== 'altar') return
-        const t = window.setTimeout(() => setEtapa('sale'), 0)
+        const t = window.setTimeout(() => setEtapa(sinMovimiento ? 'sale' : 'quema'), 0)
         return () => window.clearTimeout(t)
     }, [completa, listo, etapa, sinMovimiento])
 
@@ -143,7 +143,7 @@ export function IntroMuertos({ listo }: { listo: boolean }) {
 
     const saltar = () => {
         if (!listo) return setCompleta(true)
-        setEtapa(e => e !== 'altar' ? e : 'sale')
+        setEtapa(e => e !== 'altar' ? e : sinMovimiento ? 'sale' : 'quema')
     }
 
     if (terminada) return null
