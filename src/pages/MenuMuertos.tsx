@@ -12,6 +12,7 @@ import { LogoAlfajor, NavCategorias, TituloSeccion } from '@/components/marca/Ma
 import { BotonPedidoMuertos, BotonTicketMuertos, CintasMuertos, EstadoLocalMuertos, FooterMuertos, HeroMuertos, NocheMuertos, SelloMuertos } from '@/components/muertos/MarcaMuertos'
 import { Calavera } from '@/components/muertos/Decoraciones'
 import { IntroMuertos } from '@/components/muertos/IntroMuertos'
+import { CalaveraRebota } from '@/components/muertos/CalaveraRebota'
 import { sinTildes } from '@/lib/muertos'
 import '@/styles/muertos.css'
 import { sabores, textoEstado } from '@/lib/marcaAlfajor'
@@ -1314,6 +1315,7 @@ const MenuMuertos = ({ campana = null }: { campana?: CampanaPublica | null }) =>
             {themeStyles}
             {intro}
             <div aria-hidden className="muertos-grano pointer-events-none fixed inset-0 z-30" />
+            <CalaveraRebota />
 
             {!estadoAbierto.abierto && (
                 <div className={restaurante?.permitirPedidosProgramados || puedePreOrdenarCountry ? "bg-[#d3532b] text-[#242526]" : "bg-[#242526] text-[#f2ede0]"}>

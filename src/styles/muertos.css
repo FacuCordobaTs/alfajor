@@ -97,6 +97,15 @@
 .muertos-sale { animation: muertos-sale 360ms ease-in both; will-change: opacity, transform; }
 
 /* ── Página ───────────────────────────────────────────────────────────────── */
+/* La calavera que rebota (CalaveraRebota) festeja cuando pega justo en una esquina. */
+@keyframes muertos-esquina {
+  0% { transform: scale(1) rotate(0); }
+  30% { transform: scale(1.7) rotate(-20deg); }
+  60% { transform: scale(0.9) rotate(12deg); }
+  100% { transform: scale(1) rotate(0); }
+}
+.muertos-esquina { animation: muertos-esquina 700ms cubic-bezier(.3,1.4,.5,1); }
+
 @keyframes muertos-marquesina { to { transform: translateX(-50%); } }
 .muertos-marquesina { animation: muertos-marquesina 38s linear infinite; }
 .muertos-marquesina-inversa { animation: muertos-marquesina 44s linear infinite reverse; }
