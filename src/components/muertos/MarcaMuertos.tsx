@@ -62,12 +62,12 @@ export function HeroMuertos({ arriba, abajo }: { arriba: ReactNode; abajo: React
                 <img
                     src="/muertos/flyer-720.webp"
                     srcSet="/muertos/flyer-720.webp 720w, /muertos/flyer.webp 1080w"
-                    sizes="(min-width: 768px) 50vh, 100vw"
+                    sizes="(min-width: 768px) 70vh, 100vw"
                     width={1080}
-                    height={1920}
+                    height={1440}
                     alt="Día de los muertos de hambre. Una tradición de Alfajor. Sábado 07 de noviembre desde las 20:00: mariachis, alfajores picantes y tequilazo."
                     fetchPriority="high"
-                    className="muertos-hueco mt-1 h-[min(calc(100svh-200px),177.8vw)] w-auto max-w-full [mask-composite:intersect] [mask-image:linear-gradient(to_bottom,transparent,#000_3%,#000_95%,transparent),linear-gradient(to_right,transparent,#000_3%,#000_97%,transparent)] [-webkit-mask-composite:source-in] [-webkit-mask-image:linear-gradient(to_bottom,transparent,#000_3%,#000_95%,transparent),linear-gradient(to_right,transparent,#000_3%,#000_97%,transparent)] md:mt-0 md:h-[min(calc(100svh-110px),880px)] md:max-w-none"
+                    className="muertos-hueco mt-1 h-[min(calc(100svh-200px),133.4vw)] w-auto max-w-full [mask-composite:intersect] [mask-image:linear-gradient(to_bottom,transparent,#000_3%,#000_95%,transparent),linear-gradient(to_right,transparent,#000_3%,#000_97%,transparent)] [-webkit-mask-composite:source-in] [-webkit-mask-image:linear-gradient(to_bottom,transparent,#000_3%,#000_95%,transparent),linear-gradient(to_right,transparent,#000_3%,#000_97%,transparent)] md:mt-0 md:h-[min(calc(100svh-110px),880px)] md:max-w-none"
                 />
                 <div className="mt-2 w-full px-5 text-center md:mt-0 md:w-auto md:max-w-sm md:px-0 md:text-left" style={{ '--d': '200ms' } as CSSProperties}>
                     <p className="font-twin hidden text-[11px] text-[#d3532b] md:block">Delivery y take away</p>
