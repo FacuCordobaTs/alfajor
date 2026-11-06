@@ -4,7 +4,7 @@ import { HUECO_QUEMADO, M, PETALOS, introMuertos } from '@/lib/muertos'
 
 // La bienvenida de /muertosdehambre: reemplaza al "Armando los alfajores" y dura bastante más (~4,5 s).
 //
-// De noche aparece el logo de Alfajor y la ronda de esqueletos de la bandeja, que se mece apenas; al
+// De noche aparece la ronda de esqueletos de la bandeja, que se mece apenas; al
 // final todo se funde y aparece la página (la quema quedó sin usar). Antes el póster se
 // arma palabra por palabra como el
 // flyer: DIA DE LOS / MUERTOS / DE HAMBRE, cada una golpeando; después la firma a mano. Al final la noche se quema desde el centro, como el agujero del flyer, y
@@ -181,10 +181,9 @@ export function IntroMuertos({ listo }: { listo: boolean }) {
                 )}
 
                 <div className="relative mx-auto flex h-full max-w-xl flex-col items-center justify-center px-5 py-16 text-center">
-                    <img src="/logo.webp" alt="Alfajor" className="muertos-aparece h-[min(9svh,64px)] w-auto -rotate-3" style={demora(T.logo)} />
 
                     {/* La ronda de esqueletos de la bandeja: aparece y se mece apenas. */}
-                    <div className="muertos-aparece mt-[4svh]" style={demora(T.esqueletos)}>
+                    <div className="muertos-aparece" style={demora(T.esqueletos)}>
                         <img src="/muertos/esqueletos-hueso.svg" alt="" className="muertos-mece w-[min(84vw,44svh,460px)]" />
                     </div>
 
