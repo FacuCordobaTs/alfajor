@@ -60,8 +60,8 @@ export function HeroMuertos({ arriba, abajo }: { arriba: ReactNode; abajo: React
 
             <div className={`muertos-entrada mx-auto flex max-w-2xl flex-col items-center pb-28 md:max-w-5xl md:flex-row md:items-center md:justify-center md:gap-14 md:px-5 md:pb-32 md:pt-4 xl:max-w-6xl ${listo ? 'listo' : ''}`}>
                 <img
-                    src="/muertos/flyer-720.webp"
-                    srcSet="/muertos/flyer-720.webp 720w, /muertos/flyer.webp 1080w"
+                    src="/muertos/flyer-v2-720.webp"
+                    srcSet="/muertos/flyer-v2-720.webp 720w, /muertos/flyer-v2.webp 1080w"
                     sizes="(min-width: 768px) 70vh, 100vw"
                     width={1080}
                     height={1440}
