@@ -1208,10 +1208,10 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
     // En desarrollo se puede entrar al checkout con el local cerrado, para probarlo a cualquier hora.
     // Mandar el pedido sigue bloqueado (submitOrder): la API de desarrollo es la de producción.
     // Con pre-pedidos de countries habilitados, el local cerrado igual deja abrir el checkout:
-    // el flujo country se entrega en la próxima ventana de la zona.
+    // sólo los días de reparto y dentro del horario de pre-pedidos de alguna zona.
     const puedePreOrdenarCountry = restaurante?.permitirPrePedidosZonasEspeciales === true
         && Array.isArray(restaurante?.zonasEspeciales)
-        && restaurante.zonasEspeciales.length > 0
+        && restaurante.zonasEspeciales.some((zona: any) => zona.enVentana)
     const checkoutCerrado = !import.meta.env.DEV && !estadoAbierto.abierto && !restaurante?.permitirPedidosProgramados && !puedePreOrdenarCountry
 
     const alturaCarrito = (() => {

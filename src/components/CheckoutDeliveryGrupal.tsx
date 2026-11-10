@@ -166,8 +166,13 @@ export function CheckoutDeliveryGrupal({
     : []
   const permitirPrePedidosZonas = restauranteData?.permitirPrePedidosZonasEspeciales === true
   const zonaEspecialSeleccionada = zonasEspeciales.find((zona) => zona.id === zonaEspecialId) ?? null
-  const zonaDisponible = (zona: ZonaEspecialPublica) => (zona.enVentana && !localCerrado) || permitirPrePedidosZonas
+  // El backend sólo manda las zonas de los días de reparto; `enVentana` dice si
+  // ahora se toman pre-pedidos. Con el local cerrado hace falta además el permiso.
+  const zonaDisponible = (zona: ZonaEspecialPublica) => zona.enVentana && (!localCerrado || permitirPrePedidosZonas)
   const hayZonaDisponible = zonasEspeciales.some(zonaDisponible)
+  const motivoZonaNoDisponible = (zona: ZonaEspecialPublica) => zona.enVentana
+    ? 'El local está cerrado y todavía no habilitó los pre-pedidos.'
+    : `Los pedidos para este country se toman de ${zona.horaInicio} a ${zona.horaFin}.`
   const esCountry = tipoPedido === 'delivery' && modoCountry
 
   const codigoDescuentoEnabled = !restauranteData || restauranteData.codigoDescuentoEnabled === true
@@ -589,8 +594,9 @@ export function CheckoutDeliveryGrupal({
       cuponEnvioGratis,
       montoDescuento,
       metodoPago: metodoPago ?? null,
-      horarioProgramado: esCountry && zonaEspecialSeleccionada
-        ? `${zonaEspecialSeleccionada.horaInicio}-${zonaEspecialSeleccionada.horaFin}`
+      // En countries la entrega no tiene horario fijo: se avisa cuando salen.
+      horarioProgramado: esCountry
+        ? ''
         : (usarFranjas ? horarioProgramado : ((programacionObligatoria || programarPedido) ? horarioProgramado : '')),
       sucursalId,
       ...contextoMarketing,
@@ -687,9 +693,7 @@ export function CheckoutDeliveryGrupal({
       zonaNombre: country ? zonaEspecialNombre : (checkoutData.tipoPedido === 'delivery' ? zonaNombre : null),
       zonaEspecialId: country ? zonaEspecialId : null,
       zonaEspecialNombre: country ? zonaEspecialNombre : null,
-      horarioProgramado: country && zonaEspecialSeleccionada
-        ? `${zonaEspecialSeleccionada.horaInicio}-${zonaEspecialSeleccionada.horaFin}`
-        : checkoutData.horarioProgramado,
+      horarioProgramado: country ? '' : checkoutData.horarioProgramado,
       sucursalId: country ? null : (checkoutData.tipoPedido === 'delivery' ? (sucursalDelivery ?? checkoutData.sucursalId) : checkoutData.sucursalId),
       metodoPago,
       itemsTotal,
@@ -896,7 +900,7 @@ export function CheckoutDeliveryGrupal({
               <span className="block text-xs text-muted-foreground">
                 {hayZonaDisponible
                   ? 'Pre ordenar para un country'
-                  : 'El local todavía no habilitó los pre-pedidos'}
+                  : zonasEspeciales[0] ? motivoZonaNoDisponible(zonasEspeciales[0]) : ''}
               </span>
             </span>
             {modoCountry && <Check className="w-4 h-4 text-primary shrink-0" />}
@@ -994,7 +998,7 @@ export function CheckoutDeliveryGrupal({
         <Fence className="w-4 h-4 text-primary shrink-0 mt-0.5" />
         <div className="min-w-0">
           <p className="text-sm font-semibold text-foreground">Pre ordenar para un country</p>
-          <p className="text-xs text-muted-foreground mt-0.5">Elegí la zona: el pedido se entrega en su puerta dentro del horario del country.</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Elegí la zona: te avisamos por WhatsApp cuando salimos y el pedido se entrega en su puerta.</p>
         </div>
       </div>
 
@@ -1004,7 +1008,6 @@ export function CheckoutDeliveryGrupal({
           {zonasEspeciales.map((zona) => {
             const disponible = zonaDisponible(zona)
             const selected = zonaEspecialId === zona.id
-            const esPreOrden = !zona.enVentana || localCerrado
             const precio = Number(zona.precio) || 0
             return (
               <button
@@ -1026,17 +1029,14 @@ export function CheckoutDeliveryGrupal({
                 <span className="min-w-0 flex-1">
                   <span className="flex flex-wrap items-center gap-1.5">
                     <span className={`truncate text-sm font-semibold ${selected ? 'text-primary' : 'text-foreground'}`}>{zona.nombre}</span>
-                    {esPreOrden && permitirPrePedidosZonas && (
-                      <span className="rounded-full bg-[#eb623a]/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#c94a27]">Pre orden</span>
-                    )}
                   </span>
                   <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-                    <span className="inline-flex items-center gap-1"><Clock className="w-3 h-3" />{zona.horaInicio} a {zona.horaFin}</span>
+                    <span className="inline-flex items-center gap-1"><Clock className="w-3 h-3" />Pedidos de {zona.horaInicio} a {zona.horaFin}</span>
                     <span>·</span>
                     <span>{precio === 0 ? 'Envío gratis' : `Envío $${precio.toFixed(0)}`}</span>
                   </span>
                   {!disponible && (
-                    <span className="mt-1 block text-[11px] text-muted-foreground">No está en su horario de entrega. El local todavía no habilitó los pre-pedidos.</span>
+                    <span className="mt-1 block text-[11px] text-muted-foreground">{motivoZonaNoDisponible(zona)}</span>
                   )}
                 </span>
                 {selected && <Check className="w-4 h-4 text-primary shrink-0" />}
@@ -1051,10 +1051,9 @@ export function CheckoutDeliveryGrupal({
           <Clock className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
           <div className="min-w-0">
             <p className="text-sm font-semibold text-foreground">
-              {localCerrado || !zonaEspecialSeleccionada.enVentana ? 'Pre orden para ' : 'Entrega '}
-              {zonaEspecialSeleccionada.proximaVentana}
+              Entrega hoy en la puerta de {zonaEspecialSeleccionada.nombre}
             </p>
-            <p className="mt-0.5 text-xs text-muted-foreground">Te esperamos en la puerta de {zonaEspecialSeleccionada.nombre}.</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">Te avisamos por WhatsApp cuando estemos en camino.</p>
           </div>
         </div>
       )}
