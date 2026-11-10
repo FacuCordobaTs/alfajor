@@ -1545,9 +1545,12 @@ export function CheckoutDeliveryGrupal({
     </div>
   )
 
+  // En pasos, el country se elige recién en el paso 'zona': antes no hay que
+  // bloquear "Siguiente" por no tener zona elegida.
   const accionDisabled = tipoPedido === 'delivery' && (
     esCountry
-      ? (!zonaEspecialId || !zonaEspecialSeleccionada || !zonaDisponible(zonaEspecialSeleccionada))
+      ? ((modo === 'completo' || pasos[paso] === 'zona')
+          && (!zonaEspecialId || !zonaEspecialSeleccionada || !zonaDisponible(zonaEspecialSeleccionada)))
       : (fueraDeZona || (isCheckingZona && (modo === 'completo' || pasos[paso] === 'ubicacion')))
   )
 
