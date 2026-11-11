@@ -38,15 +38,16 @@ export function EstadoLocal({ abierto, texto, corto }: { abierto: boolean; texto
 }
 
 /** El botón principal: un ticket naranja con su talón troquelado a la derecha. */
-export function BotonTicket({ children, onClick, icono }: { children: ReactNode; onClick: () => void; icono?: ReactNode }) {
+export function BotonTicket({ children, onClick, icono, tono = 'naranja' }: { children: ReactNode; onClick: () => void; icono?: ReactNode; tono?: 'naranja' | 'verde' }) {
+    const verde = tono === 'verde'
     return (
         <button
             type="button"
             onClick={onClick}
-            className="group inline-flex h-14 items-stretch overflow-hidden rounded-lg bg-[#eb623a] text-[#083821] shadow-[0_14px_30px_-14px_rgba(8,56,33,0.6)] transition-transform duration-150 hover:-rotate-1 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#083821]"
+            className={`group inline-flex h-14 items-stretch overflow-hidden rounded-lg shadow-[0_14px_30px_-14px_rgba(8,56,33,0.6)] transition-transform duration-150 hover:-rotate-1 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 ${verde ? 'bg-[#083821] text-[#f2eee2] focus-visible:ring-[#eb623a]' : 'bg-[#eb623a] text-[#083821] focus-visible:ring-[#083821]'}`}
         >
             <span className="font-alfajor flex items-center px-5 pt-0.5 text-[20px] uppercase leading-none">{children}</span>
-            <span className="flex w-14 items-center justify-center border-l-2 border-dashed border-[#083821]/35 [&_svg]:size-5">
+            <span className={`flex w-14 items-center justify-center border-l-2 border-dashed [&_svg]:size-5 ${verde ? 'border-[#f2eee2]/35 text-[#eb623a]' : 'border-[#083821]/35'}`}>
                 {icono ?? <ArrowDown className="transition-transform group-hover:translate-y-0.5" />}
             </span>
         </button>

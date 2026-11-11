@@ -6,7 +6,8 @@ import { toast } from 'sonner'
 import {
     Trash2, Maximize2, Minimize2, Loader2,
     Package, UtensilsCrossed, Utensils, Clock, Share2, User, Plus,
-    BadgePercent, Users, Sparkles, Check, ArrowRight
+    BadgePercent, Users, Sparkles, Check, ArrowRight,
+    Fence,
 } from 'lucide-react'
 import { BotonPedido, BotonTicket, Cinta, EstadoLocal, FooterMarca, HeroVideo, LogoAlfajor, NavCategorias, TituloSeccion } from '@/components/marca/MarcaAlfajor'
 import { sabores, textoEstado } from '@/lib/marcaAlfajor'
@@ -1064,6 +1065,17 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
         ?? productosVenta.find(p => /american/i.test(p.nombre)) ?? null
     const palabrasCinta = sabores((productosPorCategoria[categoriasOrdenadas[0]] || []).map((p: any) => String(p.nombre)))
 
+    // El backend sólo manda zonas especiales en sus días de reparto: si hay alguna,
+    // hoy se reparte a countries y el hero lo anuncia.
+    const hayRepartoCountryHoy = Array.isArray(restaurante?.zonasEspeciales) && restaurante.zonasEspeciales.length > 0
+    const pedirParaCountry = () => {
+        irACarta()
+        toast('Hoy repartimos en countries', {
+            description: 'Armá tu pedido y en el checkout elegí "Country".',
+            duration: 6000,
+        })
+    }
+
     const irACarta = () => {
         const sinMovimiento = window.matchMedia('(prefers-reduced-motion: reduce)').matches
         cartaRef.current?.scrollIntoView({ behavior: sinMovimiento ? 'auto' : 'smooth', block: 'start' })
@@ -1381,6 +1393,9 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                         )}
                         <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
                             <BotonTicket onClick={irACarta}>Elegí tu alfajor</BotonTicket>
+                            {hayRepartoCountryHoy && (
+                                <BotonTicket tono="verde" onClick={pedirParaCountry} icono={<Fence />}>Pedí para tu country</BotonTicket>
+                            )}
                             {mostrarPedidoGrupal && (
                                 <button type="button" onClick={onArmarPedidoClick} aria-busy={creandoSala} className={ACCESO_HERO}>
                                     {creandoSala
