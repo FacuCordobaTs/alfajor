@@ -1194,7 +1194,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
     const productosCanje = productos.filter(p => Number(p.puntosNecesarios) > 0)
     const tieneOpcionesCanje = productosCanje.length > 0
     // Lo que puede gastar ahora, y lo que va a tener con este pedido (menos los canjes, más lo que
-    // suma al cobrarse).
+    // suma al despacharse).
     const puntosDisponibles = puntosCliente === null
         ? null
         : Math.max(0, puntosCliente - puntosEnCarrito())
